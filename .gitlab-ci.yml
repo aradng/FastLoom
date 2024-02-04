@@ -1,0 +1,11 @@
+build-core:
+  stage: pre-build
+  tags: [transcript-tag]
+  script:
+    - cd core
+    - docker build -t core:latest .
+    # - poetry config repositories.gitlab "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
+    # - poetry config http-basic.gitlab gitlab-ci-token "$CI_JOB_TOKEN"
+    # - poetry publish --build --repository gitlab
+  only:
+    - main

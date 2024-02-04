@@ -1,0 +1,116 @@
+[tool.black]
+line-length = 79
+
+[tool.isort]
+profile = "black"
+line_length = 79
+
+[tool.codespell]
+ignore-words-list = "nin,astroid"
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+follow_imports = 'skip'
+[[tool.mypy.overrides]]
+module = 'redis.asyncio'
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = 'redis'
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = 'dateutil.relativedelta'
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = 'requests'
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = 'aiofiles'
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = 'pytz'
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.poetry]
+name = "core_zenoa"
+version = "0.0.0"
+description = "Core package"
+authors = []
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">3.10, <4"
+jdatetime = "^4.1.1"
+pytz = "^2023.3.post1"
+beanie = "^1.25.0"
+pydantic-settings = "^2.1.0"
+
+fastapi = { version = "^0.103.1", optional = true }
+faststream = { version = "0.4.0rc0", extras = ["confluent"], optional = true }
+celery = { version = "^5.3.6", optional = true }
+httpx = { version = "^0.26.0", optional = true }
+redis = { version = "^5.0.1", optional = true }
+# OTEL
+sentry-sdk = { extras = ["fastapi"], version = "^1.39.1" }
+opentelemetry-distro = "^0.43b0"
+opentelemetry-exporter-otlp = "^1.22.0"
+opentelemetry-instrumentation-logging = { version = "0.43b0" }
+opentelemetry-instrumentation-urllib = { version = "0.43b0" }
+opentelemetry-instrumentation-system-metrics = { version = "0.43b0" }
+opentelemetry-instrumentation-urllib3 = { version = "0.43b0" }
+opentelemetry-instrumentation-asgi = { version = "0.43b0", optional = true }
+opentelemetry-instrumentation-fastapi = { version = "0.43b0", optional = true }
+opentelemetry-instrumentation-confluent-kafka = { version = "^0.43b0", optional = true }
+opentelemetry-instrumentation-celery = { version = "0.43b0", optional = true }
+opentelemetry-instrumentation-httpx = { version = "0.43b0", optional = true }
+opentelemetry-instrumentation-redis = { version = "0.43b0", optional = true }
+
+[tool.poetry.extras]
+FastAPI = [
+    "fastapi",
+    "opentelemetry-instrumentation-asgi",
+    "opentelemetry-instrumentation-fastapi",
+]
+Kafka = [
+    "fastapi",
+    "faststream",
+    "opentelemetry-instrumentation-asgi",
+    "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-confluent-kafka",
+]
+Celery = ["celery", "opentelemetry-instrumentation-celery"]
+HTTPx = ["httpx", "opentelemetry-instrumentation-httpx"]
+Redis = ["redis", "opentelemetry-instrumentation-redis"]
+
+[tool.poetry.group.test.dependencies]
+pytest-asyncio = "^0.21.1"
+deepdiff = "^6.7.0"
+pytest = "^7.4.3"
+pytest-mock = "^3.12.0"
+freezegun = "^1.2.2"
+pytest-cov = "^4.1.0"
+pytest-xdist = "^3.5.0"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.5.1"
+flake8 = "^6.1.0"
+black = "^23.7.0"
+isort = "^5.12.0"
+ipykernel = "^6.25.1"
+ipywidgets = "^8.1.1"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+
+[build-system]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
