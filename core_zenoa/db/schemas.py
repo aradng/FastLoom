@@ -10,6 +10,7 @@ from beanie import (
     Update,
     before_event,
 )
+from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from core_zenoa.date import utcnow
@@ -38,3 +39,21 @@ class CreatedUpdatedAtSchema(CreatedAtSchema):
 
 class BaseDocument(Document):
     id: PydanticObjectId = Field(default_factory=bson.ObjectId, alias="_id")  # type: ignore[assignment] # noqa
+
+    @classmethod
+    async def get_or_404(cls, id: PydanticObjectId):
+        obj = await cls.get(id)
+        if obj is None:
+            raise HTTPException(
+                status_code=404, detail=f"{cls.__name__} not found"
+            )
+        return obj
+
+    @classmethod
+    async def find_one_or_404(cls, *args, **kwargs):
+        obj = await cls.find_one(*args, **kwargs)
+        if obj is None:
+            raise HTTPException(
+                status_code=404, detail=f"{cls.__name__} not found"
+            )
+        return obj

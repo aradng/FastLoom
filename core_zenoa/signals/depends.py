@@ -1,8 +1,8 @@
 import logging
 import os
 
-from faststream.kafka import KafkaBroker
-from faststream.kafka.fastapi import KafkaRouter
+from faststream.confluent import KafkaBroker
+from faststream.confluent.fastapi import KafkaRouter
 
 logger = logging.getLogger(__name__)
 
