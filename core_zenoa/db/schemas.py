@@ -10,7 +10,7 @@ from beanie import (
     Update,
     before_event,
 )
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from pydantic import BaseModel, Field
 
 from core_zenoa.date import utcnow
@@ -45,7 +45,8 @@ class BaseDocument(Document):
         obj = await cls.get(id)
         if obj is None:
             raise HTTPException(
-                status_code=404, detail=f"{cls.__name__} not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"{cls.__name__} not found",
             )
         return obj
 
@@ -54,6 +55,7 @@ class BaseDocument(Document):
         obj = await cls.find_one(*args, **kwargs)
         if obj is None:
             raise HTTPException(
-                status_code=404, detail=f"{cls.__name__} not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"{cls.__name__} not found",
             )
         return obj
