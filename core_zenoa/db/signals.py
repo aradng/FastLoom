@@ -1,11 +1,11 @@
 import logging
-from enum import Enum
 import os
-from typing import Any, Generic, TypeVar
+from enum import Enum
+from typing import Generic, Literal, TypeVar
 from uuid import UUID
 
 from beanie import Insert, Replace, SaveChanges, Update, after_event
-from pydantic import BaseModel, PrivateAttr, model_validator
+from pydantic import BaseModel, PrivateAttr, create_model, model_validator
 
 from core_zenoa.db.schemas import BaseDocument
 from core_zenoa.signals.depends import get_stream_router
@@ -25,7 +25,7 @@ T = TypeVar("T", bound=BaseDocument)
 
 class SignalMessage(BaseModel, Generic[T]):
     instance: T
-    changes: dict[str, Any]
+    changes: T
     operation: Operations
 
 
@@ -74,8 +74,36 @@ class BaseDocumentSignal(BaseModel):
 
     @classmethod
     def get_publisher(cls, operation: Operations):
+        class_changes = create_model(
+            f"{cls.__name__}Changes",
+            __base__=cls,
+            **{
+                field_name: (field_info.annotation | None, None)
+                for field_name, field_info in cls.model_fields.items()
+            },
+        )
+        class_instance = create_model(
+            f"{cls.__name__}Instance",
+            __base__=cls,
+            **{
+                field_name: (field_info.annotation, ...)
+                for field_name, field_info in cls.model_fields.items()
+            },
+        )
+        # NOTE: ^ to avoid discriminator error because AsyncAPI has issues with
+        # it. Otherwise we would've defined __base__ of
+        # `narrowed_signal_message` to `SignalMessage[cls]` and wouldn't have
+        # overridden `instance`.
+        narrowed_signal_message = create_model(
+            f"{cls.__name__}SignalMessage",
+            __base__=SignalMessage,
+            instance=(class_instance, ...),
+            changes=(class_changes, ...),
+            operation=(Literal[operation], ...),
+        )
         return stream_router.broker.publisher(
-            cls.get_subscription_topic(operation)
+            cls.get_subscription_topic(operation),
+            schema=narrowed_signal_message,
         )
 
 
