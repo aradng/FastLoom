@@ -1,5 +1,6 @@
 import logging
 from enum import Enum
+import os
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
@@ -11,7 +12,7 @@ from core_zenoa.signals.depends import get_stream_router
 
 logger = logging.getLogger(__name__)
 
-stream_router = get_stream_router(__name__)
+stream_router = get_stream_router("model_signals")
 
 
 class Operations(str, Enum):
@@ -57,7 +58,10 @@ class BaseDocumentSignal(BaseModel):
 
     @classmethod
     def get_subscription_topic(cls, operation: Operations):
-        return f"{cls.Settings.name}.{operation.value}"  # type: ignore[attr-defined]  # noqa
+        project_name = os.getenv("PROJECT_NAME")
+        if not project_name:
+            raise ValueError("PROJECT_NAME environment variable is not set")
+        return f"{project_name}.{cls.Settings.name}.{operation.value}"  # type: ignore[attr-defined]  # noqa
 
     @classmethod
     def check_state_management(cls):
