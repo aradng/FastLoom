@@ -17,3 +17,4 @@ RUN apt-get update -o Acquire::Check-Valid-Until=false \
 
 RUN pip --retries 10 install --upgrade pip setuptools wheel
 RUN pip --retries 10 install poetry
+RUN poetry self add "poetry-dynamic-versioning[plugin]"
