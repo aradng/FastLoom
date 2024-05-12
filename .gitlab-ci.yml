@@ -19,10 +19,9 @@ static-analysis:
     - poetry run -q codespell --check-filenames
     - poetry run -q black --check --preview .
     - poetry run -q isort --check .
-    - poetry run -q flake8 ./app
     - poetry check
-    # - poetry run -q mypy ./app
-    - find ./app -name '*.py' -exec poetry run -q pyupgrade --py312-plus {} \;
+    - poetry run -q mypy .
+    - find . -name '*.py' -exec poetry run -q pyupgrade --py312-plus {} \;
     - git diff --quiet
   after_script:
     - >
