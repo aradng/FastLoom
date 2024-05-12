@@ -1,11 +1,43 @@
-build-core:
-  stage: pre-build
-  tags: [transcript-tag]
+stages:
+  - static-analysis
+  - build
+
+default:
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+static-analysis:
+  stage: static-analysis
+  tags:
+    - docker
+  image: $CI_REGISTRY/microservice/core_zenoa/poetry.dev:latest
+  variables:
+    GIT_STRATEGY: clone
+  before_script: []
   script:
-    - cd core
-    - docker build -t core:latest .
-    # - poetry config repositories.gitlab "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
-    # - poetry config http-basic.gitlab gitlab-ci-token "$CI_JOB_TOKEN"
-    # - poetry publish --build --repository gitlab
+    - poetry run -q ruff check --ignore-noqa .
+    - poetry run -q codespell --check-filenames
+    - poetry run -q black --check --preview .
+    - poetry run -q isort --check .
+    - poetry run -q flake8 ./app
+    - poetry check
+    # - poetry run -q mypy ./app
+    - find ./app -name '*.py' -exec poetry run -q pyupgrade --py312-plus {} \;
+    - git diff --quiet
+  after_script:
+    - >
+      if [ $CI_JOB_STATUS == 'failed' ]; then
+        echo $(git --no-pager diff)
+      fi
+
+build-core:
+  stage: build
+  tags:
+    - docker
+  image: $CI_REGISTRY/microservice/core_zenoa/system:latest
+  script:
+    - poetry config repositories.gitlab "${CI_API_V4_URL}/projects/microservice/-/packages/pypi"
+    - poetry config http-basic.gitlab gitlab-ci-token "$CI_JOB_TOKEN"
+    - poetry publish --build --repository gitlab
   only:
     - main
