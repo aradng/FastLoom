@@ -3198,4 +3198,4 @@ redis = ["opentelemetry-instrumentation-redis", "redis"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<3.13"
-content-hash = "200bc3572ae540f63293576a4c9b1177fb2606212e798604e3210d8eaf97c758"
+content-hash = "c598224deba34b0620803f96fe6cc2ceb91361b4bd0e3b51efea9378b49bd1be"
