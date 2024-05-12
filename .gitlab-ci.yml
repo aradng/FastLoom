@@ -10,7 +10,7 @@ static-analysis:
   stage: static-analysis
   tags:
     - docker
-  image: $CI_REGISTRY/microservice/core_zenoa/poetry.dev:latest
+  image: $CI_REGISTRY/microservice/core-zenoa/poetry.dev:latest
   variables:
     GIT_STRATEGY: clone
   before_script: []
@@ -34,7 +34,7 @@ build-core:
   stage: build
   tags:
     - docker
-  image: $CI_REGISTRY/microservice/core_zenoa/system:latest
+  image: $CI_REGISTRY/microservice/core-zenoa/system:latest
   script:
     - poetry config repositories.gitlab "${CI_API_V4_URL}/projects/microservice/-/packages/pypi"
     - poetry config http-basic.gitlab gitlab-ci-token "$CI_JOB_TOKEN"
