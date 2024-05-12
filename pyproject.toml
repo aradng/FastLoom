@@ -106,6 +106,7 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.5.1"
+pydantic = "^2.7.1"
 flake8 = "^6.1.0"
 black = "^24.2.0"
 isort = "^5.12.0"
