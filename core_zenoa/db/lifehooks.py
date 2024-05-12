@@ -10,9 +10,7 @@ async def init_db(
     models: list[Document],
     mongo_uri: str,
 ):
-    client: AgnosticClient = AsyncIOMotorClient(
-        mongo_uri, tz_aware=True
-    )
+    client: AgnosticClient = AsyncIOMotorClient(mongo_uri, tz_aware=True)
     client.get_io_loop = asyncio.get_event_loop  # type: ignore[method-assign]
     db = client[database_name]
     await init_beanie(db, document_models=models)  # type: ignore[arg-type]

@@ -1,5 +1,6 @@
 import secrets
 
+
 def generate_token(length: int):
     """
     Generates a n-digits numeral token, that used for OTP

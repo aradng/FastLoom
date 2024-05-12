@@ -12,9 +12,9 @@ def datetime_to_jalali(dt: datetime, date_only: bool = False) -> str:
 
 
 def utcnow() -> datetime:
-    return datetime.now(ZoneInfo('UTC'))
+    return datetime.now(ZoneInfo("UTC"))
 
 
 def datetime_to_timestamp(value: datetime) -> int:
-    dt_utc = value.replace(tzinfo=ZoneInfo('UTC'))
+    dt_utc = value.replace(tzinfo=ZoneInfo("UTC"))
     return int(dt_utc.timestamp())
