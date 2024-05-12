@@ -2,23 +2,13 @@ stages:
   - static-analysis
   - build
 
-# default:
-#   image: $CI_REGISTRY/tnc/club/club-backend/docker:24.0.5
-#   services:
-#     - name: $CI_REGISTRY/tnc/club/club-backend/docker:24.0.5-dind
-#       alias: docker
-#   before_script:
-#     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
 static-analysis:
   stage: static-analysis
   tags:
     - docker
   image: $CI_REGISTRY/microservice/core-zenoa/poetry.dev:latest
-  services: []
   variables:
     GIT_STRATEGY: clone
-  before_script: []
   script:
     - poetry run -q ruff check --ignore-noqa .
     - poetry run -q codespell --check-filenames
@@ -39,7 +29,6 @@ build-core:
   tags:
     - docker
   image: $CI_REGISTRY/microservice/core-zenoa/system:latest
-  services: []
   script:
     - poetry config repositories.gitlab "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
     - poetry config http-basic.gitlab gitlab-ci-token "$CI_JOB_TOKEN"
