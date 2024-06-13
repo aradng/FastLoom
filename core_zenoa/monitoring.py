@@ -177,10 +177,19 @@ def instrument_httpx():
     )
 
 
+def instrument_rabbit():
+    from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
+
+    AioPikaInstrumentor().instrument(
+        tracer_provider=trace.get_tracer_provider()
+    )
+
+
 class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
     CONFLUENT_KAFKA = instrument_confluent_kafka
+    RABBIT = instrument_rabbit
     HTTPX = instrument_httpx
 
 

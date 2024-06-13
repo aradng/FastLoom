@@ -39,7 +39,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.0.3"
+version = "0.0.4"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -55,7 +55,7 @@ pydantic-settings = "^2.1.0"
 fastapi = { version = "^0.103.1", optional = true }
 python-multipart = { version = "*", optional = true }
 uvicorn = { version = "^0.27.1", optional = true, extras = ["standard"] }
-faststream = { version = "0.4.5", extras = ["confluent"], optional = true }
+faststream = { version = "0.4.5", extras = ["confluent", "rabbit"], optional = true }
 celery = { version = "^5.3.6", optional = true }
 httpx = { version = "^0.26.0", optional = true }
 redis = { version = "^5.0.1", optional = true }
@@ -63,16 +63,17 @@ redis = { version = "^5.0.1", optional = true }
 sentry-sdk = { extras = ["fastapi"], version = "^1.39.1" }
 opentelemetry-distro = "^0.43b0"
 opentelemetry-exporter-otlp = "^1.22.0"
-opentelemetry-instrumentation-logging = { version = "0.43b0" }
-opentelemetry-instrumentation-urllib = { version = "0.43b0" }
-opentelemetry-instrumentation-system-metrics = { version = "0.43b0" }
-opentelemetry-instrumentation-urllib3 = { version = "0.43b0" }
-opentelemetry-instrumentation-asgi = { version = "0.43b0", optional = true }
-opentelemetry-instrumentation-fastapi = { version = "0.43b0", optional = true }
+opentelemetry-instrumentation-logging = { version = "^0.43b0" }
+opentelemetry-instrumentation-urllib = { version = "^0.43b0" }
+opentelemetry-instrumentation-system-metrics = { version = "^0.43b0" }
+opentelemetry-instrumentation-urllib3 = { version = "^0.43b0" }
+opentelemetry-instrumentation-asgi = { version = "^0.43b0", optional = true }
+opentelemetry-instrumentation-fastapi = { version = "^0.43b0", optional = true }
 opentelemetry-instrumentation-confluent-kafka = { version = "^0.43b0", optional = true }
-opentelemetry-instrumentation-celery = { version = "0.43b0", optional = true }
-opentelemetry-instrumentation-httpx = { version = "0.43b0", optional = true }
-opentelemetry-instrumentation-redis = { version = "0.43b0", optional = true }
+opentelemetry-instrumentation-aio-pika = { version = "^0.43b0", optional = true }
+opentelemetry-instrumentation-celery = { version = "^0.43b0", optional = true }
+opentelemetry-instrumentation-httpx = { version = "^0.43b0", optional = true }
+opentelemetry-instrumentation-redis = { version = "^0.43b0", optional = true }
 
 [tool.poetry.extras]
 FastAPI = [
@@ -89,6 +90,14 @@ Kafka = [
     "opentelemetry-instrumentation-asgi",
     "opentelemetry-instrumentation-fastapi",
     "opentelemetry-instrumentation-confluent-kafka",
+]
+Rabbit = [
+    "fastapi",
+    "uvicorn",
+    "faststream",
+    "opentelemetry-instrumentation-asgi",
+    "opentelemetry-instrumentation-fastapi",
+    "opentelemetry-instrumentation-aio-pika",
 ]
 Celery = ["celery", "opentelemetry-instrumentation-celery"]
 HTTPx = ["httpx", "opentelemetry-instrumentation-httpx"]
