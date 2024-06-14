@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Any
 
 import sentry_sdk
+from aio_pika.abc import AbstractChannel
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
@@ -25,6 +26,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import HOST_NAME, SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import Span
 from pydantic_settings import BaseSettings
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -185,9 +187,32 @@ def instrument_requests():
     )
 
 
+def patch_spanbuilder_set_channel() -> None:
+    """
+    The default SpanBuilder.set_channel does not work with aio_pika 9.1 and the
+    refactored connection attribute
+    """
+    import opentelemetry.instrumentation.aio_pika.span_builder
+    from opentelemetry.instrumentation.aio_pika.span_builder import SpanBuilder
+
+    def set_channel(self: SpanBuilder, channel: AbstractChannel) -> None:
+        if hasattr(channel, "_connection"):
+            url = channel._connection.url
+            port = url.port or 5672
+            self._attributes.update(
+                {
+                    SpanAttributes.NET_PEER_NAME: url.host,
+                    SpanAttributes.NET_PEER_PORT: port,
+                }
+            )
+
+    opentelemetry.instrumentation.aio_pika.span_builder.SpanBuilder.set_channel = set_channel  # type: ignore[misc]  # noqa
+
+
 def instrument_rabbit():
     from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 
+    patch_spanbuilder_set_channel()
     AioPikaInstrumentor().instrument(
         tracer_provider=trace.get_tracer_provider()
     )
