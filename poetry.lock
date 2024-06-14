@@ -1957,6 +1957,27 @@ instruments = ["redis (>=2.6)"]
 test = ["opentelemetry-instrumentation-redis[instruments]", "opentelemetry-sdk (>=1.3,<2.0)", "opentelemetry-test-utils (==0.43b0)"]
 
 [[package]]
+name = "opentelemetry-instrumentation-requests"
+version = "0.43b0"
+description = "OpenTelemetry requests instrumentation"
+optional = true
+python-versions = ">=3.7"
+files = [
+    {file = "opentelemetry_instrumentation_requests-0.43b0-py3-none-any.whl", hash = "sha256:cd9d0862ab8c8892a207dd828134f23c6a5014756f0f055120412aa00be7732d"},
+    {file = "opentelemetry_instrumentation_requests-0.43b0.tar.gz", hash = "sha256:fd92c278d463dbad39cdc42e4f5871de8f66560cf9b40191b554a293aa6faf49"},
+]
+
+[package.dependencies]
+opentelemetry-api = ">=1.12,<2.0"
+opentelemetry-instrumentation = "0.43b0"
+opentelemetry-semantic-conventions = "0.43b0"
+opentelemetry-util-http = "0.43b0"
+
+[package.extras]
+instruments = ["requests (>=2.0,<3.0)"]
+test = ["httpretty (>=1.0,<2.0)", "opentelemetry-instrumentation-requests[instruments]", "opentelemetry-test-utils (==0.43b0)"]
+
+[[package]]
 name = "opentelemetry-instrumentation-system-metrics"
 version = "0.43b0"
 description = "OpenTelemetry System Metrics Instrumentation"
@@ -3739,8 +3760,9 @@ httpx = ["httpx", "opentelemetry-instrumentation-httpx"]
 kafka = ["fastapi", "faststream", "opentelemetry-instrumentation-asgi", "opentelemetry-instrumentation-confluent-kafka", "opentelemetry-instrumentation-fastapi", "uvicorn"]
 rabbit = ["fastapi", "faststream", "opentelemetry-instrumentation-aio-pika", "opentelemetry-instrumentation-asgi", "opentelemetry-instrumentation-fastapi", "uvicorn"]
 redis = ["opentelemetry-instrumentation-redis", "redis"]
+requests = ["opentelemetry-instrumentation-requests", "requests"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<3.13"
-content-hash = "f52756e3f42234e406567305f733ab28df594764556b30d1c9119fb3acff73d3"
+content-hash = "d97f65f4604db0fd9e2ea8bce7fb11cc6581c37cd103d524e4aa252c8d432e1f"

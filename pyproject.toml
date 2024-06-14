@@ -39,7 +39,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.0.6"
+version = "0.0.7"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -58,6 +58,7 @@ uvicorn = { version = "^0.27.1", optional = true, extras = ["standard"] }
 faststream = { version = "0.4.5", extras = ["confluent", "rabbit"], optional = true }
 celery = { version = "^5.3.6", optional = true }
 httpx = { version = "^0.26.0", optional = true }
+requests = { version = "^2.31.0", optional = true }
 redis = { version = "^5.0.1", optional = true }
 # OTEL
 sentry-sdk = { extras = ["fastapi"], version = "^1.39.1" }
@@ -73,6 +74,7 @@ opentelemetry-instrumentation-confluent-kafka = { version = "^0.43b0", optional 
 opentelemetry-instrumentation-aio-pika = { version = "^0.43b0", optional = true }
 opentelemetry-instrumentation-celery = { version = "^0.43b0", optional = true }
 opentelemetry-instrumentation-httpx = { version = "^0.43b0", optional = true }
+opentelemetry-instrumentation-requests = { version = "^0.43b0", optional = true }
 opentelemetry-instrumentation-redis = { version = "^0.43b0", optional = true }
 
 [tool.poetry.extras]
@@ -101,6 +103,7 @@ Rabbit = [
 ]
 Celery = ["celery", "opentelemetry-instrumentation-celery"]
 HTTPx = ["httpx", "opentelemetry-instrumentation-httpx"]
+Requests = ["requests", "opentelemetry-instrumentation-requests"]
 Redis = ["redis", "opentelemetry-instrumentation-redis"]
 
 [tool.poetry.group.test.dependencies]

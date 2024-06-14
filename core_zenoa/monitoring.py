@@ -177,6 +177,14 @@ def instrument_httpx():
     )
 
 
+def instrument_requests():
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
+    RequestsInstrumentor().instrument(
+        tracer_provider=trace.get_tracer_provider()
+    )
+
+
 def instrument_rabbit():
     from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 
@@ -191,6 +199,7 @@ class Instruments(Enum):
     CONFLUENT_KAFKA = instrument_confluent_kafka
     RABBIT = instrument_rabbit
     HTTPX = instrument_httpx
+    REQUESTS = instrument_requests
 
 
 def instrument_otel(
