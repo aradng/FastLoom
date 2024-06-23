@@ -16,9 +16,6 @@ from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
     OTLPSpanExporter,
 )
-from opentelemetry.instrumentation.system_metrics import (
-    SystemMetricsInstrumentor,
-)
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
@@ -141,6 +138,10 @@ def instrument_logging(settings: BaseSettings):
 
 
 def instrument_metrics():
+    from opentelemetry.instrumentation.system_metrics import (
+        SystemMetricsInstrumentor,
+    )
+
     SystemMetricsInstrumentor().instrument(
         meter_provider=metrics.get_meter_provider()
     )
@@ -225,6 +226,7 @@ class Instruments(Enum):
     RABBIT = instrument_rabbit
     HTTPX = instrument_httpx
     REQUESTS = instrument_requests
+    METRICS = instrument_metrics
 
 
 def instrument_otel(
@@ -233,7 +235,6 @@ def instrument_otel(
     only: tuple[Instruments, ...] | None = None,
 ):
     init_metrics(settings)
-    instrument_metrics()
     init_tracer(settings)
     instrument_logging(settings)
     if app:
