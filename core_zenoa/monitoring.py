@@ -29,7 +29,7 @@ from pydantic_settings import BaseSettings
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
-def init_sentry(dsn: str):
+def init_sentry(dsn: str, environment: str):
     sentry_sdk.init(
         dsn=dsn,
         # Set traces_sample_rate to 1.0 to capture 100%
@@ -37,6 +37,7 @@ def init_sentry(dsn: str):
         traces_sample_rate=1.0,
         enable_tracing=True,
         profiles_sample_rate=1.0,
+        environment=environment,
     )
 
 
