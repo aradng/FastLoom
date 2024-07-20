@@ -220,6 +220,21 @@ def instrument_rabbit():
     )
 
 
+def instrument_mongodb():
+    from opentelemetry.instrumentation.pymongo import PymongoInstrumentor
+    from pymongo import monitoring
+
+    def _response_hook(span: Span, event: monitoring.CommandStartedEvent):
+        if span and span.is_recording():
+            ...
+
+    PymongoInstrumentor().instrument(
+        tracer_provider=trace.get_tracer_provider(),
+        capture_statement=True,
+        response_hook=_response_hook,
+    )
+
+
 class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
@@ -228,6 +243,7 @@ class Instruments(Enum):
     HTTPX = instrument_httpx
     REQUESTS = instrument_requests
     METRICS = instrument_metrics
+    MONGODB = instrument_mongodb
 
 
 def instrument_otel(
