@@ -28,6 +28,8 @@ from opentelemetry.trace import Span
 from pydantic_settings import BaseSettings
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from core_zenoa.utils import ColoredFormatter
+
 
 def init_sentry(dsn: str, environment: str):
     sentry_sdk.init(
@@ -127,14 +129,12 @@ def instrument_logging(settings: BaseSettings):
     handler = LoggingHandler(
         level=logging.DEBUG, logger_provider=logger_provider
     )
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
+    handler.setFormatter(ColoredFormatter())
     _logger.addHandler(handler)
+    _logger.setLevel(logging.INFO)
 
     _stream_handler = logging.StreamHandler()
-    _stream_handler.setFormatter(formatter)
+    _stream_handler.setFormatter(ColoredFormatter())
     _logger.addHandler(_stream_handler)
 
 
