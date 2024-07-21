@@ -5,13 +5,18 @@ from motor.core import AgnosticClient
 from motor.motor_asyncio import AsyncIOMotorClient
 
 
+async def get_mongo_client(mongo_uri: str) -> AgnosticClient:
+    client: AgnosticClient = AsyncIOMotorClient(mongo_uri, tz_aware=True)
+    client.get_io_loop = asyncio.get_event_loop  # type: ignore[method-assign]
+    return client
+
+
 async def init_db(
     database_name: str,
     models: list[Document],
     mongo_uri: str,
 ):
-    client: AgnosticClient = AsyncIOMotorClient(mongo_uri, tz_aware=True)
-    client.get_io_loop = asyncio.get_event_loop  # type: ignore[method-assign]
+    client: AgnosticClient = await get_mongo_client(mongo_uri)
     db = client[database_name]
     await init_beanie(db, document_models=models)  # type: ignore[arg-type]
 
@@ -22,8 +27,7 @@ async def destroy_db(
     mongo_uri: str,
     drop_database: bool = False,
 ):
-    client: AgnosticClient = AsyncIOMotorClient(mongo_uri)
-    client.get_io_loop = asyncio.get_event_loop  # type: ignore[method-assign]
+    client: AgnosticClient = await get_mongo_client(mongo_uri)
     db = client[database_name]
     if not drop_database:
         for model in models[1:]:  # Skip pre-populated Province collection
