@@ -5,9 +5,11 @@ from typing import Any
 
 import sentry_sdk
 from aio_pika.abc import AbstractChannel
+from jose.exceptions import JWTError
+from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+from opentelemetry.exporter.otlp.proto.http._log_exporter import (
     OTLPLogExporter,
 )
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
@@ -77,13 +79,39 @@ def init_metrics(settings: BaseSettings):
     metrics.set_meter_provider(meter_provider)
 
 
+def _get_authorization_header(scopes: dict[str, Any]) -> str | None:
+    headers: dict[str, Any] = {
+        key.lower().decode("latin-1"): value.decode("latin-1")
+        for key, value in scopes["headers"]
+    }
+    if "authorization" not in headers:
+        return None
+    return headers["authorization"]
+
+
+def _set_user_attributes_to_span(span: Span, token: str):
+    try:
+        payload: dict[str, Any] = get_unverified_claims(token)
+        username: str = payload["name"]
+        user_id: str = payload["sub"]
+        span.set_attribute("username", username)
+        span.set_attribute("user_id", user_id)
+    except (JWTError, KeyError):
+        return
+
+
 def instrument_fastapi(app):
     from fastapi.responses import PlainTextResponse
+    from fastapi.security.utils import get_authorization_scheme_param
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
     def _server_request_hook(span: Span, scope: dict):
         if span and span.is_recording():
-            ...
+            if auth_header := _get_authorization_header(scope):
+                scheme, param = get_authorization_scheme_param(auth_header)
+                if scheme.lower() != "bearer":
+                    return
+                _set_user_attributes_to_span(span, param)
 
     def _client_response_hook(span: Span, message: dict):
         if span and span.is_recording():
