@@ -4,7 +4,6 @@ from enum import Enum
 from typing import Any
 
 import sentry_sdk
-from aio_pika.abc import AbstractChannel
 from jose.exceptions import JWTError
 from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
@@ -48,8 +47,8 @@ def init_sentry(dsn: str, environment: str):
 def _get_resource(settings: BaseSettings):
     return Resource(
         attributes={
-            SERVICE_NAME: settings.PROJECT_NAME,
-            HOST_NAME: settings.ENVIRONMENT,
+            SERVICE_NAME: settings.PROJECT_NAME,  # type: ignore[AttributeAccessIssue]  # noqa
+            HOST_NAME: settings.ENVIRONMENT,  # type: ignore[AttributeAccessIssue]  # noqa
         }
     )
 
@@ -58,7 +57,7 @@ def init_tracer(settings: BaseSettings):
     trace_provider = TracerProvider(resource=_get_resource(settings))
     processor = BatchSpanProcessor(
         OTLPSpanExporter(
-            endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces"
+            endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces"  # type: ignore[AttributeAccessIssue]  # noqa
         )
     )
     trace_provider.add_span_processor(processor)
@@ -69,7 +68,7 @@ def init_metrics(settings: BaseSettings):
     reader = PeriodicExportingMetricReader(
         OTLPMetricExporter(
             endpoint=(
-                f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"
+                f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"  # type: ignore[AttributeAccessIssue]  # noqa
             )
         )
     )
@@ -151,7 +150,7 @@ def instrument_logging(settings: BaseSettings):
     set_logger_provider(logger_provider)
 
     exporter = OTLPLogExporter(
-        endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT_GRPC}/v1/logs",
+        endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT_GRPC}/v1/logs",  # type: ignore[AttributeAccessIssue]  # noqa
     )
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
     handler = LoggingHandler(
@@ -223,15 +222,16 @@ def patch_spanbuilder_set_channel() -> None:
     refactored connection attribute
     """
     import opentelemetry.instrumentation.aio_pika.span_builder
+    from aio_pika.abc import AbstractChannel
     from opentelemetry.instrumentation.aio_pika.span_builder import SpanBuilder
 
     def set_channel(self: SpanBuilder, channel: AbstractChannel) -> None:
         if hasattr(channel, "_connection"):
-            url = channel._connection.url
+            url = channel._connection.url  # type: ignore[AttributeAccessIssue]  # noqa
             port = url.port or 5672
-            self._attributes.update(
+            self._attributes.update(  # type: ignore[CallIssue]
                 {
-                    SpanAttributes.NET_PEER_NAME: url.host,
+                    SpanAttributes.NET_PEER_NAME: url.host,  # type: ignore[ArgumentType]  # noqa
                     SpanAttributes.NET_PEER_PORT: port,
                 }
             )
