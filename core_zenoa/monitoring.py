@@ -150,7 +150,7 @@ def instrument_logging(settings: BaseSettings):
     set_logger_provider(logger_provider)
 
     exporter = OTLPLogExporter(
-        endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT_GRPC}/v1/logs",  # type: ignore[AttributeAccessIssue]  # noqa
+        endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs",  # type: ignore[AttributeAccessIssue]  # noqa
     )
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
     handler = LoggingHandler(
