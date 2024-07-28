@@ -112,7 +112,7 @@ def instrument_fastapi(app):
                     return
                 _set_user_attributes_to_span(span, param)
 
-    def _client_response_hook(span: Span, message: dict):
+    def _client_response_hook(span: Span, scope: dict, message: dict):
         if span and span.is_recording():
             ...
 
