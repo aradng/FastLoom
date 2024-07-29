@@ -5,8 +5,9 @@ from faststream.confluent import KafkaBroker
 from faststream.confluent.fastapi import KafkaRouter
 from faststream.rabbit import RabbitBroker
 from faststream.rabbit.fastapi import RabbitRouter
-from faststream.rabbit.opentelemetry import RabbitTelemetryMiddleware
 from opentelemetry import trace
+
+from core_zenoa.signals.middlewares import RabbitPayloadTelemetryMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def get_rabbit_broker(
         rabbit_url,
         schema_url=f"/{name}/asyncapi",
         middlewares=(
-            RabbitTelemetryMiddleware(
+            RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()
             ),
         ),
@@ -58,7 +59,7 @@ def get_rabbit_router(
         rabbit_url,
         schema_url=f"/{name}/asyncapi",
         middlewares=(
-            RabbitTelemetryMiddleware(
+            RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()
             ),
         ),
