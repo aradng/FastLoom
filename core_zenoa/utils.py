@@ -16,11 +16,12 @@ class ColoredFormatter(logging.Formatter):
         return level_colors.get(levelno, lambda text: text)(level_name)
 
     def format(self, record):
+        formatted_message = super().format(record)
         levelname = self.get_colored_levelname(
             record.levelname, record.levelno
         )
         name = click.style(record.name, fg="magenta")
-        message = click.style(record.msg, fg="bright_cyan")
+        message = click.style(formatted_message, fg="bright_cyan")
 
-        formatted_message = f"{levelname}: \t  {name} {message}"
-        return formatted_message
+        colorized_message = f"{levelname}: \t  {name} {message}"
+        return colorized_message

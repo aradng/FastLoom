@@ -156,7 +156,10 @@ def instrument_logging(settings: BaseSettings):
     handler = LoggingHandler(
         level=logging.DEBUG, logger_provider=logger_provider
     )
-    handler.setFormatter(ColoredFormatter())
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
     _logger.addHandler(handler)
     _logger.setLevel(logging.INFO)
 
