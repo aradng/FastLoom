@@ -169,13 +169,14 @@ def instrument_logging(settings: BaseSettings):
 
 
 def instrument_metrics():
-    from opentelemetry.instrumentation.system_metrics import (
-        SystemMetricsInstrumentor,
-    )
+    # from opentelemetry.instrumentation.system_metrics import (
+    #     SystemMetricsInstrumentor,
+    # )
 
-    SystemMetricsInstrumentor().instrument(
-        meter_provider=metrics.get_meter_provider()
-    )
+    # SystemMetricsInstrumentor().instrument(
+    #     meter_provider=metrics.get_meter_provider()
+    # )
+    ...
 
 
 def instrument_redis():

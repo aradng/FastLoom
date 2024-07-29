@@ -41,7 +41,7 @@ class RabbitPayloadTelemetryMiddleware(TelemetryMiddleware):
     ) -> None:
         super().__init__(
             settings_provider_factory=(
-                lambda _: RabbitTelemetrySettingsProvider()
+                lambda _: RabbitPayloadTelemetrySettingsProvider()
             ),
             tracer_provider=tracer_provider,
             meter_provider=meter_provider,
