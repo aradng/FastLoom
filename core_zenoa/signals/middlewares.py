@@ -32,7 +32,7 @@ class RabbitPayloadTelemetrySettingsProvider(RabbitTelemetrySettingsProvider):
             SpanAttributes.MESSAGING_MESSAGE_CONVERSATION_ID: kwargs[
                 "correlation_id"
             ],
-            # "messaging.message.body": kwargs.pop("msg", None) or "",
+            # "messaging.message.body": kwargs.pop("message_body", None) or "",
         }
 
 
@@ -41,7 +41,7 @@ class PayloadTelemetryMiddleware(BaseTelemetryMiddleware):
         self, call_next: "AsyncFunc", msg: Any, *args: Any, **kwargs: Any
     ) -> Any:
         return await super().publish_scope(
-            call_next, msg, *args, **(kwargs | dict(msg=msg))
+            call_next, msg, *args, **(kwargs | dict(message_body=msg))
         )
 
 
