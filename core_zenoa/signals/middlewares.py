@@ -1,6 +1,10 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from faststream.opentelemetry.middleware import TelemetryMiddleware
+from faststream import BaseMiddleware
+from faststream.opentelemetry.middleware import (
+    BaseTelemetryMiddleware,
+    TelemetryMiddleware,
+)
 from faststream.rabbit.opentelemetry.provider import (
     RabbitTelemetrySettingsProvider,
 )
@@ -9,7 +13,7 @@ from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import TracerProvider
 
 if TYPE_CHECKING:
-    from faststream.types import AnyDict
+    from faststream.types import AnyDict, AsyncFunc
 
 
 class RabbitPayloadTelemetrySettingsProvider(RabbitTelemetrySettingsProvider):
@@ -28,7 +32,17 @@ class RabbitPayloadTelemetrySettingsProvider(RabbitTelemetrySettingsProvider):
             SpanAttributes.MESSAGING_MESSAGE_CONVERSATION_ID: kwargs[
                 "correlation_id"
             ],
+            # "messaging.message.body": kwargs.pop("msg", None) or "",
         }
+
+
+class PayloadTelemetryMiddleware(BaseTelemetryMiddleware):
+    async def publish_scope(
+        self, call_next: "AsyncFunc", msg: Any, *args: Any, **kwargs: Any
+    ) -> Any:
+        return await super().publish_scope(
+            call_next, msg, *args, **(kwargs | dict(msg=msg))
+        )
 
 
 class RabbitPayloadTelemetryMiddleware(TelemetryMiddleware):
@@ -47,4 +61,12 @@ class RabbitPayloadTelemetryMiddleware(TelemetryMiddleware):
             meter_provider=meter_provider,
             meter=meter,
             include_messages_counters=False,
+        )
+
+    def __call__(self, msg: Any | None) -> BaseMiddleware:
+        return PayloadTelemetryMiddleware(
+            tracer=self._tracer,
+            metrics_container=self._metrics,
+            settings_provider_factory=self._settings_provider_factory,
+            msg=msg,
         )
