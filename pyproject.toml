@@ -39,7 +39,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.0.20"
+version = "0.0.21"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -69,7 +69,7 @@ opentelemetry-instrumentation-urllib = { version = "*" }
 opentelemetry-instrumentation-system-metrics = { version = "*" }
 opentelemetry-instrumentation-urllib3 = { version = "*" }
 opentelemetry-instrumentation-asgi = { version = "*", optional = true }
-opentelemetry-instrumentation-fastapi = { version = "*", optional = true }
+opentelemetry-instrumentation-fastapi = ">0.46b"
 opentelemetry-instrumentation-confluent-kafka = { version = "*", optional = true }
 opentelemetry-instrumentation-aio-pika = { version = "*", optional = true }
 opentelemetry-instrumentation-celery = { version = "*", optional = true }
