@@ -256,9 +256,9 @@ def instrument_mongodb():
     from opentelemetry.instrumentation.pymongo import PymongoInstrumentor
     from pymongo import monitoring
 
-    def _response_hook(span: Span, event: monitoring.CommandStartedEvent):
+    def _response_hook(span: Span, event: monitoring.CommandSucceededEvent):
         if span and span.is_recording():
-            ...
+            span.set_attribute("db.mongodb.server_reply", event.reply)
 
     PymongoInstrumentor().instrument(
         tracer_provider=trace.get_tracer_provider(),

@@ -1,6 +1,8 @@
 from typing import TYPE_CHECKING, Any
 
+from aio_pika import IncomingMessage
 from faststream import BaseMiddleware
+from faststream.broker.message import StreamMessage
 from faststream.opentelemetry.middleware import (
     BaseTelemetryMiddleware,
     TelemetryMiddleware,
@@ -9,11 +11,20 @@ from faststream.rabbit.opentelemetry.provider import (
     RabbitTelemetrySettingsProvider,
 )
 from opentelemetry.metrics import Meter, MeterProvider
-from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import TracerProvider
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from faststream.types import AnyDict, AsyncFunc
+
+
+def message_body_to_str(message_body) -> str:
+    if isinstance(message_body, BaseModel):
+        return message_body.model_dump_json()
+    elif isinstance(message_body, str):
+        return message_body
+    else:
+        return str(message_body)
 
 
 class RabbitPayloadTelemetrySettingsProvider(RabbitTelemetrySettingsProvider):
@@ -21,18 +32,19 @@ class RabbitPayloadTelemetrySettingsProvider(RabbitTelemetrySettingsProvider):
         self,
         kwargs: "AnyDict",
     ) -> "AnyDict":
-        print("OTEL_MESSAGE_PUBLISH", kwargs)
-        return {
-            SpanAttributes.MESSAGING_SYSTEM: self.messaging_system,
-            SpanAttributes.MESSAGING_DESTINATION_NAME: kwargs.get("exchange")
-            or "",
-            SpanAttributes.MESSAGING_RABBITMQ_DESTINATION_ROUTING_KEY: kwargs[
-                "routing_key"
-            ],
-            SpanAttributes.MESSAGING_MESSAGE_CONVERSATION_ID: kwargs[
-                "correlation_id"
-            ],
-            # "messaging.message.body": kwargs.pop("message_body", None) or "",
+        ret = super().get_publish_attrs_from_kwargs(kwargs)
+        message_body = kwargs.pop("message_body")
+        try:
+            message_body_str = message_body_to_str(message_body)
+        except ValueError:
+            return ret
+        return ret | {"messaging.message.body": message_body_str}
+
+    def get_consume_attrs_from_message(
+        self, msg: "StreamMessage[IncomingMessage]"
+    ) -> "AnyDict":
+        return super().get_consume_attrs_from_message(msg) | {
+            "messaging.message.body": msg.body.decode()
         }
 
 
