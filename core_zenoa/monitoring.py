@@ -258,7 +258,9 @@ def instrument_mongodb():
 
     def _response_hook(span: Span, event: monitoring.CommandSucceededEvent):
         if span and span.is_recording():
-            span.set_attribute("db.mongodb.server_reply", event.reply)
+            span.set_attribute(
+                "db.mongodb.server_reply", json.dumps(event.reply)
+            )
 
     PymongoInstrumentor().instrument(
         tracer_provider=trace.get_tracer_provider(),
