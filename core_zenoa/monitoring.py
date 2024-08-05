@@ -3,6 +3,7 @@ import logging
 from enum import Enum
 from typing import Any
 
+import orjson
 import sentry_sdk
 from jose.exceptions import JWTError
 from jose.jwt import get_unverified_claims
@@ -253,13 +254,26 @@ def instrument_rabbit():
 
 
 def instrument_mongodb():
+    from bson import Decimal128, ObjectId
     from opentelemetry.instrumentation.pymongo import PymongoInstrumentor
     from pymongo import monitoring
+
+    def pars_mongo_types(obj: object):
+        if isinstance(obj, Decimal128):
+            return str(obj.to_decimal())
+        if ObjectId.is_valid(obj):
+            return str(obj)
+        raise TypeError()
 
     def _response_hook(span: Span, event: monitoring.CommandSucceededEvent):
         if span and span.is_recording():
             span.set_attribute(
-                "db.mongodb.server_reply", json.dumps(event.reply)
+                "db.mongodb.server_reply",
+                orjson.dumps(
+                    event.reply,
+                    default=pars_mongo_types,
+                    option=orjson.OPT_NAIVE_UTC,
+                ),
             )
 
     PymongoInstrumentor().instrument(
