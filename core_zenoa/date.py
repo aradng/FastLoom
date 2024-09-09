@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 import jdatetime
@@ -18,3 +18,7 @@ def utcnow() -> datetime:
 def datetime_to_timestamp(value: datetime) -> int:
     dt_utc = value.replace(tzinfo=ZoneInfo("UTC"))
     return int(dt_utc.timestamp())
+
+
+def get_zero_time() -> datetime:
+    return datetime.combine(date.today(), time())
