@@ -40,7 +40,6 @@ def get_rabbit_broker(
     rabbit_url = rabbit_url or _get_rabbit_url()
     broker = RabbitBroker(
         rabbit_url,
-        schema_url=f"/{name}/asyncapi",
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()
