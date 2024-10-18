@@ -1,8 +1,10 @@
 import json
 import logging
+from collections.abc import Callable, Sequence
 from enum import Enum
 from typing import Any
 
+import logfire
 import orjson
 import sentry_sdk
 from jose.exceptions import JWTError
@@ -20,20 +22,20 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
 )
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import HOST_NAME, SERVICE_NAME, Resource
-from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import Span
 from pydantic_settings import BaseSettings
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core_zenoa.utils import ColoredFormatter
 
 
 def init_sentry(dsn: str, environment: str):
+    if dsn is None:
+        raise ValueError("Sentry DSN is not set")
+
     sentry_sdk.init(
         dsn=dsn,
         # Set traces_sample_rate to 1.0 to capture 100%
@@ -48,35 +50,18 @@ def init_sentry(dsn: str, environment: str):
 def _get_resource(settings: BaseSettings):
     return Resource(
         attributes={
-            SERVICE_NAME: settings.PROJECT_NAME,  # type: ignore[AttributeAccessIssue]  # noqa
-            HOST_NAME: settings.ENVIRONMENT,  # type: ignore[AttributeAccessIssue]  # noqa
+            SERVICE_NAME: settings.PROJECT_NAME,
+            HOST_NAME: settings.ENVIRONMENT,
         }
     )
 
 
-def init_tracer(settings: BaseSettings):
-    trace_provider = TracerProvider(resource=_get_resource(settings))
-    processor = BatchSpanProcessor(
-        OTLPSpanExporter(
-            endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces"  # type: ignore[AttributeAccessIssue]  # noqa
-        )
-    )
-    trace_provider.add_span_processor(processor)
-    trace.set_tracer_provider(trace_provider)
+def get_span_proccessor() -> BatchSpanProcessor:
+    return BatchSpanProcessor(OTLPSpanExporter())
 
 
-def init_metrics(settings: BaseSettings):
-    reader = PeriodicExportingMetricReader(
-        OTLPMetricExporter(
-            endpoint=(
-                f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/metrics"  # type: ignore[AttributeAccessIssue]  # noqa
-            )
-        )
-    )
-    meter_provider = MeterProvider(
-        resource=_get_resource(settings), metric_readers=[reader]
-    )
-    metrics.set_meter_provider(meter_provider)
+def get_metrics_reader() -> PeriodicExportingMetricReader:
+    return PeriodicExportingMetricReader(OTLPMetricExporter())
 
 
 def _get_authorization_header(scopes: dict[str, Any]) -> str | None:
@@ -100,10 +85,20 @@ def _set_user_attributes_to_span(span: Span, token: str):
         return
 
 
-def instrument_fastapi(app):
+def _get_excluded_urls(settings: BaseSettings) -> list[str]:
+    try:
+        return [
+            f"{settings.API_PREFIX}/docs",
+            f"{settings.API_PREFIX}/openapi.json",
+        ]
+    except AttributeError:
+        return ["/docs", "/openapi.json"]
+
+
+def instrument_fastapi(app, settings: BaseSettings):
     from fastapi.responses import PlainTextResponse
     from fastapi.security.utils import get_authorization_scheme_param
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from starlette.exceptions import HTTPException as StarletteHTTPException
 
     def _server_request_hook(span: Span, scope: dict):
         if span and span.is_recording():
@@ -117,12 +112,12 @@ def instrument_fastapi(app):
         if span and span.is_recording():
             ...
 
-    FastAPIInstrumentor().instrument_app(
+    logfire.instrument_fastapi(
         app,
+        excluded_urls=_get_excluded_urls(settings),
         server_request_hook=_server_request_hook,
         client_response_hook=_client_response_hook,
         meter_provider=metrics.get_meter_provider(),
-        tracer_provider=trace.get_tracer_provider(),
     )
 
     @app.exception_handler(StarletteHTTPException)
@@ -145,51 +140,48 @@ def instrument_fastapi(app):
 
 
 def instrument_logging(settings: BaseSettings):
-    _logger = logging.getLogger()
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
 
-    logger_provider = LoggerProvider(resource=_get_resource(settings))
-    set_logger_provider(logger_provider)
+    otel_logger_provider = LoggerProvider(resource=_get_resource(settings))
+    set_logger_provider(otel_logger_provider)
+    otel_logger_provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter())
+    )
 
-    exporter = OTLPLogExporter(
-        endpoint=f"http://{settings.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/logs",  # type: ignore[AttributeAccessIssue]  # noqa
-    )
-    logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
-    handler = LoggingHandler(
-        level=logging.DEBUG, logger_provider=logger_provider
-    )
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    handler.setFormatter(formatter)
-    _logger.addHandler(handler)
-    _logger.setLevel(logging.INFO)
 
-    _stream_handler = logging.StreamHandler()
-    _stream_handler.setFormatter(ColoredFormatter())
-    _logger.addHandler(_stream_handler)
+    otel_handler = LoggingHandler(
+        level=logging.DEBUG, logger_provider=otel_logger_provider
+    )
+    otel_handler.setFormatter(formatter)
+    logger.addHandler(otel_handler)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(ColoredFormatter())
+    logger.addHandler(stream_handler)
+
+    logfire_handler = logfire.LogfireLoggingHandler(
+        fallback=otel_handler, level=logging.DEBUG
+    )
+    logfire_handler.setFormatter(formatter)
+    logger.addHandler(logfire_handler)
 
 
 def instrument_metrics():
-    # from opentelemetry.instrumentation.system_metrics import (
-    #     SystemMetricsInstrumentor,
-    # )
-
-    # SystemMetricsInstrumentor().instrument(
-    #     meter_provider=metrics.get_meter_provider()
-    # )
-    ...
+    logfire.instrument_system_metrics(base="full")
 
 
 def instrument_redis():
-    from opentelemetry.instrumentation.redis import RedisInstrumentor
-
-    RedisInstrumentor().instrument(tracer_provider=trace.get_tracer_provider())
+    logfire.instrument_redis(
+        capture_statement=True, tracer_provider=trace.get_tracer_provider()
+    )
 
 
 def instrument_celery():
-    from opentelemetry.instrumentation.celery import CeleryInstrumentor
-
-    CeleryInstrumentor().instrument(
+    logfire.instrument_celery(
         tracer_provider=trace.get_tracer_provider(),
         meter_provider=metrics.get_meter_provider(),
     )
@@ -206,19 +198,11 @@ def instrument_confluent_kafka():
 
 
 def instrument_httpx():
-    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-
-    HTTPXClientInstrumentor().instrument(
-        tracer_provider=trace.get_tracer_provider()
-    )
+    logfire.instrument_httpx(tracer_provider=trace.get_tracer_provider())
 
 
 def instrument_requests():
-    from opentelemetry.instrumentation.requests import RequestsInstrumentor
-
-    RequestsInstrumentor().instrument(
-        tracer_provider=trace.get_tracer_provider()
-    )
+    logfire.instrument_requests(tracer_provider=trace.get_tracer_provider())
 
 
 def patch_spanbuilder_set_channel() -> None:
@@ -232,11 +216,11 @@ def patch_spanbuilder_set_channel() -> None:
 
     def set_channel(self: SpanBuilder, channel: AbstractChannel) -> None:
         if hasattr(channel, "_connection"):
-            url = channel._connection.url  # type: ignore[AttributeAccessIssue]  # noqa
+            url = channel._connection.url
             port = url.port or 5672
-            self._attributes.update(  # type: ignore[CallIssue]
+            self._attributes.update(
                 {
-                    SpanAttributes.NET_PEER_NAME: url.host,  # type: ignore[ArgumentType]  # noqa
+                    SpanAttributes.NET_PEER_NAME: url.host,
                     SpanAttributes.NET_PEER_PORT: port,
                 }
             )
@@ -255,7 +239,6 @@ def instrument_rabbit():
 
 def instrument_mongodb():
     from bson import Decimal128, ObjectId
-    from opentelemetry.instrumentation.pymongo import PymongoInstrumentor
     from pymongo import monitoring
 
     def pars_mongo_types(obj: object):
@@ -276,11 +259,20 @@ def instrument_mongodb():
                 ),
             )
 
-    PymongoInstrumentor().instrument(
+    logfire.instrument_pymongo(
         tracer_provider=trace.get_tracer_provider(),
         capture_statement=True,
         response_hook=_response_hook,
     )
+
+
+def instrument_openai(client: Any | None = None):
+    from openai import AsyncOpenAI, OpenAI
+
+    if client is not None and not isinstance(client, (OpenAI, AsyncOpenAI)):
+        raise ValueError("client must be an instance of OpenAI or AsyncOpenAI")
+
+    logfire.instrument_openai(client)
 
 
 class Instruments(Enum):
@@ -292,25 +284,40 @@ class Instruments(Enum):
     REQUESTS = instrument_requests
     METRICS = instrument_metrics
     MONGODB = instrument_mongodb
+    OPENAI = instrument_openai
 
 
 def instrument_otel(
     settings: BaseSettings,
     app: Any | None = None,
-    only: tuple[Instruments, ...] | None = None,
+    only: (
+        Sequence[Instruments | tuple[Instruments, Sequence[Any]]] | None
+    ) = None,
 ):
-    init_metrics(settings)
-    init_tracer(settings)
+    logfire.configure(
+        send_to_logfire=False,
+        service_name=settings.PROJECT_NAME,
+        console=False,
+        metrics=logfire.MetricsOptions(
+            additional_readers=[get_metrics_reader()]
+        ),
+    )
+
+    instrument_metrics()
     instrument_logging(settings)
     if app:
-        instrument_fastapi(app)
+        instrument_fastapi(app, settings)
     if only is None:
-        instrument_redis()
-        instrument_celery()
         instrument_httpx()
     else:
-        for instrument in only:
-            if callable(instrument):
-                instrument()
+        for item in only:
+            instrument: Instruments
+            args: Sequence[Any] | None = None
+            if isinstance(item, Sequence):
+                instrument, args = item
             else:
-                instrument.value()
+                instrument = item
+            func: Callable = (
+                instrument if callable(instrument) else instrument.value
+            )
+            func(*args) if args is not None else func()

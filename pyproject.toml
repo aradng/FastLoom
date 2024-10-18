@@ -39,7 +39,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.0.31"
+version = "0.0.32"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -51,16 +51,20 @@ beanie = "^1.25.0"
 python-jose = "^3.3.0"
 pydantic = "^2.7.1"
 pydantic-settings = "^2.1.0"
+uvicorn = "^0.30.0"
+orjson = "^3.10.6"
 
 fastapi = { version = "^0.111", optional = true }
 python-multipart = { version = "*", optional = true }
-uvicorn = "^0.30.0"
 faststream = { version = "^0.5.12", extras = ["confluent", "rabbit", "otel"], optional = true }
 celery = { version = "^5.3.6", optional = true }
 httpx = { version = "^0.26.0", optional = true }
 requests = { version = "^2.31.0", optional = true }
 redis = { version = "^5.0.1", optional = true }
+openai = {version = "^1.51.2", optional = true}
+
 # OTEL
+logfire = "^1.1.0"
 sentry-sdk = { extras = ["fastapi"], version = "^1.39.1" }
 opentelemetry-distro = "*"
 opentelemetry-exporter-otlp = "^1.22.0"
@@ -77,7 +81,6 @@ opentelemetry-instrumentation-httpx = { version = "*", optional = true }
 opentelemetry-instrumentation-requests = { version = "*", optional = true }
 opentelemetry-instrumentation-redis = { version = "*", optional = true }
 opentelemetry-instrumentation-pymongo = { version = "*", optional = true }
-orjson = "^3.10.6"
 
 [tool.poetry.extras]
 FastAPI = [
@@ -108,6 +111,7 @@ HTTPx = ["httpx", "opentelemetry-instrumentation-httpx"]
 Requests = ["requests", "opentelemetry-instrumentation-requests"]
 Redis = ["redis", "opentelemetry-instrumentation-redis"]
 Mongodb = ["beanie", "opentelemetry-instrumentation-pymongo"]
+OpenAI = ["openai"]
 
 [tool.poetry.group.test.dependencies]
 pytest-asyncio = "^0.21.1"
