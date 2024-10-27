@@ -39,7 +39,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.0.32"
+version = "0.0.33"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -53,6 +53,7 @@ pydantic = "^2.7.1"
 pydantic-settings = "^2.1.0"
 uvicorn = "^0.30.0"
 orjson = "^3.10.6"
+pyyaml = "^6.0.2"
 
 fastapi = { version = "^0.111", optional = true }
 python-multipart = { version = "*", optional = true }
@@ -137,6 +138,7 @@ pre-commit = "^3.6.0"
 ruff = "^0.4.4"
 codespell = "^2.2.6"
 pyupgrade = "^3.15.2"
+types-pyyaml = "^6.0.12.20240917"
 
 [build-system]
 requires = ["poetry-core"]
