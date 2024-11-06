@@ -22,6 +22,7 @@ repos:
     rev: 24.10.0
     hooks:
       - id: black
+        args: ["--preview"]
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.1
     hooks:
@@ -36,7 +37,8 @@ repos:
       - id: mypy
         additional_dependencies:
           - "mypy-extensions==1.0.0"
-          - "pydantic==2.5.3"
+          - "typing-extensions==4.12.2"
+          - "pydantic==2.9.2"
           - "types-pyyaml"
 
   - repo: https://github.com/python-poetry/poetry

@@ -12,7 +12,8 @@ ignore-words-list = "nin,astroid"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 
-follow_imports = 'skip'
+
+follow_imports = 'normal'
 [[tool.mypy.overrides]]
 module = 'redis.asyncio.client'
 ignore_missing_imports = true
@@ -39,7 +40,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.0.33"
+version = "0.1.0"
 description = "Core package"
 authors = []
 readme = "README.md"

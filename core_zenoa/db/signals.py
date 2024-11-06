@@ -74,15 +74,16 @@ class BaseDocumentSignal(BaseModel):
 
     @classmethod
     def get_publisher(cls, operation: Operations):
-        class_changes = create_model(
+
+        class_changes = create_model(  # type: ignore[call-overload]
             f"{cls.__name__}Changes",
             __base__=cls,
             **{
-                field_name: (field_info.annotation | None, None)
+                field_name: (f"{field_info.annotation} | None", None)
                 for field_name, field_info in cls.model_fields.items()
             },
         )
-        class_instance = create_model(
+        class_instance = create_model(  # type: ignore[call-overload]
             f"{cls.__name__}Instance",
             __base__=cls,
             **{

@@ -27,8 +27,8 @@ from opentelemetry.sdk.resources import HOST_NAME, SERVICE_NAME, Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import Span
-from pydantic_settings import BaseSettings
 
+from core_zenoa.tenant.protocols import TenantMonitoringSchema
 from core_zenoa.utils import ColoredFormatter
 
 
@@ -47,7 +47,7 @@ def init_sentry(dsn: str, environment: str):
     )
 
 
-def _get_resource(settings: BaseSettings):
+def _get_resource(settings):
     return Resource(
         attributes={
             SERVICE_NAME: settings.PROJECT_NAME,
@@ -77,25 +77,14 @@ def _get_authorization_header(scopes: dict[str, Any]) -> str | None:
 def _set_user_attributes_to_span(span: Span, token: str):
     try:
         payload: dict[str, Any] = get_unverified_claims(token)
-        username: str = payload["name"]
-        user_id: str = payload["sub"]
-        span.set_attribute("username", username)
-        span.set_attribute("user_id", user_id)
+        span.set_attribute("username", payload["name"])
+        span.set_attribute("user_id", payload["sub"])
+        span.set_attribute("tenant", payload["owner"])
     except (JWTError, KeyError):
         return
 
 
-def _get_excluded_urls(settings: BaseSettings) -> list[str]:
-    try:
-        return [
-            f"{settings.API_PREFIX}/docs",
-            f"{settings.API_PREFIX}/openapi.json",
-        ]
-    except AttributeError:
-        return ["/docs", "/openapi.json"]
-
-
-def instrument_fastapi(app, settings: BaseSettings):
+def instrument_fastapi(app):
     from fastapi.responses import PlainTextResponse
     from fastapi.security.utils import get_authorization_scheme_param
     from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -114,7 +103,6 @@ def instrument_fastapi(app, settings: BaseSettings):
 
     logfire.instrument_fastapi(
         app,
-        excluded_urls=_get_excluded_urls(settings),
         server_request_hook=_server_request_hook,
         client_response_hook=_client_response_hook,
         meter_provider=metrics.get_meter_provider(),
@@ -139,10 +127,9 @@ def instrument_fastapi(app, settings: BaseSettings):
         )
 
 
-def instrument_logging(settings: BaseSettings):
+def instrument_logging(settings):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-
     otel_logger_provider = LoggerProvider(resource=_get_resource(settings))
     set_logger_provider(otel_logger_provider)
     otel_logger_provider.add_log_record_processor(
@@ -163,9 +150,7 @@ def instrument_logging(settings: BaseSettings):
     stream_handler.setFormatter(ColoredFormatter())
     logger.addHandler(stream_handler)
 
-    logfire_handler = logfire.LogfireLoggingHandler(
-        fallback=otel_handler, level=logging.DEBUG
-    )
+    logfire_handler = logfire.LogfireLoggingHandler(level=logging.DEBUG)
     logfire_handler.setFormatter(formatter)
     logger.addHandler(logfire_handler)
 
@@ -217,7 +202,8 @@ def patch_spanbuilder_set_channel() -> None:
     def set_channel(self: SpanBuilder, channel: AbstractChannel) -> None:
         if hasattr(channel, "_connection"):
             url = channel._connection.url
-            port = url.port or 5672
+            port = url.port or "5672"
+            assert isinstance(url.port, str)
             self._attributes.update(
                 {
                     SpanAttributes.NET_PEER_NAME: url.host,
@@ -225,7 +211,7 @@ def patch_spanbuilder_set_channel() -> None:
                 }
             )
 
-    opentelemetry.instrumentation.aio_pika.span_builder.SpanBuilder.set_channel = set_channel  # type: ignore[misc]  # noqa
+    opentelemetry.instrumentation.aio_pika.span_builder.SpanBuilder.set_channel = set_channel  # type: ignore[method-assign]  # noqa
 
 
 def instrument_rabbit():
@@ -288,7 +274,7 @@ class Instruments(Enum):
 
 
 def instrument_otel(
-    settings: BaseSettings,
+    settings: TenantMonitoringSchema,
     app: Any | None = None,
     only: (
         Sequence[Instruments | tuple[Instruments, Sequence[Any]]] | None
@@ -306,7 +292,7 @@ def instrument_otel(
     instrument_metrics()
     instrument_logging(settings)
     if app:
-        instrument_fastapi(app, settings)
+        instrument_fastapi(app)
     if only is None:
         instrument_httpx()
     else:
