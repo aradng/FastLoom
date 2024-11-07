@@ -41,14 +41,19 @@ class VerifiedAuth(JWTAuth):
                     "method": request.method,
                 },
             )
+
         if response.status_code != 200:
             raise HTTPException(status_code=403, detail=response.text)
         if not response.json():
             raise HTTPException(status_code=403)
 
-    async def get_claims(
-        self, request: Request, token: Annotated[str, Depends(oauth2_schema)]
-    ) -> UserClaims:
-        await self.introspect(token)
-        await self.acl(request, token)
-        return await super().get_claims(request, token)
+    @property
+    def get_claims(self):
+        async def _inner(
+            request: Request, token: str = Depends(self.oauth2_schema)
+        ) -> UserClaims:
+            await self.introspect(token)
+            await self.acl(request, token)
+            return super(VerifiedAuth, self).get_claims(token)
+
+        return _inner

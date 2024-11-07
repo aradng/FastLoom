@@ -16,6 +16,14 @@ TenantMapping = MutableMapping[TenantName, TenantNameSchema]
 TenantMappingWithHosts = MutableMapping[TenantName, TenantHostSchema]
 
 
+class TenantNotFound(Exception):
+    def __init__(self, tenant: str):
+        self.tenant = tenant
+
+    def __str__(self):
+        return f"Tenant {self.tenant} not found in settings"
+
+
 class BaseTenantSource[K]:
     settings: MutableMapping[TenantName, K]
 
@@ -30,7 +38,7 @@ class BaseTenantSource[K]:
     def get_dep(self) -> Callable[..., str]:
         def _inner(tenant: Annotated[str, Depends(self._dep)]) -> str:
             if tenant not in self.settings:
-                raise KeyError(f"Tenant {tenant} not found in settings")
+                raise TenantNotFound(tenant)
             return tenant
 
         return _inner
@@ -45,7 +53,9 @@ class HeaderSource(BaseTenantSource):
             assert isinstance(tenant.website_url.host, str)
             self._hosts[tenant.website_url.host] = tenant.name
 
-    async def _dep(self, x_forwarded_host: Annotated[str, Header()]) -> str:
+    async def _dep(
+        self, x_forwarded_host: Annotated[str, Header(include_in_schema=False)]
+    ) -> str:
         return self._hosts[x_forwarded_host]
 
 
@@ -76,14 +86,16 @@ class TokenHeaderSource(BaseTenantSource):
         super().__init__(settings)
         self.auth = JWTAuth(self.general_settings)
 
-    @property
-    async def get_claims(self):
-        return self.auth.get_claims
+    def get_dep(self) -> Callable[..., str]:
+        def _inner(
+            claims: Annotated[UserClaims, Depends(self.auth.get_claims)],
+        ) -> str:
+            tenant = claims.owner
+            if tenant not in self.settings:
+                raise TenantNotFound(tenant)
+            return tenant
 
-    async def _dep(
-        self, token: Annotated[UserClaims, Depends(get_claims)]
-    ) -> str:
-        return token.owner
+        return _inner
 
 
 class ContextSource(BaseTenantSource):

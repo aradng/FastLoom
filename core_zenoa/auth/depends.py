@@ -1,6 +1,7 @@
+from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose.jwt import get_unverified_claims
 
@@ -17,10 +18,14 @@ class JWTAuth:
         self.oauth2_schema = OAuth2PasswordBearer(str(settings.IAM_TOKEN_URL))
 
     @classmethod
-    def parse_token(cls, token: str):
+    def parse_token(cls, token: str) -> UserClaims:
         return UserClaims.model_validate(get_unverified_claims(token))
 
-    async def get_claims(
-        self, request: Request, token: Annotated[str, Depends(oauth2_schema)]
-    ) -> UserClaims:
-        return self.parse_token(token)
+    @property
+    def get_claims(self) -> Callable[..., UserClaims]:
+        def _inner(
+            token: Annotated[str, Depends(self.oauth2_schema)],
+        ) -> UserClaims:
+            return self.parse_token(token)
+
+        return _inner
