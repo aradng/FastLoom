@@ -202,8 +202,7 @@ def patch_spanbuilder_set_channel() -> None:
     def set_channel(self: SpanBuilder, channel: AbstractChannel) -> None:
         if hasattr(channel, "_connection"):
             url = channel._connection.url
-            port = url.port or "5672"
-            assert isinstance(url.port, str)
+            port = str(url.port) or "5672"
             self._attributes.update(
                 {
                     SpanAttributes.NET_PEER_NAME: url.host,
