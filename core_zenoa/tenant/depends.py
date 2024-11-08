@@ -1,12 +1,13 @@
 from abc import abstractmethod
 from collections.abc import Callable, MutableMapping
+from json import JSONDecodeError
 from typing import Annotated, Generic
 
 from fastapi import Depends, Header, HTTPException, Path, Request
 from faststream.rabbit.fastapi import RabbitMessage
 from pydantic import StringConstraints
 
-from core_zenoa.auth.depends import JWTAuth
+from core_zenoa.auth.depends import JWTAuth, OptionalJWTAuth
 from core_zenoa.auth.schemas import UserClaims
 from core_zenoa.tenant.base.utils import V, get_general_settings
 from core_zenoa.tenant.protocols import TenantHostSchema, TenantNameSchema
@@ -32,11 +33,15 @@ class BaseTenantSource[K]:
         self.general_settings = get_general_settings(settings)
 
     @abstractmethod
-    async def _dep(self, *args, **kwargs) -> str:
+    async def _dep(self, *args, **kwargs) -> str | None:
         pass
 
-    def get_dep(self) -> Callable[..., str]:
-        def _inner(tenant: Annotated[str, Depends(self._dep)]) -> str:
+    def get_dep(self) -> Callable[..., str | None]:
+        def _inner(
+            tenant: Annotated[str | None, Depends(self._dep)],
+        ) -> str | None:
+            if tenant is None:
+                return None
             if tenant not in self.settings:
                 raise TenantNotFound(tenant)
             return tenant
@@ -72,28 +77,54 @@ class TokenBodySource(BaseTenantSource):
         self.auth = JWTAuth(self.general_settings)
 
     async def _dep(self, req: Request) -> str:
-        if "token" not in (req_json := await req.json()):
+        try:
+            if "token" not in (req_json := await req.json()):
+                raise HTTPException(
+                    status_code=400, detail="Token not found in request body."
+                )
+        except JSONDecodeError:
             raise HTTPException(
-                status_code=400, detail="Token not found in request body."
+                status_code=400, detail="Request body is not JSON decodable."
             )
-        return self.auth.parse_token(req_json["token"]).owner
+        return self.auth._parse_token(req_json["token"]).owner
 
 
-class TokenHeaderSource(BaseTenantSource):
-    auth: JWTAuth
+class OptionalTokenHeaderSource(BaseTenantSource):
+    auth: OptionalJWTAuth
+    _auth_cls = OptionalJWTAuth
 
     def __init__(self, settings: TenantMapping):
         super().__init__(settings)
-        self.auth = JWTAuth(self.general_settings)
+        self.auth = self._auth_cls(self.general_settings)
+
+    def get_dep(self) -> Callable[..., str | None]:
+        def _inner(
+            claims: Annotated[
+                UserClaims | None, Depends(self.auth.get_claims)
+            ],
+        ) -> str | None:
+            if claims is None:
+                return None
+            return self._get_tenant_from_claims(claims)
+
+        return _inner
+
+    def _get_tenant_from_claims(self, claims: UserClaims) -> str:
+        tenant = claims.owner
+        if tenant not in self.settings:
+            raise TenantNotFound(tenant)
+        return tenant
+
+
+class TokenHeaderSource(OptionalTokenHeaderSource):
+    auth: JWTAuth
+    _auth_cls = JWTAuth
 
     def get_dep(self) -> Callable[..., str]:
         def _inner(
             claims: Annotated[UserClaims, Depends(self.auth.get_claims)],
         ) -> str:
-            tenant = claims.owner
-            if tenant not in self.settings:
-                raise TenantNotFound(tenant)
-            return tenant
+            return self._get_tenant_from_claims(claims)
 
         return _inner
 
@@ -117,7 +148,7 @@ class TenantDependancySelector(Generic[V]):
 
     def __getitem__(
         self, source_cls: type[BaseTenantSource]
-    ) -> Callable[..., str]:
+    ) -> Callable[..., str | None]:
         return self._sources[source_cls.__name__].get_dep()
 
 

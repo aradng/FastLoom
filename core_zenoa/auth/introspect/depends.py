@@ -1,23 +1,26 @@
-from typing import Annotated
+from collections.abc import Callable, Coroutine
+from typing import Annotated, Any
 
 import httpx
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 
-from core_zenoa.auth.depends import JWTAuth
+from core_zenoa.auth.depends import JWTAuth, OptionalJWTAuth
 from core_zenoa.auth.introspect.schema import IntrospectionResponse
 from core_zenoa.auth.protocols import SidecarSettings
 from core_zenoa.auth.schemas import UserClaims
 
 
-class VerifiedAuth(JWTAuth):
-    oauth2_schema: OAuth2PasswordBearer | None = None
+class OptionalVerifiedAuth(OptionalJWTAuth):
     settings: SidecarSettings
+    _oauth2_schema: OAuth2PasswordBearer | None = None
 
     def __init__(self, settings: SidecarSettings):
         super().__init__(settings)
 
-    async def introspect(self, token: Annotated[str, Depends(oauth2_schema)]):
+    async def _introspect(
+        self, token: Annotated[str, Depends(_oauth2_schema)]
+    ):
         async with httpx.AsyncClient() as client:
             response: httpx.Response = await client.post(
                 f"{self.settings.IAM_SIDECAR_URL}/introspect",
@@ -29,8 +32,8 @@ class VerifiedAuth(JWTAuth):
         if not data.active:
             raise HTTPException(status_code=403, detail="Inactive token")
 
-    async def acl(
-        self, request: Request, token: Annotated[str, Depends(oauth2_schema)]
+    async def _acl(
+        self, request: Request, token: Annotated[str, Depends(_oauth2_schema)]
     ) -> None:
         async with httpx.AsyncClient() as client:
             response: httpx.Response = await client.post(
@@ -48,12 +51,29 @@ class VerifiedAuth(JWTAuth):
             raise HTTPException(status_code=403)
 
     @property
-    def get_claims(self):
+    def get_claims(
+        self,
+    ) -> Callable[..., Coroutine[Any, Any, UserClaims | None]]:
         async def _inner(
-            request: Request, token: str = Depends(self.oauth2_schema)
+            request: Request, token: str | None = Depends(self._oauth2_schema)
+        ) -> UserClaims | None:
+            if token is None:
+                return None
+            await self._introspect(token)
+            await self._acl(request, token)
+            return await super(OptionalVerifiedAuth, self).get_claims(token)
+
+        return _inner
+
+
+class VerifiedAuth(JWTAuth, OptionalVerifiedAuth):
+    @property
+    def get_claims(self) -> Callable[..., Coroutine[Any, Any, UserClaims]]:
+        async def _inner(
+            request: Request, token: str = Depends(self._oauth2_schema)
         ) -> UserClaims:
-            await self.introspect(token)
-            await self.acl(request, token)
-            return super(VerifiedAuth, self).get_claims(token)
+            await self._introspect(token)
+            await self._acl(request, token)
+            return await super(VerifiedAuth, self).get_claims(token)
 
         return _inner
