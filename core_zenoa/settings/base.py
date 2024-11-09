@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 class IAMSettings(BaseModel):
     IAM_SIDECAR_URL: HttpUrl = Field(
-        HttpUrl("http://iam:8000/api/iam/auth/sidecar")
+        HttpUrl("http://iam:8000/api/iam/sidecar")
     )
     IAM_TOKEN_URL: Path = Path("/api/iam/auth/login/basic")
 

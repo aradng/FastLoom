@@ -4,7 +4,6 @@ from json import JSONDecodeError
 from typing import Annotated, Generic
 
 from fastapi import Depends, Header, HTTPException, Path, Request
-from faststream.rabbit.fastapi import RabbitMessage
 from pydantic import StringConstraints
 
 from core_zenoa.auth.depends import JWTAuth, OptionalJWTAuth
@@ -129,9 +128,26 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
         return _inner
 
 
-class ContextSource(BaseTenantSource):
-    async def _dep(self, tenant: Annotated[str, RabbitMessage]):
-        return tenant
+try:
+    from faststream import Depends as StreamDepends
+    from faststream.rabbit.fastapi import RabbitMessage
+
+    class ContextSource(BaseTenantSource):
+        async def _dep(self, tenant: Annotated[str, RabbitMessage]):
+            return tenant
+
+    def get_dep(self) -> Callable[..., str | None]:
+        def _inner(
+            tenant: Annotated[str, StreamDepends(self._dep)],
+        ) -> str | None:
+            if tenant not in self.settings:
+                raise TenantNotFound(tenant)
+            return tenant
+
+        return _inner
+
+except ImportError:
+    pass
 
 
 class TenantDependancySelector(Generic[V]):
