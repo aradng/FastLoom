@@ -85,7 +85,7 @@ class TokenBodySource(BaseTenantSource):
             raise HTTPException(
                 status_code=400, detail="Request body is not JSON decodable."
             )
-        return self.auth._parse_token(req_json["token"]).owner
+        return self.auth._parse_token(req_json["token"]).tenant
 
 
 class OptionalTokenHeaderSource(BaseTenantSource):
@@ -109,7 +109,7 @@ class OptionalTokenHeaderSource(BaseTenantSource):
         return _inner
 
     def _get_tenant_from_claims(self, claims: UserClaims) -> str:
-        tenant = claims.owner
+        tenant = claims.tenant
         if tenant not in self.settings:
             raise TenantNotFound(tenant)
         return tenant

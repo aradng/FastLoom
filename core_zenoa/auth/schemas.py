@@ -7,7 +7,7 @@ class Role(BaseModel):
 
 
 class UserClaims(BaseModel):
-    owner: str = Field(title="Owner")
+    tenant: str = Field(title="Owner", alias="owner")
     id: str | None = Field(None, title="Id")
     username: str = Field(..., title="Name", validation_alias="name")
     email: str | None = Field(None, title="Email")
@@ -24,8 +24,3 @@ class UserClaims(BaseModel):
             "IR": "+98",
             "US": "+1",
         }.get(self.country_code)
-
-    @computed_field  # type: ignore[misc]
-    @property
-    def tenant(self) -> str:
-        return self.owner
