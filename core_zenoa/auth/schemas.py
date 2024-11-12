@@ -24,3 +24,8 @@ class UserClaims(BaseModel):
             "IR": "+98",
             "US": "+1",
         }.get(self.country_code)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def tenant(self) -> str:
+        return self.owner
