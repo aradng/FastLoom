@@ -8,7 +8,7 @@ class TenantNameSchema(Protocol):
 
 
 class TenantHostSchema(TenantNameSchema, Protocol):
-    website_url: HttpUrl
+    website_url: HttpUrl | list[HttpUrl]
 
 
 class TenantMonitoringSchema(Protocol):

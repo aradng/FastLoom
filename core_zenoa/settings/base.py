@@ -15,7 +15,7 @@ class TenantSettings(BaseModel):
 
 
 class TenantWithHostSettings(TenantSettings):
-    website_url: HttpUrl
+    website_url: HttpUrl | list[HttpUrl]
 
 
 class MonitoringSettings(BaseModel):

@@ -5,6 +5,7 @@ from typing import Annotated, Generic
 
 from fastapi import Depends, Header, HTTPException, Path, Request
 from pydantic import StringConstraints
+from pydantic_core import Url
 
 from core_zenoa.auth.depends import JWTAuth, OptionalJWTAuth
 from core_zenoa.auth.schemas import UserClaims
@@ -54,8 +55,12 @@ class HeaderSource(BaseTenantSource):
     def __init__(self, settings: TenantMappingWithHosts) -> None:
         super().__init__(settings)
         for tenant in settings.values():
-            assert isinstance(tenant.website_url.host, str)
-            self._hosts[tenant.website_url.host] = tenant.name
+            if isinstance(tenant.website_url, Url):
+                tenant.website_url = [tenant.website_url]
+            assert isinstance(tenant.website_url, list)
+            self._hosts.update(
+                {url.host: tenant.name for url in tenant.website_url}
+            )
 
     async def _dep(
         self, x_forwarded_host: Annotated[str, Header(include_in_schema=False)]
