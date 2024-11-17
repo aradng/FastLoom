@@ -59,7 +59,11 @@ class HeaderSource(BaseTenantSource):
                 tenant.website_url = [tenant.website_url]
             assert isinstance(tenant.website_url, list)
             self._hosts.update(
-                {url.host: tenant.name for url in tenant.website_url}
+                {
+                    url.host: tenant.name
+                    for url in tenant.website_url
+                    if isinstance(url.host, str)
+                }
             )
 
     async def _dep(
