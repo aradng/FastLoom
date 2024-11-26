@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Self
 
 import bson
 from beanie import (
@@ -11,7 +12,7 @@ from beanie import (
     before_event,
 )
 from fastapi import HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from core_zenoa.date import utcnow
 
@@ -41,8 +42,8 @@ class BaseDocument(Document):
     id: PydanticObjectId = Field(default_factory=bson.ObjectId, alias="_id")  # type: ignore[assignment] # noqa
 
     @classmethod
-    async def get_or_404(cls, id: PydanticObjectId):
-        obj = await cls.get(id)
+    async def get_or_404(cls, id: PydanticObjectId) -> Self:
+        obj: Self | None = await cls.get(id)
         if obj is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -51,11 +52,28 @@ class BaseDocument(Document):
         return obj
 
     @classmethod
-    async def find_one_or_404(cls, *args, **kwargs):
-        obj = await cls.find_one(*args, **kwargs)
+    async def find_one_or_404(cls, *args, **kwargs) -> Self:
+        obj: Self | None = await cls.find_one(*args, **kwargs)
         if obj is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"{cls.__name__} not found",
             )
         return obj
+
+
+class BasePaginationQuery(BaseModel):
+    offset: int | None = Field(None, ge=0)
+    limit: int | None = Field(None, ge=0)
+
+    @field_validator("limit", mode="after")
+    @classmethod
+    def convert_zero_limit(cls, v: int | None) -> int | None:
+        return v or None
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def skip(self) -> int | None:
+        if self.limit and self.offset is not None:
+            return self.limit * self.offset
+        return None

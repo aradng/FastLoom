@@ -40,7 +40,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.1.12"
+version = "0.1.13"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -56,7 +56,7 @@ uvicorn = "^0.30.0"
 orjson = "^3.10.6"
 pyyaml = "^6.0.2"
 
-fastapi = { version = "^0.115", optional = true }
+fastapi = { version = "^0.111", optional = true }
 python-multipart = { version = "*", optional = true }
 faststream = { version = "0.5.28", extras = ["confluent", "rabbit", "otel"], optional = true }
 celery = { version = "^5.3.6", optional = true }
