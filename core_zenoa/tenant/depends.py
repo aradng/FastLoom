@@ -57,14 +57,14 @@ class HeaderSource(BaseTenantSource):
         for tenant in settings.values():
             if isinstance(tenant.website_url, Url):
                 tenant.website_url = [tenant.website_url]
-            assert isinstance(tenant.website_url, list)
-            self._hosts.update(
-                {
-                    url.host: tenant.name
-                    for url in tenant.website_url
-                    if isinstance(url.host, str)
-                }
-            )
+            else:
+                self._hosts.update(
+                    {
+                        url.host: tenant.name
+                        for url in tenant.website_url
+                        if isinstance(url.host, str)
+                    }
+                )
 
     async def _dep(
         self, x_forwarded_host: Annotated[str, Header(include_in_schema=False)]
