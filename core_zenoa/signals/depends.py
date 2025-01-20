@@ -20,54 +20,26 @@ from faststream.rabbit.subscriber.asyncapi import AsyncAPISubscriber
 from opentelemetry import trace
 
 from core_zenoa.signals.middlewares import RabbitPayloadTelemetryMiddleware
+from core_zenoa.signals.settings import RabbitmqSettings
 
 logger = logging.getLogger(__name__)
 
 
-def _get_kafka_url() -> str:
-    return os.getenv("KAFKA_URL", "localhost:9092")
-
-
-def _get_rabbit_url():
-    return os.getenv("RABBIT_URL", "amqp://localhost:5672/")
-
-
-def get_stream_broker(name: str, kafka_url: str | None = None) -> KafkaBroker:
-    kafka_url = kafka_url or _get_kafka_url()
-    broker = KafkaBroker(kafka_url)
-    logger.debug(f"Created stream broker: {name}: {broker}")
-    return broker
-
-
-def get_stream_router(name: str, kafka_url: str | None = None) -> KafkaRouter:
-    kafka_url = kafka_url or _get_kafka_url()
-    router = KafkaRouter(kafka_url, schema_url=f"/{name}/asyncapi")
-    logger.debug(f"Created stream router: {name}: {router}")
-    return router
-
-
-def get_rabbit_broker(
-    name: str, rabbit_url: str | None = None
-) -> RabbitBroker:
-    rabbit_url = rabbit_url or _get_rabbit_url()
+def get_rabbit_broker(settings: RabbitmqSettings) -> RabbitBroker:
     broker = RabbitBroker(
-        rabbit_url,
+        str(settings.RABBITMQ_URI),
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()
             ),
         ),
     )
-    logger.debug(f"Created stream broker: {name}: {broker}")
     return broker
 
 
-def get_rabbit_router(
-    name: str, rabbit_url: str | None = None
-) -> RabbitRouter:
-    rabbit_url = rabbit_url or _get_rabbit_url()
-    router = RabbitRouter(
-        rabbit_url,
+def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
+    return RabbitRouter(
+        str(settings.RABBITMQ_URI),
         schema_url=f"/{name}/asyncapi",
         middlewares=(
             RabbitPayloadTelemetryMiddleware(

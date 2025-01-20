@@ -2,7 +2,7 @@ import json
 import logging
 from collections.abc import Callable, Sequence
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import logfire
 import orjson
@@ -27,14 +27,24 @@ from opentelemetry.sdk.resources import HOST_NAME, SERVICE_NAME, Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import Span
+from pydantic import HttpUrl
 
+from core_zenoa.observability.settings import ObservabilitySettings
 from core_zenoa.tenant.protocols import TenantMonitoringSchema
 from core_zenoa.utils import ColoredFormatter
 
+if TYPE_CHECKING:
+    try:
+        from fastapi import FastAPI
+    except ImportError:
+        FastAPI = Any
 
-def init_sentry(dsn: str, environment: str):
+
+def init_sentry(dsn: HttpUrl | str | None, environment: str):
     if dsn is None:
         raise ValueError("Sentry DSN is not set")
+    if isinstance(dsn, HttpUrl):
+        dsn = str(dsn)
 
     sentry_sdk.init(
         dsn=dsn,
@@ -84,7 +94,7 @@ def _set_user_attributes_to_span(span: Span, token: str):
         return
 
 
-def instrument_fastapi(app):
+def instrument_fastapi(app: "FastAPI"):
     from fastapi.responses import PlainTextResponse
     from fastapi.security.utils import get_authorization_scheme_param
     from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -263,7 +273,6 @@ def instrument_openai(client: Any | None = None):
 class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
-    CONFLUENT_KAFKA = instrument_confluent_kafka
     RABBIT = instrument_rabbit
     HTTPX = instrument_httpx
     REQUESTS = instrument_requests
@@ -274,10 +283,8 @@ class Instruments(Enum):
 
 def instrument_otel(
     settings: TenantMonitoringSchema,
-    app: Any | None = None,
-    only: (
-        Sequence[Instruments | tuple[Instruments, Sequence[Any]]] | None
-    ) = None,
+    app: "FastAPI | None" = None,
+    only: tuple[Instruments, ...] | None = None,
 ):
     logfire.configure(
         send_to_logfire=False,
@@ -306,3 +313,28 @@ def instrument_otel(
                 instrument if callable(instrument) else instrument.value
             )
             func(*args) if args is not None else func()
+
+
+class InitMonitoring:
+    def __init__(
+        self,
+        settings: ObservabilitySettings,
+        instruments: tuple[Instruments, ...] | None = None,
+    ):
+        self.settings = settings
+        self.instruments = instruments
+
+    def __enter__(self):
+        if int(self.settings.SENTRY_ENABLED):
+            init_sentry(self.settings.SENTRY_DSN, self.settings.ENVIRONMENT)
+
+        if int(self.settings.OTEL_ENABLED):
+            instrument_otel(self.settings, only=self.instruments)
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb): ...
+
+    def instrument(self, app: "FastAPI"):
+        if app is not None and int(self.settings.OTEL_ENABLED):
+            instrument_fastapi(app)

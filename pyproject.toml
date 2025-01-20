@@ -40,7 +40,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.1.23"
+version = "0.2.0"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -53,13 +53,13 @@ python-jose = "^3.3.0"
 pydantic = { version = "^2.10.3", extras = ["email"] }
 pydantic-settings = "^2.1.0"
 uvicorn = "^0.30.0"
-orjson = "^3.10.6"
+orjson = "3.10.14"
 pyyaml = "^6.0.2"
 
 # fastapi = { version = "^0.111", optional = true }
 fastapi = { version = "^0.115", optional = true }
 python-multipart = { version = "*", optional = true }
-faststream = { version = "^0.5.28", extras = ["confluent", "rabbit", "otel"], optional = true }
+faststream = { version = "^0.5.28", extras = ["rabbit", "otel"], optional = true }
 celery = { version = "^5.3.6", optional = true }
 httpx = { version = "^0.26.0", optional = true }
 requests = { version = "^2.31.0", optional = true }
@@ -77,7 +77,6 @@ opentelemetry-instrumentation-system-metrics = { version = "*" }
 opentelemetry-instrumentation-urllib3 = { version = "*" }
 opentelemetry-instrumentation-asgi = { version = "*", optional = true }
 opentelemetry-instrumentation-fastapi = ">0.46b"
-opentelemetry-instrumentation-confluent-kafka = { version = "*", optional = true }
 opentelemetry-instrumentation-aio-pika = { version = "*", optional = true }
 opentelemetry-instrumentation-celery = { version = "*", optional = true }
 opentelemetry-instrumentation-httpx = { version = "*", optional = true }
@@ -92,14 +91,6 @@ FastAPI = [
     "uvicorn",
     "opentelemetry-instrumentation-asgi",
     "opentelemetry-instrumentation-fastapi",
-]
-Kafka = [
-    "fastapi",
-    "uvicorn",
-    "faststream",
-    "opentelemetry-instrumentation-asgi",
-    "opentelemetry-instrumentation-fastapi",
-    "opentelemetry-instrumentation-confluent-kafka",
 ]
 Rabbit = [
     "fastapi",
