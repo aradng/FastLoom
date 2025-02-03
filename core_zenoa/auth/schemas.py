@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 
 
 class Role(BaseModel):
@@ -7,20 +7,9 @@ class Role(BaseModel):
 
 
 class UserClaims(BaseModel):
-    tenant: str = Field(title="Owner", alias="owner")
-    id: str | None = Field(None, title="Id")
-    username: str = Field(..., title="Name", validation_alias="name")
-    email: str | None = Field(None, title="Email")
-    phone: str | None = Field(None, title="Phone")
-    roles: list[Role] | None = Field(default_factory=list, title="Roles")
-    country_code: str = Field(
-        ..., title="CountryCode", validation_alias="countryCode"
-    )
-
-    @computed_field  # type: ignore[misc]
-    @property
-    def prefix_code(self) -> str | None:
-        return {
-            "IR": "+98",
-            "US": "+1",
-        }.get(self.country_code)
+    tenant: str = Field(alias="owner")
+    id: str | None = None
+    username: str = Field(..., validation_alias="name")
+    email: str | None = None
+    phone: str | None = None
+    roles: list[Role] | None = Field(default_factory=list)

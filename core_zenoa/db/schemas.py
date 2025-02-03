@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Self
+from typing import Any, Self
 
 import bson
 from beanie import (
@@ -77,3 +77,9 @@ class BasePaginationQuery(BaseModel):
         if self.limit and self.offset is not None:
             return self.limit * self.offset
         return None
+
+
+class PaginatedResponse(BaseModel):
+    # TODO convert to what we implemented in bazisazan
+    data: list[Any] = Field(default_factory=list)
+    count: int = Field(default=0, ge=0)
