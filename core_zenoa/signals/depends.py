@@ -279,7 +279,7 @@ class RabbitSubscriber:
         def _inner(func):
             for routing_key in routing_keys:
                 func = self.subscriber(
-                    queue=self._get_queue(routing_key),
+                    routing_key,
                     retry_backoff=retry_backoff,
                     **kwargs,
                 )(func)
