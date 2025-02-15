@@ -1,7 +1,7 @@
 import re
 from typing import Annotated
 
-from pydantic import AfterValidator, BeforeValidator
+from pydantic import AfterValidator
 
 PHONE_REGEX = r"^(\+|00)\d{1,2}\s?((\(\d{3}\))|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}$"
 EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -36,7 +36,7 @@ PhoneNumberOrNone = Annotated[
     str | None, AfterValidator(PhoneValidation.phone_validator)
 ]
 ValidatedPhoneNumber = Annotated[
-    str, BeforeValidator(PhoneValidation.phone_validator_or_exc)
+    str, AfterValidator(PhoneValidation.phone_validator_or_exc)
 ]
 
 
