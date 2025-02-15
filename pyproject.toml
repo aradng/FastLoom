@@ -40,7 +40,7 @@ warn_required_dynamic_aliases = true
 
 [tool.poetry]
 name = "core-zenoa"
-version = "0.2.0"
+version = "0.2.1"
 description = "Core package"
 authors = []
 readme = "README.md"
