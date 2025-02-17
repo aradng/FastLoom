@@ -74,7 +74,7 @@ class HeaderSource(BaseTenantSource[TenantHostSchema]):
         return dict(
             chain(
                 *(
-                    (
+                    tuple(
                         (url.host, tenant.name)
                         for url in (
                             tenant.website_url
