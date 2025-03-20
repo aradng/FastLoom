@@ -31,7 +31,7 @@ build-core:
   image: $CI_REGISTRY/microservice/core-bluprint/system:latest
   script:
     - poetry build
-    - poetry config repositories.nexus-registry "https://nexus.bluprint.ir/repository/private-package-registry/simple"
+    - poetry config repositories.nexus-registry "https://nexus.bluprint.ir/repository/private-package-registry/"
     - poetry config http-basic.nexus-registry $NEXUS_USERNAME $NEXUS_PASSWORD
     - poetry publish --repository nexus-registry
   only:

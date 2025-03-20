@@ -1,12 +1,9 @@
 import logging
-import os
 from typing import Annotated, Protocol
 
 from aio_pika import IncomingMessage, Message
 from faststream import Context, ExceptionMiddleware
 from faststream.broker.message import StreamMessage
-from faststream.confluent import KafkaBroker
-from faststream.confluent.fastapi import KafkaRouter
 from faststream.rabbit import (
     ExchangeType,
     RabbitBroker,
@@ -47,12 +44,10 @@ def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
             ),
         ),
     )
-    logger.debug(f"Created stream router: {name}: {router}")
-    return router
 
 
 class RabbitSubscriptable(Protocol):
-    RABBIT_URI: str
+    RABBITMQ_URI: str
     ENVIRONMENT: str
     PROJECT_NAME: str
 
@@ -95,7 +90,9 @@ class RabbitSubscriber:
         self._settings = settings
         self.router = get_rabbit_router(
             f"api/{self._settings.PROJECT_NAME}",
-            rabbit_url=str(self._settings.RABBIT_URI),
+            RabbitmqSettings.model_validate(
+                {"RABBITMQ_URI": self._settings.RABBITMQ_URI}
+            ),
         )
         self.exchange = RabbitExchange(
             name="amq.topic", type=ExchangeType.TOPIC, durable=True
