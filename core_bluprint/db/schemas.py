@@ -14,7 +14,7 @@ from beanie import (
 from fastapi import HTTPException, status
 from pydantic import BaseModel, Field, computed_field, field_validator
 
-from core_zenoa.date import utcnow
+from core_bluprint.date import utcnow
 
 
 class CreatedAtSchema(BaseModel):

@@ -5,7 +5,7 @@ from typing import Annotated, Any, Generic, TypeVar
 import yaml
 from pydantic import BaseModel, RootModel, StringConstraints
 
-from core_zenoa.tenant.protocols import TenantHostSchema, TenantNameSchema
+from core_bluprint.tenant.protocols import TenantHostSchema, TenantNameSchema
 
 DEFAULT_CONFIG_KEY: str = "default"
 

@@ -29,9 +29,9 @@ from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import Span
 from pydantic import HttpUrl
 
-from core_zenoa.observability.settings import ObservabilitySettings
-from core_zenoa.tenant.protocols import TenantMonitoringSchema
-from core_zenoa.utils import ColoredFormatter
+from core_bluprint.observability.settings import ObservabilitySettings
+from core_bluprint.tenant.protocols import TenantMonitoringSchema
+from core_bluprint.utils import ColoredFormatter
 
 if TYPE_CHECKING:
     try:

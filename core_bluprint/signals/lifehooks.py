@@ -1,5 +1,5 @@
-from core_zenoa.db.schemas import BaseDocument
-from core_zenoa.db.signals import Operations, SignalsSave, SignalsUpdate
+from core_bluprint.db.schemas import BaseDocument
+from core_bluprint.db.signals import Operations, SignalsSave, SignalsUpdate
 
 
 async def init_streams(models: list[BaseDocument]):

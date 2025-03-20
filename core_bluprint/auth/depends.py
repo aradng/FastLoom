@@ -5,8 +5,8 @@ from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose.jwt import get_unverified_claims
 
-from core_zenoa.auth.protocols import OAuth2Settings
-from core_zenoa.auth.schemas import UserClaims
+from core_bluprint.auth.protocols import OAuth2Settings
+from core_bluprint.auth.schemas import UserClaims
 
 
 class OptionalJWTAuth:

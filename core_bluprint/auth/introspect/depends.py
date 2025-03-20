@@ -5,10 +5,10 @@ import httpx
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 
-from core_zenoa.auth.depends import JWTAuth, OptionalJWTAuth
-from core_zenoa.auth.introspect.schema import IntrospectionResponse
-from core_zenoa.auth.protocols import SidecarSettings
-from core_zenoa.auth.schemas import UserClaims
+from core_bluprint.auth.depends import JWTAuth, OptionalJWTAuth
+from core_bluprint.auth.introspect.schema import IntrospectionResponse
+from core_bluprint.auth.protocols import SidecarSettings
+from core_bluprint.auth.schemas import UserClaims
 
 
 class OptionalVerifiedAuth(OptionalJWTAuth):

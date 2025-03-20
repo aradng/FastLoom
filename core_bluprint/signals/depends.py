@@ -19,8 +19,8 @@ from faststream.rabbit.schemas.queue import ClassicQueueArgs
 from faststream.rabbit.subscriber.asyncapi import AsyncAPISubscriber
 from opentelemetry import trace
 
-from core_zenoa.signals.middlewares import RabbitPayloadTelemetryMiddleware
-from core_zenoa.signals.settings import RabbitmqSettings
+from core_bluprint.signals.middlewares import RabbitPayloadTelemetryMiddleware
+from core_bluprint.signals.settings import RabbitmqSettings
 
 logger = logging.getLogger(__name__)
 

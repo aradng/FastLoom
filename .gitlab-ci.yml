@@ -6,7 +6,7 @@ static-analysis:
   stage: static-analysis
   tags:
     - docker
-  image: $CI_REGISTRY/microservice/core-zenoa/poetry.dev:latest
+  image: $CI_REGISTRY/microservice/core-bluprint/poetry.dev:latest
   variables:
     GIT_STRATEGY: clone
   script:
@@ -28,11 +28,11 @@ build-core:
   stage: build
   tags:
     - docker
-  image: $CI_REGISTRY/microservice/core-zenoa/system:latest
+  image: $CI_REGISTRY/microservice/core-bluprint/system:latest
   script:
     - poetry build
-    - poetry config repositories.gitlab "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi"
-    - poetry config http-basic.gitlab gitlab-ci-token "$CI_JOB_TOKEN"
-    - poetry publish --repository gitlab
+    - poetry config repositories.nexus-registry "https://nexus.bluprint.ir/repository/private-package-registry/simple"
+    - poetry config http-basic.nexus-registry $NEXUS_USERNAME $NEXUS_PASSWORD
+    - poetry publish --repository nexus-registry
   only:
     - main

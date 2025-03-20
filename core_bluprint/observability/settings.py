@@ -1,6 +1,6 @@
 from pydantic import HttpUrl
 
-from core_zenoa.settings.base import MonitoringSettings
+from core_bluprint.settings.base import MonitoringSettings
 
 
 class ObservabilitySettings(MonitoringSettings):

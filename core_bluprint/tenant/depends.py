@@ -7,10 +7,10 @@ from typing import Annotated, Generic, TypeAliasType, TypeVar
 from fastapi import Depends, Header, HTTPException, Path, Request
 from pydantic import StringConstraints
 
-from core_zenoa.auth.depends import JWTAuth, OptionalJWTAuth
-from core_zenoa.auth.schemas import UserClaims
-from core_zenoa.tenant.base.utils import get_general_settings
-from core_zenoa.tenant.protocols import TenantHostSchema, TenantNameSchema
+from core_bluprint.auth.depends import JWTAuth, OptionalJWTAuth
+from core_bluprint.auth.schemas import UserClaims
+from core_bluprint.tenant.base.utils import get_general_settings
+from core_bluprint.tenant.protocols import TenantHostSchema, TenantNameSchema
 
 TenantName = Annotated[str, StringConstraints(strip_whitespace=True)]
 TenantMapping = MutableMapping[TenantName, TenantNameSchema]

@@ -4,7 +4,7 @@ from typing import ParamSpec, TypeVar
 
 from motor.core import AgnosticClient, AgnosticClientSession
 
-from core_zenoa.db.lifehooks import get_mongo_client
+from core_bluprint.db.lifehooks import get_mongo_client
 
 T = TypeVar("T")
 P = ParamSpec("P")

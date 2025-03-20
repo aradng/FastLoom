@@ -39,7 +39,7 @@ init_typed = true
 warn_required_dynamic_aliases = true
 
 [tool.poetry]
-name = "core-zenoa"
+name = "core-bluprint"
 version = "0.2.4"
 description = "Core package"
 authors = []

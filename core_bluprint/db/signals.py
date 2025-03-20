@@ -7,8 +7,8 @@ from uuid import UUID
 from beanie import Insert, Replace, SaveChanges, Update, after_event
 from pydantic import BaseModel, PrivateAttr, create_model, model_validator
 
-from core_zenoa.db.schemas import BaseDocument
-from core_zenoa.signals.depends import get_stream_router
+from core_bluprint.db.schemas import BaseDocument
+from core_bluprint.signals.depends import get_stream_router
 
 logger = logging.getLogger(__name__)
 
