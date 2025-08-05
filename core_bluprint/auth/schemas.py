@@ -8,8 +8,8 @@ class Role(BaseModel):
 
 class UserClaims(BaseModel):
     tenant: str = Field(alias="owner")
-    id: str | None = None
+    id: str
     username: str = Field(..., validation_alias="name")
     email: str | None = None
     phone: str | None = None
-    roles: list[Role] | None = Field(default_factory=list)
+    roles: list[Role] = Field(default_factory=list)

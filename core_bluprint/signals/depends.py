@@ -68,7 +68,7 @@ class RabbitSubscriber:
         settings: RabbitSubscriptable,
         base_delay: int = 5,
         max_delay: int = 3600 * 24,
-        exceptions: list[type[Exception]] = [Exception],
+        exceptions: list[type[Exception]] | None = None,
     ):
         """
         :param settings: settings object with
@@ -88,6 +88,8 @@ class RabbitSubscriber:
             ```
         """
         self._settings = settings
+        if exceptions is None:
+            exceptions = [Exception]
         self.router = get_rabbit_router(
             f"api/{self._settings.PROJECT_NAME}",
             RabbitmqSettings.model_validate(
@@ -155,8 +157,7 @@ class RabbitSubscriber:
 
         await robust_queue.bind(
             dlx,
-            routing_key=f"{routing_key}.{self._settings.PROJECT_NAME}."
-            f"{delay}",
+            routing_key=f"{routing_key}.{self._settings.PROJECT_NAME}.{delay}",
         )
 
         return queue

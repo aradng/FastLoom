@@ -8,11 +8,9 @@ from beanie import Insert, Replace, SaveChanges, Update, after_event
 from pydantic import BaseModel, PrivateAttr, create_model, model_validator
 
 from core_bluprint.db.schemas import BaseDocument
-from core_bluprint.signals.depends import get_stream_router
+from core_bluprint.signals.depends import RabbitSubscriber
 
 logger = logging.getLogger(__name__)
-
-stream_router = get_stream_router("model_signals")
 
 
 class Operations(str, Enum):
@@ -29,7 +27,7 @@ class SignalMessage(BaseModel, Generic[T]):
     operation: Operations
 
 
-class BaseDocumentSignal(BaseModel):
+class BaseDocumentSignal(BaseDocument):
     """
     Assumes that this mixin is used with `BaseDocument` subclasses and
     `BaseDocument` has full state management
@@ -45,6 +43,8 @@ class BaseDocumentSignal(BaseModel):
         return self
 
     async def _publish(self, message: SignalMessage):
+        if self.revision_id is None:
+            return
         _event_key = (
             self.revision_id,  # type: ignore[attr-defined]
             message.operation,
@@ -61,7 +61,7 @@ class BaseDocumentSignal(BaseModel):
         project_name = os.getenv("PROJECT_NAME")
         if not project_name:
             raise ValueError("PROJECT_NAME environment variable is not set")
-        return f"{project_name}.{cls.Settings.name}.{operation.value}"  # type: ignore[attr-defined]  # noqa
+        return f"{project_name}.{cls.get_collection_name()}.{operation.value}"  # type: ignore[attr-defined]  # noqa
 
     @classmethod
     def check_state_management(cls):
@@ -74,11 +74,10 @@ class BaseDocumentSignal(BaseModel):
 
     @classmethod
     def get_publisher(cls, operation: Operations):
-
         class_changes = create_model(  # type: ignore[call-overload]
             f"{cls.__name__}Changes",
             __base__=cls,
-            **{
+            field_definitions={
                 field_name: (f"{field_info.annotation} | None", None)
                 for field_name, field_info in cls.model_fields.items()
             },
@@ -86,7 +85,7 @@ class BaseDocumentSignal(BaseModel):
         class_instance = create_model(  # type: ignore[call-overload]
             f"{cls.__name__}Instance",
             __base__=cls,
-            **{
+            field_definitions={
                 field_name: (field_info.annotation, ...)
                 for field_name, field_info in cls.model_fields.items()
             },
@@ -102,7 +101,7 @@ class BaseDocumentSignal(BaseModel):
             changes=(class_changes, ...),
             operation=(Literal[operation], ...),
         )
-        return stream_router.broker.publisher(
+        return RabbitSubscriber.router.broker.publisher(
             cls.get_subscription_topic(operation),
             schema=narrowed_signal_message,
         )
@@ -110,8 +109,8 @@ class BaseDocumentSignal(BaseModel):
 
 class SignalsSave(BaseDocumentSignal):
     @after_event(Insert)
-    async def _publish_post_save(self):
-        await self.publish_post_save()
+    async def _publish_post_save(cls):
+        await cls.publish_post_save()
 
     async def publish_post_save(self):
         await self._publish(

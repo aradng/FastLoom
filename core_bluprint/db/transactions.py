@@ -2,7 +2,8 @@ import functools
 from collections.abc import Awaitable, Callable
 from typing import ParamSpec, TypeVar
 
-from motor.core import AgnosticClient, AgnosticClientSession
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.client_session import AsyncClientSession
 
 from core_bluprint.db.lifehooks import get_mongo_client
 
@@ -14,10 +15,10 @@ class MongoTransactionManager:
     def __init__(self, mongo_uri: str):
         self.mongo_uri = mongo_uri
 
-    async def __aenter__(self) -> AgnosticClientSession:
-        self.client: AgnosticClient = await get_mongo_client(self.mongo_uri)
-        self.session: AgnosticClientSession = await self.client.start_session()
-        self.session.start_transaction()
+    async def __aenter__(self) -> AsyncClientSession:
+        self.client: AsyncMongoClient = await get_mongo_client(self.mongo_uri)
+        self.session: AsyncClientSession = self.client.start_session()
+        await self.session.start_transaction()
         return self.session
 
     async def __aexit__(
@@ -31,7 +32,7 @@ class MongoTransactionManager:
         else:
             await self.session.commit_transaction()
         await self.session.end_session()
-        self.client.close()
+        await self.client.close()
 
 
 def with_transaction(

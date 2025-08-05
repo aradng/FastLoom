@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "core-bluprint"
-version = "0.2.5"
+version = "0.2.6"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -9,16 +9,6 @@ readme = "README.md"
 name = "nexus-registry"
 url = "https://nexus.bluprint.ir/repository/group-package-registry/simple/"
 priority = "primary"
-
-[tool.black]
-line-length = 79
-
-[tool.isort]
-profile = "black"
-line_length = 79
-
-[tool.codespell]
-ignore-words-list = "nin,astroid"
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
@@ -53,15 +43,15 @@ warn_required_dynamic_aliases = true
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
 jdatetime = "^4.1.1"
-beanie = "1.26.0"
+beanie = "2.0.0"
 python-jose = "^3.3.0"
-pydantic = { version = "^2.10.3", extras = ["email"] }
+pydantic = { version = "^2.11", extras = ["email"] }
 pydantic-settings = "^2.1.0"
-uvicorn = "^0.30.0"
+uvicorn = "^0.35.0"
 orjson = "3.10.14"
 pyyaml = "^6.0.2"
 
-fastapi = { version = "^0.115", optional = true }
+fastapi = { version = "^0", optional = true }
 python-multipart = { version = "*", optional = true }
 faststream = { version = "^0.5.28", extras = [
     "rabbit",
@@ -74,16 +64,16 @@ redis = { version = "^5.0.1", optional = true }
 openai = { version = "^1.51.2", optional = true }
 
 # OTEL
-logfire = { version = "^1.1.0", extras = ["system-metrics"] }
-sentry-sdk = { extras = ["fastapi"], version = "^1.39.1" }
-opentelemetry-distro = "0.48b0"
-opentelemetry-exporter-otlp = "^1.22.0"
+logfire = { version = "^4.0.0", extras = ["system-metrics"] }
+sentry-sdk = { extras = ["fastapi"], version = "^2.0.0" }
+opentelemetry-distro = "*"
+opentelemetry-exporter-otlp = "*"
 opentelemetry-instrumentation-logging = { version = "*" }
 opentelemetry-instrumentation-urllib = { version = "*" }
 opentelemetry-instrumentation-system-metrics = { version = "*" }
 opentelemetry-instrumentation-urllib3 = { version = "*" }
 opentelemetry-instrumentation-asgi = { version = "*", optional = true }
-opentelemetry-instrumentation-fastapi = ">0.46b"
+opentelemetry-instrumentation-fastapi = "*"
 opentelemetry-instrumentation-aio-pika = { version = "*", optional = true }
 opentelemetry-instrumentation-celery = { version = "*", optional = true }
 opentelemetry-instrumentation-httpx = { version = "*", optional = true }
@@ -127,19 +117,16 @@ pytest-xdist = "^3.5.0"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.5.1"
-pydantic = "^2.7.1"
-flake8 = "^6.1.0"
-black = "^24.2.0"
-isort = "^5.12.0"
-ipykernel = "^6.25.1"
-ipywidgets = "^8.1.1"
-pre-commit = "^3.6.0"
-ruff = "^0.4.4"
-codespell = "^2.2.6"
-pyupgrade = "^3.15.2"
+pre-commit = "^4.2.0"
+ruff = "^0.12.5"
+mypy = "^1.17.0"
+ipykernel = "^6.30.0"
 types-pyyaml = "^6.0.12.20240917"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+[tool.pyright]
+reportInvalidTypeForm = false

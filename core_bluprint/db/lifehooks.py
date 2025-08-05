@@ -1,24 +1,48 @@
-import asyncio
+import pkgutil
+from collections.abc import Sequence
+from importlib import import_module
+from itertools import chain
+from types import ModuleType
 
-from beanie import Document, init_beanie
-from motor.core import AgnosticClient
-from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import Document, UnionDoc, View, init_beanie
+from pymongo import AsyncMongoClient
 
 
-async def get_mongo_client(mongo_uri: str) -> AgnosticClient:
-    client: AgnosticClient = AsyncIOMotorClient(mongo_uri, tz_aware=True)
-    client.get_io_loop = asyncio.get_event_loop  # type: ignore[method-assign]
-    return client
+async def get_mongo_client(mongo_uri: str) -> AsyncMongoClient:
+    return AsyncMongoClient(mongo_uri, tz_aware=True)
+
+
+def get_models(
+    module: ModuleType,
+) -> list[type[Document] | type[UnionDoc] | type[View]]:
+    if (
+        module.__spec__ is None
+        or not module.__spec__.submodule_search_locations
+    ):
+        return [
+            x
+            for x in vars(module).values()
+            if isinstance(x, type)
+            and issubclass(x, Document | UnionDoc | View)
+            and x not in [Document, UnionDoc, View]
+        ]
+
+    return list(
+        chain.from_iterable(
+            get_models(import_module(f"{module.__name__}.{i.name}"))
+            for i in pkgutil.iter_modules(module.__path__)
+        )
+    )
 
 
 async def init_db(
     database_name: str,
-    models: list[Document],
+    models: Sequence[type[Document] | type[UnionDoc] | type[View] | str],
     mongo_uri: str,
 ):
-    client: AgnosticClient = await get_mongo_client(mongo_uri)
+    client: AsyncMongoClient = await get_mongo_client(mongo_uri)
     db = client[database_name]
-    await init_beanie(db, document_models=models)  # type: ignore[arg-type]
+    await init_beanie(db, document_models=models)
 
 
 async def destroy_db(
@@ -27,7 +51,7 @@ async def destroy_db(
     mongo_uri: str,
     drop_database: bool = False,
 ):
-    client: AgnosticClient = await get_mongo_client(mongo_uri)
+    client: AsyncMongoClient = await get_mongo_client(mongo_uri)
     db = client[database_name]
     if not drop_database:
         for model in models[1:]:  # Skip pre-populated Province collection

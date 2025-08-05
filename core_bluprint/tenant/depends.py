@@ -101,10 +101,10 @@ class TokenBodySource(BaseTenantSource):
                 raise HTTPException(
                     status_code=400, detail="Token not found in request body."
                 )
-        except JSONDecodeError:
+        except JSONDecodeError as er:
             raise HTTPException(
                 status_code=400, detail="Request body is not JSON decodable."
-            )
+            ) from er
         return self.auth._parse_token(req_json["token"]).tenant
 
     @property
@@ -200,7 +200,8 @@ class BaseGetFrom[K]:
         self.dep_selector = dep_selector
 
     @abstractmethod
-    def _item_getter(self, tenant: str): ...
+    def _item_getter(self, tenant: str):
+        raise NotImplementedError("Must implement _item_getter method")
 
     def __getitem__(
         self, source_cls: type[BaseTenantSource]

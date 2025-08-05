@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import logfire
 import orjson
-import sentry_sdk
+from bson import DBRef
 from jose.exceptions import JWTError
 from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
@@ -25,9 +25,9 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import HOST_NAME, SERVICE_NAME, Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace import Span
 from pydantic import HttpUrl
+from sentry_sdk import init as sentry_init
 
 from core_bluprint.observability.settings import ObservabilitySettings
 from core_bluprint.tenant.protocols import TenantMonitoringSchema
@@ -37,16 +37,16 @@ if TYPE_CHECKING:
     try:
         from fastapi import FastAPI
     except ImportError:
-        FastAPI = Any
+        FastAPI = Any  # type: ignore[no-redef, misc, assignment]
 
 
 def init_sentry(dsn: HttpUrl | str | None, environment: str):
     if dsn is None:
-        raise ValueError("Sentry DSN is not set")
+        return
     if isinstance(dsn, HttpUrl):
         dsn = str(dsn)
 
-    sentry_sdk.init(
+    sentry_init(
         dsn=dsn,
         # Set traces_sample_rate to 1.0 to capture 100%
         # of transactions for performance monitoring.
@@ -54,6 +54,7 @@ def init_sentry(dsn: HttpUrl | str | None, environment: str):
         enable_tracing=True,
         profiles_sample_rate=1.0,
         environment=environment,
+        send_default_pii=True,
     )
 
 
@@ -94,18 +95,21 @@ def _set_user_attributes_to_span(span: Span, token: str):
         return
 
 
-def instrument_fastapi(app: "FastAPI"):
+def instrument_fastapi(app: FastAPI):
     from fastapi.responses import PlainTextResponse
     from fastapi.security.utils import get_authorization_scheme_param
     from starlette.exceptions import HTTPException as StarletteHTTPException
 
     def _server_request_hook(span: Span, scope: dict):
-        if span and span.is_recording():
-            if auth_header := _get_authorization_header(scope):
-                scheme, param = get_authorization_scheme_param(auth_header)
-                if scheme.lower() != "bearer":
-                    return
-                _set_user_attributes_to_span(span, param)
+        if (
+            span
+            and span.is_recording()
+            and (auth_header := _get_authorization_header(scope))
+        ):
+            scheme, param = get_authorization_scheme_param(auth_header)
+            if scheme.lower() != "bearer":
+                return
+            _set_user_attributes_to_span(span, param)
 
     def _client_response_hook(span: Span, scope: dict, message: dict):
         if span and span.is_recording():
@@ -169,6 +173,14 @@ def instrument_metrics():
     logfire.instrument_system_metrics(base="full")
 
 
+def instrument_httpx():
+    logfire.instrument_httpx(tracer_provider=trace.get_tracer_provider())
+
+
+def instrument_requests():
+    logfire.instrument_requests(tracer_provider=trace.get_tracer_provider())
+
+
 def instrument_redis():
     logfire.instrument_redis(
         capture_statement=True, tracer_provider=trace.get_tracer_provider()
@@ -192,41 +204,9 @@ def instrument_confluent_kafka():
     )
 
 
-def instrument_httpx():
-    logfire.instrument_httpx(tracer_provider=trace.get_tracer_provider())
-
-
-def instrument_requests():
-    logfire.instrument_requests(tracer_provider=trace.get_tracer_provider())
-
-
-def patch_spanbuilder_set_channel() -> None:
-    """
-    The default SpanBuilder.set_channel does not work with aio_pika 9.1 and the
-    refactored connection attribute
-    """
-    import opentelemetry.instrumentation.aio_pika.span_builder
-    from aio_pika.abc import AbstractChannel
-    from opentelemetry.instrumentation.aio_pika.span_builder import SpanBuilder
-
-    def set_channel(self: SpanBuilder, channel: AbstractChannel) -> None:
-        if hasattr(channel, "_connection"):
-            url = channel._connection.url
-            port = str(url.port) or "5672"
-            self._attributes.update(
-                {
-                    SpanAttributes.NET_PEER_NAME: url.host,
-                    SpanAttributes.NET_PEER_PORT: port,
-                }
-            )
-
-    opentelemetry.instrumentation.aio_pika.span_builder.SpanBuilder.set_channel = set_channel  # type: ignore[method-assign]  # noqa
-
-
 def instrument_rabbit():
     from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 
-    patch_spanbuilder_set_channel()
     AioPikaInstrumentor().instrument(
         tracer_provider=trace.get_tracer_provider()
     )
@@ -236,10 +216,12 @@ def instrument_mongodb():
     from bson import Decimal128, ObjectId
     from pymongo import monitoring
 
-    def pars_mongo_types(obj: object):
+    def parse_mongo_types(obj: object):
         if isinstance(obj, Decimal128):
             return str(obj.to_decimal())
         if ObjectId.is_valid(obj):
+            return str(obj)
+        if isinstance(obj, DBRef):
             return str(obj)
         raise TypeError()
 
@@ -249,7 +231,7 @@ def instrument_mongodb():
                 "db.mongodb.server_reply",
                 orjson.dumps(
                     event.reply,
-                    default=pars_mongo_types,
+                    default=parse_mongo_types,
                     option=orjson.OPT_NAIVE_UTC,
                 ),
             )
@@ -283,7 +265,7 @@ class Instruments(Enum):
 
 def instrument_otel(
     settings: TenantMonitoringSchema,
-    app: "FastAPI | None" = None,
+    app: FastAPI | None = None,
     only: tuple[Instruments, ...] | None = None,
 ):
     logfire.configure(
@@ -335,6 +317,6 @@ class InitMonitoring:
 
     def __exit__(self, exc_type, exc_val, exc_tb): ...
 
-    def instrument(self, app: "FastAPI"):
+    def instrument(self, app: FastAPI):
         if app is not None and int(self.settings.OTEL_ENABLED):
             instrument_fastapi(app)

@@ -1,0 +1,81 @@
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "hooks"
+]
+
+line-length = 79
+indent-width = 4
+
+[lint]
+exclude = ["*.ipynb"]
+select = [
+    # pycodestyle
+    "E",
+    # pydocstyle warnings
+    "W",
+    # Pyflakes
+    "F",
+    # mccabe
+    "C90",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # flake8-gettext not sure?
+    "INT",
+    # isort
+    "I",
+    # FastAPI
+    "FAST",
+]
+
+fixable = ["ALL"]
+unfixable = ["F401"]
+ignore = [
+    "W191",
+    # "E133",
+    "E203",
+    # "W503",
+    "E701",
+    # "E704"
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F", "E402"]
+"**/{tests,docs,tools}/*" = ["E402"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+
+skip-magic-trailing-comma = false
+
+docstring-code-format = false
+docstring-code-line-length = "dynamic"
