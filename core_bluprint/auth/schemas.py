@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field, field_validator
+
+ADMIN_ROLE = "ADMIN"
 
 
 class Role(BaseModel):
@@ -13,3 +15,15 @@ class UserClaims(BaseModel):
     email: str | None = None
     phone: str | None = None
     roles: list[Role] = Field(default_factory=list)
+
+    @field_validator("roles", mode="before")
+    @classmethod
+    def validate_roles(cls, v: list[Role] | None) -> list[Role]:
+        if not v:
+            return []
+        return v
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def is_admin(self) -> bool:
+        return any(role.name == ADMIN_ROLE for role in self.roles or [])

@@ -1,7 +1,7 @@
 import re
 from typing import Annotated
 
-from pydantic import AfterValidator
+from pydantic import AfterValidator, Field
 
 PHONE_REGEX = r"^(\+|00)\d{1,2}\s?((\(\d{3}\))|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}$"
 EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -51,3 +51,7 @@ def _national_id_validator(nc: str) -> str | None:
 
 
 NationalID = Annotated[str, AfterValidator(_national_id_validator)]
+
+UserId = str
+
+NoneField = Annotated[None, Field(None)]

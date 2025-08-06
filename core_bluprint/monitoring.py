@@ -95,7 +95,7 @@ def _set_user_attributes_to_span(span: Span, token: str):
         return
 
 
-def instrument_fastapi(app: FastAPI):
+def instrument_fastapi(app: "FastAPI"):
     from fastapi.responses import PlainTextResponse
     from fastapi.security.utils import get_authorization_scheme_param
     from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -265,7 +265,7 @@ class Instruments(Enum):
 
 def instrument_otel(
     settings: TenantMonitoringSchema,
-    app: FastAPI | None = None,
+    app: "FastAPI | None" = None,
     only: tuple[Instruments, ...] | None = None,
 ):
     logfire.configure(
@@ -317,6 +317,6 @@ class InitMonitoring:
 
     def __exit__(self, exc_type, exc_val, exc_tb): ...
 
-    def instrument(self, app: FastAPI):
+    def instrument(self, app: "FastAPI"):
         if app is not None and int(self.settings.OTEL_ENABLED):
             instrument_fastapi(app)

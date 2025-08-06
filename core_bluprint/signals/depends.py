@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated, Protocol
+from typing import Annotated
 
 from aio_pika import IncomingMessage, Message
 from faststream import Context, ExceptionMiddleware
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def get_rabbit_broker(settings: RabbitmqSettings) -> RabbitBroker:
     broker = RabbitBroker(
-        str(settings.RABBITMQ_URI),
+        str(settings.RABBIT_URI),
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()
@@ -36,7 +36,7 @@ def get_rabbit_broker(settings: RabbitmqSettings) -> RabbitBroker:
 
 def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
     return RabbitRouter(
-        str(settings.RABBITMQ_URI),
+        str(settings.RABBIT_URI),
         schema_url=f"/{name}/asyncapi",
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
@@ -46,8 +46,7 @@ def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
     )
 
 
-class RabbitSubscriptable(Protocol):
-    RABBITMQ_URI: str
+class RabbitSubscriptable(RabbitmqSettings):
     ENVIRONMENT: str
     PROJECT_NAME: str
 
@@ -93,7 +92,7 @@ class RabbitSubscriber:
         self.router = get_rabbit_router(
             f"api/{self._settings.PROJECT_NAME}",
             RabbitmqSettings.model_validate(
-                {"RABBITMQ_URI": self._settings.RABBITMQ_URI}
+                self._settings, from_attributes=True
             ),
         )
         self.exchange = RabbitExchange(
@@ -146,7 +145,7 @@ class RabbitSubscriber:
                     "x-dead-letter-routing-key": f"{routing_key}."
                     f"{self._settings.PROJECT_NAME}",
                     "x-message-ttl": delay * 1000,
-                    "x-expires": delay * 2000,
+                    # "x-expires": delay * 2000,
                 }
             ),
         )
