@@ -1,6 +1,6 @@
-[tool.poetry]
+[project]
 name = "core-bluprint"
-version = "0.2.7"
+version = "0.2.8"
 description = "Core package"
 authors = []
 readme = "README.md"

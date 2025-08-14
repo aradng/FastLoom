@@ -5,7 +5,7 @@ name = "aio-pika"
 version = "9.5.7"
 description = "Wrapper around the aiormq for asyncio and humans"
 optional = true
-python-versions = "<4.0,>=3.10"
+python-versions = ">=3.10,<4.0"
 groups = ["main"]
 markers = "extra == \"rabbit\""
 files = [
@@ -17,12 +17,17 @@ files = [
 aiormq = ">=6.8,<7.0"
 yarl = "*"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "aiormq"
 version = "6.9.0"
 description = "Pure python AMQP asynchronous client library"
 optional = true
-python-versions = "<4.0,>=3.9"
+python-versions = ">=3.9,<4.0"
 groups = ["main"]
 markers = "extra == \"rabbit\""
 files = [
@@ -33,6 +38,11 @@ files = [
 [package.dependencies]
 pamqp = "3.3.0"
 yarl = "*"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "amqp"
@@ -50,6 +60,11 @@ files = [
 [package.dependencies]
 vine = ">=5.0.0,<6.0.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "annotated-types"
 version = "0.7.0"
@@ -61,6 +76,11 @@ files = [
     {file = "annotated_types-0.7.0-py3-none-any.whl", hash = "sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53"},
     {file = "annotated_types-0.7.0.tar.gz", hash = "sha256:aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "anyio"
@@ -82,6 +102,11 @@ typing_extensions = {version = ">=4.5", markers = "python_version < \"3.13\""}
 [package.extras]
 trio = ["trio (>=0.26.1)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "appnope"
 version = "0.1.4"
@@ -94,6 +119,11 @@ files = [
     {file = "appnope-0.1.4-py2.py3-none-any.whl", hash = "sha256:502575ee11cd7a28c0205f379b525beefebab9d161b7c964670864014ed7213c"},
     {file = "appnope-0.1.4.tar.gz", hash = "sha256:1de3860566df9caf38f01f86f65e0e13e379af54f9e4bee1e66b48f2efffd1ee"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "asgiref"
@@ -111,6 +141,11 @@ files = [
 [package.extras]
 tests = ["mypy (>=1.14.0)", "pytest", "pytest-asyncio"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "asttokens"
 version = "3.0.0"
@@ -127,6 +162,11 @@ files = [
 astroid = ["astroid (>=2,<4)"]
 test = ["astroid (>=2,<4)", "pytest", "pytest-cov", "pytest-xdist"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "babel"
 version = "2.17.0"
@@ -142,12 +182,17 @@ files = [
 [package.extras]
 dev = ["backports.zoneinfo ; python_version < \"3.9\"", "freezegun (>=1.0,<2.0)", "jinja2 (>=3.0)", "pytest (>=6.0)", "pytest-cov", "pytz", "setuptools", "tzdata ; sys_platform == \"win32\""]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "beanie"
 version = "2.0.0"
 description = "Asynchronous Python ODM for MongoDB"
 optional = false
-python-versions = "<4.0,>=3.9"
+python-versions = ">=3.9,<4.0"
 groups = ["main"]
 markers = "extra == \"mongodb\""
 files = [
@@ -174,6 +219,11 @@ snappy = ["pymongo[snappy] (>=4.11.0,<5.0.0)"]
 test = ["asgi-lifespan (>=1.0.1)", "dnspython (>=2.1.0)", "fastapi (>=0.100)", "httpx (>=0.23.0)", "pre-commit (>=3.5.0)", "pydantic-extra-types (>=2)", "pydantic-settings (>=2)", "pydantic[email]", "pyright (>=0)", "pytest (>=8.3.3)", "pytest-asyncio (>=0.24.0)", "pytest-cov (>=5.0.0)"]
 zstd = ["pymongo[zstd] (>=4.11.0,<5.0.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "billiard"
 version = "4.2.1"
@@ -186,6 +236,11 @@ files = [
     {file = "billiard-4.2.1-py3-none-any.whl", hash = "sha256:40b59a4ac8806ba2c2369ea98d876bc6108b051c227baffd928c644d15d8f3cb"},
     {file = "billiard-4.2.1.tar.gz", hash = "sha256:12b641b0c539073fc8d3f5b8b7be998956665c4233c7c1fcd66a7e677c4fb36f"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "celery"
@@ -245,6 +300,11 @@ yaml = ["kombu[yaml]"]
 zookeeper = ["kazoo (>=1.3.1)"]
 zstd = ["zstandard (==0.23.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "certifi"
 version = "2025.8.3"
@@ -256,6 +316,11 @@ files = [
     {file = "certifi-2025.8.3-py3-none-any.whl", hash = "sha256:f6c12493cfb1b06ba2ff328595af9350c65d6644968e5d3a2ffd78699af217a5"},
     {file = "certifi-2025.8.3.tar.gz", hash = "sha256:e564105f78ded564e3ae7c923924435e1daa7463faeab5bb932bc53ffae63407"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "cffi"
@@ -338,6 +403,11 @@ files = [
 [package.dependencies]
 pycparser = "*"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "cfgv"
 version = "3.4.0"
@@ -349,6 +419,11 @@ files = [
     {file = "cfgv-3.4.0-py2.py3-none-any.whl", hash = "sha256:b7265b1f29fd3316bfcd2b330d63d024f2bfd8bcb8b0272f8e19a504856c48f9"},
     {file = "cfgv-3.4.0.tar.gz", hash = "sha256:e52591d4c5f5dead8e0f673fb16db7949d2cfb3f7da4582893288f0ded8fe560"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "charset-normalizer"
@@ -452,6 +527,11 @@ files = [
     {file = "charset_normalizer-3.4.2.tar.gz", hash = "sha256:5baececa9ecba31eff645232d59845c07aa030f0c81ee70184a90d35099a0e63"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "click"
 version = "8.2.1"
@@ -468,6 +548,11 @@ files = [
 [package.dependencies]
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "click-didyoumean"
 version = "0.3.1"
@@ -483,6 +568,11 @@ files = [
 
 [package.dependencies]
 click = ">=7"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "click-plugins"
@@ -502,6 +592,11 @@ click = ">=4.0"
 
 [package.extras]
 dev = ["coveralls", "pytest (>=3.6)", "pytest-cov", "wheel"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "click-repl"
@@ -523,6 +618,11 @@ prompt-toolkit = ">=3.0.36"
 [package.extras]
 testing = ["pytest (>=7.2.1)", "pytest-cov (>=4.0.0)", "tox (>=4.4.3)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "colorama"
 version = "0.4.6"
@@ -535,6 +635,11 @@ files = [
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
 ]
 markers = {main = "(extra == \"mongodb\" or extra == \"fastapi\" or extra == \"rabbit\" or extra == \"celery\" or extra == \"openai\") and platform_system == \"Windows\"", dev = "sys_platform == \"win32\"", test = "sys_platform == \"win32\""}
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "comm"
@@ -550,6 +655,11 @@ files = [
 
 [package.extras]
 test = ["pytest"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "coverage"
@@ -652,6 +762,11 @@ files = [
 [package.extras]
 toml = ["tomli ; python_full_version <= \"3.11.0a6\""]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "debugpy"
 version = "1.8.15"
@@ -688,6 +803,11 @@ files = [
     {file = "debugpy-1.8.15.tar.gz", hash = "sha256:58d7a20b7773ab5ee6bdfb2e6cf622fdf1e40c9d5aef2857d85391526719ac00"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "decorator"
 version = "5.2.1"
@@ -699,6 +819,11 @@ files = [
     {file = "decorator-5.2.1-py3-none-any.whl", hash = "sha256:d316bb415a2d9e2d2b3abcc4084c6502fc09240e292cd76a76afc106a1c8e04a"},
     {file = "decorator-5.2.1.tar.gz", hash = "sha256:65f266143752f734b0a7cc83c46f4618af75b8c5911b00ccb61d0ac9b6da0360"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "deepdiff"
@@ -719,6 +844,11 @@ ordered-set = ">=4.0.2,<4.2.0"
 cli = ["click (==8.1.3)", "pyyaml (==6.0.1)"]
 optimize = ["orjson"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "distlib"
 version = "0.4.0"
@@ -730,6 +860,11 @@ files = [
     {file = "distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16"},
     {file = "distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "distro"
@@ -743,6 +878,11 @@ files = [
     {file = "distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2"},
     {file = "distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "dnspython"
@@ -765,12 +905,17 @@ idna = ["idna (>=3.7)"]
 trio = ["trio (>=0.23)"]
 wmi = ["wmi (>=1.5.1)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "ecdsa"
 version = "0.19.1"
 description = "ECDSA cryptographic signature library (pure python)"
 optional = false
-python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,>=2.6"
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*"
 groups = ["main"]
 files = [
     {file = "ecdsa-0.19.1-py2.py3-none-any.whl", hash = "sha256:30638e27cf77b7e15c4c4cc1973720149e1033827cfd00661ca5c8cc0cdb24c3"},
@@ -783,6 +928,11 @@ six = ">=1.9.0"
 [package.extras]
 gmpy = ["gmpy"]
 gmpy2 = ["gmpy2"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "email-validator"
@@ -800,6 +950,11 @@ files = [
 dnspython = ">=2.0.0"
 idna = ">=2.0.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "execnet"
 version = "2.1.1"
@@ -815,6 +970,11 @@ files = [
 [package.extras]
 testing = ["hatch", "pre-commit", "pytest", "tox"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "executing"
 version = "2.2.0"
@@ -829,6 +989,11 @@ files = [
 
 [package.extras]
 tests = ["asttokens (>=2.1.0)", "coverage", "coverage-enable-subprocess", "ipython", "littleutils", "pytest", "rich ; python_version >= \"3.11\""]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "fast-depends"
@@ -846,6 +1011,11 @@ files = [
 [package.dependencies]
 anyio = ">=3.0.0,<5.0.0"
 pydantic = ">=1.7.4,<1.8 || >1.8,<1.8.1 || >1.8.1,<3.0.0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "fastapi"
@@ -868,6 +1038,11 @@ typing-extensions = ">=4.8.0"
 all = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.8)", "httpx (>=0.23.0)", "itsdangerous (>=1.1.0)", "jinja2 (>=3.1.5)", "orjson (>=3.2.1)", "pydantic-extra-types (>=2.0.0)", "pydantic-settings (>=2.0.0)", "python-multipart (>=0.0.18)", "pyyaml (>=5.3.1)", "ujson (>=4.0.1,!=4.0.2,!=4.1.0,!=4.2.0,!=4.3.0,!=5.0.0,!=5.1.0)", "uvicorn[standard] (>=0.12.0)"]
 standard = ["email-validator (>=2.0.0)", "fastapi-cli[standard] (>=0.0.8)", "httpx (>=0.23.0)", "jinja2 (>=3.1.5)", "python-multipart (>=0.0.18)", "uvicorn[standard] (>=0.12.0)"]
 standard-no-fastapi-cloud-cli = ["email-validator (>=2.0.0)", "fastapi-cli[standard-no-fastapi-cloud-cli] (>=0.0.8)", "httpx (>=0.23.0)", "jinja2 (>=3.1.5)", "python-multipart (>=0.0.18)", "uvicorn[standard] (>=0.12.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "faststream"
@@ -906,6 +1081,11 @@ test-core = ["coverage[toml] (==7.6.1) ; python_version < \"3.9\"", "coverage[to
 testing = ["coverage[toml] (==7.6.1) ; python_version < \"3.9\"", "coverage[toml] (==7.9.2) ; python_version >= \"3.9\"", "dirty-equals (==0.9.0)", "email-validator (==2.2.0)", "fastapi (==0.116.1)", "httpx (==0.28.1)", "psutil (==7.0.0)", "pydantic-settings (>=2.0.0,<3.0.0)", "pytest (==8.3.5) ; python_version < \"3.9\"", "pytest (==8.4.1) ; python_version >= \"3.9\"", "pytest-asyncio (==0.24.0) ; python_version < \"3.9\"", "pytest-asyncio (==1.0.0) ; python_version >= \"3.9\"", "pyyaml (==6.0.2)", "typing-extensions (>=4.8.0,<4.12.1) ; python_version < \"3.9\"", "uvicorn (==0.33.0) ; python_version < \"3.9\"", "uvicorn (>=0.34.3) ; python_version >= \"3.9\""]
 types = ["aio-pika (>=9,<10)", "aiokafka (>=0.9,<0.13)", "confluent-kafka (>=2,!=2.8.1,<3) ; python_version < \"3.13\"", "confluent-kafka (>=2.6,!=2.8.1,<3) ; python_version >= \"3.13\"", "confluent-kafka-stubs ; python_version >= \"3.11\"", "mypy (==1.16.1)", "nats-py (>=2.7.0,<=3.0.0)", "opentelemetry-sdk (>=1.24.0,<2.0.0)", "prometheus-client (>=0.20.0,<0.30.0)", "redis (>=5.0.0,<7.0.0)", "typer (>=0.9,!=0.12,<=0.16.0)", "types-aiofiles", "types-deprecated", "types-docutils", "types-pygments", "types-pyyaml", "types-redis", "types-setuptools", "types-ujson", "watchfiles (>=0.15.0,<1.2.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "filelock"
 version = "3.18.0"
@@ -923,6 +1103,11 @@ docs = ["furo (>=2024.8.6)", "sphinx (>=8.1.3)", "sphinx-autodoc-typehints (>=3)
 testing = ["covdefaults (>=2.3)", "coverage (>=7.6.10)", "diff-cover (>=9.2.1)", "pytest (>=8.3.4)", "pytest-asyncio (>=0.25.2)", "pytest-cov (>=6)", "pytest-mock (>=3.14)", "pytest-timeout (>=2.3.1)", "virtualenv (>=20.28.1)"]
 typing = ["typing-extensions (>=4.12.2) ; python_version < \"3.11\""]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "freezegun"
 version = "1.5.4"
@@ -937,6 +1122,11 @@ files = [
 
 [package.dependencies]
 python-dateutil = ">=2.7"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "googleapis-common-protos"
@@ -955,6 +1145,11 @@ protobuf = ">=3.20.2,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4
 
 [package.extras]
 grpc = ["grpcio (>=1.44.0,<2.0.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "grpcio"
@@ -1020,6 +1215,11 @@ files = [
 [package.extras]
 protobuf = ["grpcio-tools (>=1.74.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "h11"
 version = "0.16.0"
@@ -1032,6 +1232,11 @@ files = [
     {file = "h11-0.16.0-py3-none-any.whl", hash = "sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86"},
     {file = "h11-0.16.0.tar.gz", hash = "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "httpcore"
@@ -1055,6 +1260,11 @@ asyncio = ["anyio (>=4.0,<5.0)"]
 http2 = ["h2 (>=3,<5)"]
 socks = ["socksio (==1.*)"]
 trio = ["trio (>=0.22.0,<1.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "httpx"
@@ -1082,6 +1292,11 @@ http2 = ["h2 (>=3,<5)"]
 socks = ["socksio (==1.*)"]
 zstd = ["zstandard (>=0.18.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "identify"
 version = "2.6.12"
@@ -1097,6 +1312,11 @@ files = [
 [package.extras]
 license = ["ukkonen"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "idna"
 version = "3.10"
@@ -1111,6 +1331,11 @@ files = [
 
 [package.extras]
 all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "importlib-metadata"
@@ -1136,6 +1361,11 @@ perf = ["ipython"]
 test = ["flufl.flake8", "importlib_resources (>=1.3) ; python_version < \"3.9\"", "jaraco.test (>=5.4)", "packaging", "pyfakefs", "pytest (>=6,!=8.1.*)", "pytest-perf (>=0.9.2)"]
 type = ["pytest-mypy"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "iniconfig"
 version = "2.1.0"
@@ -1147,6 +1377,11 @@ files = [
     {file = "iniconfig-2.1.0-py3-none-any.whl", hash = "sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760"},
     {file = "iniconfig-2.1.0.tar.gz", hash = "sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "ipykernel"
@@ -1182,6 +1417,11 @@ pyqt5 = ["pyqt5"]
 pyside6 = ["pyside6"]
 test = ["flaky", "ipyparallel", "pre-commit", "pytest (>=7.0,<9)", "pytest-asyncio (>=0.23.5)", "pytest-cov", "pytest-timeout"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "ipython"
 version = "9.4.0"
@@ -1214,6 +1454,11 @@ matplotlib = ["matplotlib"]
 test = ["packaging", "pytest", "pytest-asyncio (<0.22)", "testpath"]
 test-extra = ["curio", "ipykernel", "ipython[test]", "jupyter_ai", "matplotlib (!=3.2.0)", "nbclient", "nbformat", "numpy (>=1.23)", "pandas", "trio"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "ipython-pygments-lexers"
 version = "1.1.1"
@@ -1229,6 +1474,11 @@ files = [
 [package.dependencies]
 pygments = "*"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "jdatetime"
 version = "4.1.1"
@@ -1240,6 +1490,11 @@ files = [
     {file = "jdatetime-4.1.1-py3-none-any.whl", hash = "sha256:8b56c702406eaf84d2ad673c41180488f8c77f156c3ac0630ce0caabaf6af5b8"},
     {file = "jdatetime-4.1.1.tar.gz", hash = "sha256:1dd0ee210160c7bd30002803c443e6260ac602ea65b065652a1d567d3bfdca7a"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "jedi"
@@ -1261,6 +1516,11 @@ docs = ["Jinja2 (==2.11.3)", "MarkupSafe (==1.1.1)", "Pygments (==2.8.1)", "alab
 qa = ["flake8 (==5.0.4)", "mypy (==0.971)", "types-setuptools (==67.2.0.1)"]
 testing = ["Django", "attrs", "colorama", "docopt", "pytest (<9.0.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "jinja2"
 version = "3.1.6"
@@ -1278,6 +1538,11 @@ MarkupSafe = ">=2.0"
 
 [package.extras]
 i18n = ["Babel (>=2.7)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "jiter"
@@ -1367,6 +1632,11 @@ files = [
     {file = "jiter-0.10.0.tar.gz", hash = "sha256:07a7142c38aacc85194391108dc91b5b57093c978a9932bd86a36862759d9500"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "jupyter-client"
 version = "8.6.3"
@@ -1390,6 +1660,11 @@ traitlets = ">=5.3"
 docs = ["ipykernel", "myst-parser", "pydata-sphinx-theme", "sphinx (>=4)", "sphinx-autodoc-typehints", "sphinxcontrib-github-alt", "sphinxcontrib-spelling"]
 test = ["coverage", "ipykernel (>=6.14)", "mypy", "paramiko ; sys_platform == \"win32\"", "pre-commit", "pytest (<8.2.0)", "pytest-cov", "pytest-jupyter[client] (>=0.4.1)", "pytest-timeout"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "jupyter-core"
 version = "5.8.1"
@@ -1410,6 +1685,11 @@ traitlets = ">=5.3"
 [package.extras]
 docs = ["intersphinx-registry", "myst-parser", "pydata-sphinx-theme", "sphinx-autodoc-typehints", "sphinxcontrib-spelling", "traitlets"]
 test = ["ipykernel", "pre-commit", "pytest (<9)", "pytest-cov", "pytest-timeout"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "kombu"
@@ -1448,12 +1728,17 @@ sqs = ["boto3 (>=1.26.143)", "urllib3 (>=1.26.16)"]
 yaml = ["PyYAML (>=3.10)"]
 zookeeper = ["kazoo (>=2.8.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "lazy-model"
 version = "0.3.0"
 description = ""
 optional = false
-python-versions = "<4.0,>=3.8"
+python-versions = ">=3.8,<4.0"
 groups = ["main"]
 markers = "extra == \"mongodb\""
 files = [
@@ -1463,6 +1748,11 @@ files = [
 
 [package.dependencies]
 pydantic = ">=1.9.0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "logfire"
@@ -1510,6 +1800,11 @@ starlette = ["opentelemetry-instrumentation-starlette (>=0.42b0)"]
 system-metrics = ["opentelemetry-instrumentation-system-metrics (>=0.42b0)"]
 wsgi = ["opentelemetry-instrumentation-wsgi (>=0.42b0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "markdown-it-py"
 version = "3.0.0"
@@ -1534,6 +1829,11 @@ plugins = ["mdit-py-plugins"]
 profiling = ["gprof2dot"]
 rtd = ["jupyter_sphinx", "mdit-py-plugins", "myst-parser", "pyyaml", "sphinx", "sphinx-copybutton", "sphinx-design", "sphinx_book_theme"]
 testing = ["coverage", "pytest", "pytest-cov", "pytest-regressions"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "markupsafe"
@@ -1606,6 +1906,11 @@ files = [
     {file = "markupsafe-3.0.2.tar.gz", hash = "sha256:ee55d3edf80167e48ea11a923c7386f4669df67d7994554387f84e7d8b0a2bf0"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "matplotlib-inline"
 version = "0.1.7"
@@ -1621,6 +1926,11 @@ files = [
 [package.dependencies]
 traitlets = "*"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "mdurl"
 version = "0.1.2"
@@ -1632,6 +1942,11 @@ files = [
     {file = "mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8"},
     {file = "mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "multidict"
@@ -1754,6 +2069,11 @@ files = [
     {file = "multidict-6.6.3.tar.gz", hash = "sha256:798a9eb12dab0a6c2e29c1de6f3468af5cb2da6053a20dfa3344907eed0937cc"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "mypy"
 version = "1.17.1"
@@ -1814,6 +2134,11 @@ install-types = ["pip"]
 mypyc = ["setuptools (>=50)"]
 reports = ["lxml"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "mypy-extensions"
 version = "1.1.0"
@@ -1825,6 +2150,11 @@ files = [
     {file = "mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505"},
     {file = "mypy_extensions-1.1.0.tar.gz", hash = "sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "nest-asyncio"
@@ -1838,17 +2168,27 @@ files = [
     {file = "nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "nodeenv"
 version = "1.9.1"
 description = "Node.js virtual environment builder"
 optional = false
-python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
+python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*"
 groups = ["dev"]
 files = [
     {file = "nodeenv-1.9.1-py2.py3-none-any.whl", hash = "sha256:ba11c9782d29c27c70ffbdda2d7415098754709be8a7056d79a737cd901155c9"},
     {file = "nodeenv-1.9.1.tar.gz", hash = "sha256:6ec12890a2dab7946721edbfbcd91f3319c6ccc9aec47be7c7e6b7011ee6645f"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "openai"
@@ -1879,6 +2219,11 @@ datalib = ["numpy (>=1)", "pandas (>=1.2.3)", "pandas-stubs (>=1.1.0.11)"]
 realtime = ["websockets (>=13,<16)"]
 voice-helpers = ["numpy (>=2.0.2)", "sounddevice (>=0.5.1)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-api"
 version = "1.36.0"
@@ -1894,6 +2239,11 @@ files = [
 [package.dependencies]
 importlib-metadata = ">=6.0,<8.8.0"
 typing-extensions = ">=4.5.0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-distro"
@@ -1915,6 +2265,11 @@ opentelemetry-sdk = ">=1.13,<2.0"
 [package.extras]
 otlp = ["opentelemetry-exporter-otlp (==1.36.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-exporter-otlp"
 version = "1.36.0"
@@ -1931,6 +2286,11 @@ files = [
 opentelemetry-exporter-otlp-proto-grpc = "1.36.0"
 opentelemetry-exporter-otlp-proto-http = "1.36.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-exporter-otlp-proto-common"
 version = "1.36.0"
@@ -1945,6 +2305,11 @@ files = [
 
 [package.dependencies]
 opentelemetry-proto = "1.36.0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-exporter-otlp-proto-grpc"
@@ -1967,6 +2332,11 @@ opentelemetry-proto = "1.36.0"
 opentelemetry-sdk = ">=1.36.0,<1.37.0"
 typing-extensions = ">=4.6.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-exporter-otlp-proto-http"
 version = "1.36.0"
@@ -1988,6 +2358,11 @@ opentelemetry-sdk = ">=1.36.0,<1.37.0"
 requests = ">=2.7,<3.0"
 typing-extensions = ">=4.5.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-instrumentation"
 version = "0.57b0"
@@ -2005,6 +2380,11 @@ opentelemetry-api = ">=1.4,<2.0"
 opentelemetry-semantic-conventions = "0.57b0"
 packaging = ">=18.0"
 wrapt = ">=1.0.0,<2.0.0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-instrumentation-aio-pika"
@@ -2026,6 +2406,11 @@ wrapt = ">=1.0.0,<2.0.0"
 
 [package.extras]
 instruments = ["aio-pika (>=7.2.0,<10.0.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-instrumentation-asgi"
@@ -2050,6 +2435,11 @@ opentelemetry-util-http = "0.57b0"
 [package.extras]
 instruments = ["asgiref (>=3.0,<4.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-instrumentation-celery"
 version = "0.57b0"
@@ -2070,6 +2460,11 @@ opentelemetry-semantic-conventions = "0.57b0"
 
 [package.extras]
 instruments = ["celery (>=4.0,<6.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-instrumentation-fastapi"
@@ -2094,6 +2489,11 @@ opentelemetry-util-http = "0.57b0"
 [package.extras]
 instruments = ["fastapi (>=0.92,<1.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-instrumentation-httpx"
 version = "0.57b0"
@@ -2117,6 +2517,11 @@ wrapt = ">=1.0.0,<2.0.0"
 [package.extras]
 instruments = ["httpx (>=0.18.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-instrumentation-logging"
 version = "0.57b0"
@@ -2132,6 +2537,11 @@ files = [
 [package.dependencies]
 opentelemetry-api = ">=1.12,<2.0"
 opentelemetry-instrumentation = "0.57b0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-instrumentation-pymongo"
@@ -2153,6 +2563,11 @@ opentelemetry-semantic-conventions = "0.57b0"
 
 [package.extras]
 instruments = ["pymongo (>=3.1,<5.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-instrumentation-redis"
@@ -2176,6 +2591,11 @@ wrapt = ">=1.12.1"
 [package.extras]
 instruments = ["redis (>=2.6)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-instrumentation-requests"
 version = "0.57b0"
@@ -2198,6 +2618,11 @@ opentelemetry-util-http = "0.57b0"
 [package.extras]
 instruments = ["requests (>=2.0,<3.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-instrumentation-system-metrics"
 version = "0.57b0"
@@ -2218,6 +2643,11 @@ psutil = ">=5.9.0,<8"
 [package.extras]
 instruments = ["psutil (>=5)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-instrumentation-urllib"
 version = "0.57b0"
@@ -2235,6 +2665,11 @@ opentelemetry-api = ">=1.12,<2.0"
 opentelemetry-instrumentation = "0.57b0"
 opentelemetry-semantic-conventions = "0.57b0"
 opentelemetry-util-http = "0.57b0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-instrumentation-urllib3"
@@ -2258,6 +2693,11 @@ wrapt = ">=1.0.0,<2.0.0"
 [package.extras]
 instruments = ["urllib3 (>=1.0.0,<3.0.0)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-proto"
 version = "1.36.0"
@@ -2272,6 +2712,11 @@ files = [
 
 [package.dependencies]
 protobuf = ">=5.0,<7.0"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "opentelemetry-sdk"
@@ -2290,6 +2735,11 @@ opentelemetry-api = "1.36.0"
 opentelemetry-semantic-conventions = "0.57b0"
 typing-extensions = ">=4.5.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-semantic-conventions"
 version = "0.57b0"
@@ -2306,6 +2756,11 @@ files = [
 opentelemetry-api = "1.36.0"
 typing-extensions = ">=4.5.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "opentelemetry-util-http"
 version = "0.57b0"
@@ -2317,6 +2772,11 @@ files = [
     {file = "opentelemetry_util_http-0.57b0-py3-none-any.whl", hash = "sha256:e54c0df5543951e471c3d694f85474977cd5765a3b7654398c83bab3d2ffb8e9"},
     {file = "opentelemetry_util_http-0.57b0.tar.gz", hash = "sha256:f7417595ead0eb42ed1863ec9b2f839fc740368cd7bbbfc1d0a47bc1ab0aba11"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "ordered-set"
@@ -2332,6 +2792,11 @@ files = [
 
 [package.extras]
 dev = ["black", "mypy", "pytest"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "orjson"
@@ -2418,6 +2883,11 @@ files = [
     {file = "orjson-3.10.14.tar.gz", hash = "sha256:cf31f6f071a6b8e7aa1ead1fa27b935b48d00fbfa6a28ce856cfff2d5dd68eed"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "packaging"
 version = "25.0"
@@ -2429,6 +2899,11 @@ files = [
     {file = "packaging-25.0-py3-none-any.whl", hash = "sha256:29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484"},
     {file = "packaging-25.0.tar.gz", hash = "sha256:d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pamqp"
@@ -2447,6 +2922,11 @@ files = [
 codegen = ["lxml", "requests", "yapf"]
 testing = ["coverage", "flake8", "flake8-comprehensions", "flake8-deprecated", "flake8-import-order", "flake8-print", "flake8-quotes", "flake8-rst-docstrings", "flake8-tuple", "yapf"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "parso"
 version = "0.8.4"
@@ -2463,6 +2943,11 @@ files = [
 qa = ["flake8 (==5.0.4)", "mypy (==0.971)", "types-setuptools (==67.2.0.1)"]
 testing = ["docopt", "pytest"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pathspec"
 version = "0.12.1"
@@ -2474,6 +2959,11 @@ files = [
     {file = "pathspec-0.12.1-py3-none-any.whl", hash = "sha256:a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08"},
     {file = "pathspec-0.12.1.tar.gz", hash = "sha256:a482d51503a1ab33b1c67a6c3813a26953dbdc71c31dacaef9a838c4e29f5712"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pexpect"
@@ -2490,6 +2980,11 @@ files = [
 
 [package.dependencies]
 ptyprocess = ">=0.5"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "platformdirs"
@@ -2508,6 +3003,11 @@ docs = ["furo (>=2024.8.6)", "proselint (>=0.14)", "sphinx (>=8.1.3)", "sphinx-a
 test = ["appdirs (==1.4.4)", "covdefaults (>=2.3)", "pytest (>=8.3.4)", "pytest-cov (>=6)", "pytest-mock (>=3.14)"]
 type = ["mypy (>=1.14.1)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pluggy"
 version = "1.6.0"
@@ -2523,6 +3023,11 @@ files = [
 [package.extras]
 dev = ["pre-commit", "tox"]
 testing = ["coverage", "pytest", "pytest-benchmark"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pre-commit"
@@ -2543,6 +3048,11 @@ nodeenv = ">=0.11.1"
 pyyaml = ">=5.1"
 virtualenv = ">=20.10.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "prompt-toolkit"
 version = "3.0.51"
@@ -2558,6 +3068,11 @@ markers = {main = "extra == \"celery\""}
 
 [package.dependencies]
 wcwidth = "*"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "propcache"
@@ -2668,6 +3183,11 @@ files = [
     {file = "propcache-0.3.2.tar.gz", hash = "sha256:20d7d62e4e7ef05f221e0db2856b979540686342e7dd9973b815599c7057e168"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "protobuf"
 version = "6.31.1"
@@ -2686,6 +3206,11 @@ files = [
     {file = "protobuf-6.31.1-py3-none-any.whl", hash = "sha256:720a6c7e6b77288b85063569baae8536671b39f15cc22037ec7045658d80489e"},
     {file = "protobuf-6.31.1.tar.gz", hash = "sha256:d8cac4c982f0b957a4dc73a80e2ea24fab08e679c0de9deb835f4a12d69aca9a"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "psutil"
@@ -2708,8 +3233,13 @@ files = [
 ]
 
 [package.extras]
-dev = ["abi3audit", "black (==24.10.0)", "check-manifest", "coverage", "packaging", "pylint", "pyperf", "pypinfo", "pytest", "pytest-cov", "pytest-xdist", "requests", "rstcheck", "ruff", "setuptools", "sphinx", "sphinx_rtd_theme", "toml-sort", "twine", "virtualenv", "vulture", "wheel"]
+dev = ["abi3audit", "black (==24.10.0)", "check-manifest", "coverage", "packaging", "pylint", "pyperf", "pypinfo", "pytest", "pytest-cov", "pytest-xdist", "requests", "rstcheck", "ruff", "setuptools", "sphinx", "sphinx-rtd-theme", "toml-sort", "twine", "virtualenv", "vulture", "wheel"]
 test = ["pytest", "pytest-xdist", "setuptools"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "ptyprocess"
@@ -2723,6 +3253,11 @@ files = [
     {file = "ptyprocess-0.7.0-py2.py3-none-any.whl", hash = "sha256:4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35"},
     {file = "ptyprocess-0.7.0.tar.gz", hash = "sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pure-eval"
@@ -2739,6 +3274,11 @@ files = [
 [package.extras]
 tests = ["pytest"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pyasn1"
 version = "0.6.1"
@@ -2750,6 +3290,11 @@ files = [
     {file = "pyasn1-0.6.1-py3-none-any.whl", hash = "sha256:0d632f46f2ba09143da3a8afe9e33fb6f92fa2320ab7e886e2d0f7672af84629"},
     {file = "pyasn1-0.6.1.tar.gz", hash = "sha256:6f580d2bdd84365380830acf45550f2511469f673cb4a5ae3857a3170128b034"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pycparser"
@@ -2763,6 +3308,11 @@ files = [
     {file = "pycparser-2.22-py3-none-any.whl", hash = "sha256:c3702b6d3dd8c7abc1afa565d7e63d53a1d0bd86cdc24edd75470f4de499cfcc"},
     {file = "pycparser-2.22.tar.gz", hash = "sha256:491c8be9c040f5390f5bf44a5b07752bd07f56edf992381b05c701439eec10f6"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pydantic"
@@ -2786,6 +3336,11 @@ typing-inspection = ">=0.4.0"
 [package.extras]
 email = ["email-validator (>=2.0.0)"]
 timezone = ["tzdata ; python_version >= \"3.9\" and platform_system == \"Windows\""]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pydantic-core"
@@ -2899,6 +3454,11 @@ files = [
 [package.dependencies]
 typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pydantic-settings"
 version = "2.10.1"
@@ -2923,6 +3483,11 @@ gcp-secret-manager = ["google-cloud-secret-manager (>=2.23.1)"]
 toml = ["tomli (>=2.0.1)"]
 yaml = ["pyyaml (>=6.0.1)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pygments"
 version = "2.19.2"
@@ -2937,6 +3502,11 @@ files = [
 
 [package.extras]
 windows-terminal = ["colorama (>=0.4.6)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pyjwt"
@@ -2956,6 +3526,11 @@ crypto = ["cryptography (>=3.4.0)"]
 dev = ["coverage[toml] (==5.0.4)", "cryptography (>=3.4.0)", "pre-commit", "pytest (>=6.0.0,<7.0.0)", "sphinx", "sphinx-rtd-theme", "zope.interface"]
 docs = ["sphinx", "sphinx-rtd-theme", "zope.interface"]
 tests = ["coverage[toml] (==5.0.4)", "pytest (>=6.0.0,<7.0.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pymongo"
@@ -3038,6 +3613,11 @@ snappy = ["python-snappy"]
 test = ["pytest (>=8.2)", "pytest-asyncio (>=0.24.0)"]
 zstd = ["zstandard"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pytest"
 version = "7.4.4"
@@ -3059,6 +3639,11 @@ pluggy = ">=0.12,<2.0"
 [package.extras]
 testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pytest-asyncio"
 version = "0.21.2"
@@ -3077,6 +3662,11 @@ pytest = ">=7.0.0"
 [package.extras]
 docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1.0)"]
 testing = ["coverage (>=6.2)", "flaky (>=3.5.0)", "hypothesis (>=5.7.1)", "mypy (>=0.931)", "pytest-trio (>=0.7.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pytest-cov"
@@ -3097,6 +3687,11 @@ pytest = ">=4.6"
 [package.extras]
 testing = ["fields", "hunter", "process-tests", "pytest-xdist", "six", "virtualenv"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "pytest-mock"
 version = "3.14.1"
@@ -3114,6 +3709,11 @@ pytest = ">=6.2.5"
 
 [package.extras]
 dev = ["pre-commit", "pytest-asyncio", "tox"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pytest-xdist"
@@ -3136,6 +3736,11 @@ psutil = ["psutil (>=3.0)"]
 setproctitle = ["setproctitle"]
 testing = ["filelock"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
@@ -3152,6 +3757,11 @@ markers = {main = "extra == \"celery\""}
 [package.dependencies]
 six = ">=1.5"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "python-dotenv"
 version = "1.1.1"
@@ -3166,6 +3776,11 @@ files = [
 
 [package.extras]
 cli = ["click (>=5.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "python-jose"
@@ -3190,6 +3805,11 @@ pycrypto = ["pycrypto (>=2.6.0,<2.7.0)"]
 pycryptodome = ["pycryptodome (>=3.3.1,<4.0.0)"]
 test = ["pytest", "pytest-cov"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "python-multipart"
 version = "0.0.20"
@@ -3202,6 +3822,11 @@ files = [
     {file = "python_multipart-0.0.20-py3-none-any.whl", hash = "sha256:8a62d3a8335e06589fe01f2a3e178cdcc632f3fbe0d492ad9ee0ec35aab1f104"},
     {file = "python_multipart-0.0.20.tar.gz", hash = "sha256:8dd0cab45b8e23064ae09147625994d090fa46f5b0d1e13af944c331a7fa9d13"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pywin32"
@@ -3233,6 +3858,11 @@ files = [
     {file = "pywin32-311-cp39-cp39-win_amd64.whl", hash = "sha256:e0c4cfb0621281fe40387df582097fd796e80430597cb9944f0ae70447bacd91"},
     {file = "pywin32-311-cp39-cp39-win_arm64.whl", hash = "sha256:62ea666235135fee79bb154e695f3ff67370afefd71bd7fea7512fc70ef31e3d"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pyyaml"
@@ -3296,6 +3926,11 @@ files = [
     {file = "PyYAML-6.0.2-cp39-cp39-win_amd64.whl", hash = "sha256:39693e1f8320ae4f43943590b49779ffb98acb81f788220ea932a6b6c51004d8"},
     {file = "pyyaml-6.0.2.tar.gz", hash = "sha256:d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "pyzmq"
@@ -3402,6 +4037,11 @@ files = [
 [package.dependencies]
 cffi = {version = "*", markers = "implementation_name == \"pypy\""}
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "redis"
 version = "5.3.1"
@@ -3421,6 +4061,11 @@ PyJWT = ">=2.9.0"
 [package.extras]
 hiredis = ["hiredis (>=3.0.0)"]
 ocsp = ["cryptography (>=36.0.1)", "pyopenssl (==23.2.1)", "requests (>=2.31.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "requests"
@@ -3444,6 +4089,11 @@ urllib3 = ">=1.21.1,<3"
 socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "rich"
 version = "14.1.0"
@@ -3463,12 +4113,17 @@ pygments = ">=2.13.0,<3.0.0"
 [package.extras]
 jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "rsa"
 version = "4.9.1"
 description = "Pure-Python RSA implementation"
 optional = false
-python-versions = "<4,>=3.6"
+python-versions = ">=3.6,<4"
 groups = ["main"]
 files = [
     {file = "rsa-4.9.1-py3-none-any.whl", hash = "sha256:68635866661c6836b8d39430f97a996acbd61bfa49406748ea243539fe239762"},
@@ -3477,6 +4132,11 @@ files = [
 
 [package.dependencies]
 pyasn1 = ">=0.1.3"
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "ruff"
@@ -3505,6 +4165,11 @@ files = [
     {file = "ruff-0.12.7-py3-none-win_arm64.whl", hash = "sha256:dfce05101dbd11833a0776716d5d1578641b7fddb537fe7fa956ab85d1769b69"},
     {file = "ruff-0.12.7.tar.gz", hash = "sha256:1fc3193f238bc2d7968772c82831a4ff69252f673be371fb49663f0068b7ec71"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "sentry-sdk"
@@ -3564,17 +4229,27 @@ statsig = ["statsig (>=0.55.3)"]
 tornado = ["tornado (>=6)"]
 unleash = ["UnleashClient (>=6.0.1)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "six"
 version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
 optional = false
-python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 groups = ["main", "dev", "test"]
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "sniffio"
@@ -3587,6 +4262,11 @@ files = [
     {file = "sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2"},
     {file = "sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "stack-data"
@@ -3608,6 +4288,11 @@ pure-eval = "*"
 [package.extras]
 tests = ["cython", "littleutils", "pygments", "pytest", "typeguard"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "starlette"
 version = "0.47.2"
@@ -3627,12 +4312,17 @@ typing-extensions = {version = ">=4.10.0", markers = "python_version < \"3.13\""
 [package.extras]
 full = ["httpx (>=0.27.0,<0.29.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.18)", "pyyaml"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "tornado"
 version = "6.5.1"
 description = "Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed."
 optional = false
-python-versions = ">=3.9"
+python-versions = ">= 3.9"
 groups = ["dev"]
 files = [
     {file = "tornado-6.5.1-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:d50065ba7fd11d3bd41bcad0825227cc9a95154bad83239357094c36708001f7"},
@@ -3648,6 +4338,11 @@ files = [
     {file = "tornado-6.5.1-cp39-abi3-win_arm64.whl", hash = "sha256:02420a0eb7bf617257b9935e2b754d1b63897525d8a289c9d65690d580b4dcf7"},
     {file = "tornado-6.5.1.tar.gz", hash = "sha256:84ceece391e8eb9b2b95578db65e920d2a61070260594819589609ba9bc6308c"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "tqdm"
@@ -3672,6 +4367,11 @@ notebook = ["ipywidgets (>=6)"]
 slack = ["slack-sdk"]
 telegram = ["requests"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "traitlets"
 version = "5.14.3"
@@ -3688,6 +4388,11 @@ files = [
 docs = ["myst-parser", "pydata-sphinx-theme", "sphinx"]
 test = ["argcomplete (>=3.0.3)", "mypy (>=1.7.0)", "pre-commit", "pytest (>=7.0,<8.2)", "pytest-mock", "pytest-mypy-testing"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "types-pyyaml"
 version = "6.0.12.20250516"
@@ -3700,6 +4405,11 @@ files = [
     {file = "types_pyyaml-6.0.12.20250516.tar.gz", hash = "sha256:9f21a70216fc0fa1b216a8176db5f9e0af6eb35d2f2932acb87689d03a5bf6ba"},
 ]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "typing-extensions"
 version = "4.14.1"
@@ -3711,6 +4421,11 @@ files = [
     {file = "typing_extensions-4.14.1-py3-none-any.whl", hash = "sha256:d1e1e3b58374dc93031d6eda2420a48ea44a36c2b4766a4fdeb3710755731d76"},
     {file = "typing_extensions-4.14.1.tar.gz", hash = "sha256:38b39f4aeeab64884ce9f74c94263ef78f3c22467c8724005483154c26648d36"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "typing-inspection"
@@ -3727,6 +4442,11 @@ files = [
 [package.dependencies]
 typing-extensions = ">=4.12.0"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "tzdata"
 version = "2025.2"
@@ -3739,6 +4459,11 @@ files = [
     {file = "tzdata-2025.2-py2.py3-none-any.whl", hash = "sha256:1a403fada01ff9221ca8044d701868fa132215d84beb92242d9acd2147f667a8"},
     {file = "tzdata-2025.2.tar.gz", hash = "sha256:b60a638fcc0daffadf82fe0f57e53d06bdec2f36c4df66280ae79bce6bd6f2b9"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "urllib3"
@@ -3757,6 +4482,11 @@ brotli = ["brotli (>=1.0.9) ; platform_python_implementation == \"CPython\"", "b
 h2 = ["h2 (>=4,<5)"]
 socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
 zstd = ["zstandard (>=0.18.0)"]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "uvicorn"
@@ -3778,6 +4508,11 @@ h11 = ">=0.8"
 [package.extras]
 standard = ["colorama (>=0.4) ; sys_platform == \"win32\"", "httptools (>=0.6.3)", "python-dotenv (>=0.13)", "pyyaml (>=5.1)", "uvloop (>=0.15.1) ; sys_platform != \"win32\" and sys_platform != \"cygwin\" and platform_python_implementation != \"PyPy\"", "watchfiles (>=0.13)", "websockets (>=10.4)"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "vine"
 version = "5.1.0"
@@ -3790,6 +4525,11 @@ files = [
     {file = "vine-5.1.0-py3-none-any.whl", hash = "sha256:40fdf3c48b2cfe1c38a49e9ae2da6fda88e4794c810050a728bd7413811fb1dc"},
     {file = "vine-5.1.0.tar.gz", hash = "sha256:8b62e981d35c41049211cf62a0a1242d8c1ee9bd15bb196ce38aefd6799e61e0"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "virtualenv"
@@ -3812,6 +4552,11 @@ platformdirs = ">=3.9.1,<5"
 docs = ["furo (>=2023.7.26)", "proselint (>=0.13)", "sphinx (>=7.1.2,!=7.3)", "sphinx-argparse (>=0.4)", "sphinxcontrib-towncrier (>=0.2.1a0)", "towncrier (>=23.6)"]
 test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess (>=1)", "flaky (>=3.7)", "packaging (>=23.1)", "pytest (>=7.4)", "pytest-env (>=0.8.2)", "pytest-freezer (>=0.4.8) ; platform_python_implementation == \"PyPy\" or platform_python_implementation == \"GraalVM\" or platform_python_implementation == \"CPython\" and sys_platform == \"win32\" and python_version >= \"3.13\"", "pytest-mock (>=3.11.1)", "pytest-randomly (>=3.12)", "pytest-timeout (>=2.1)", "setuptools (>=68)", "time-machine (>=2.10) ; platform_python_implementation == \"CPython\""]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "wcwidth"
 version = "0.2.13"
@@ -3824,6 +4569,11 @@ files = [
     {file = "wcwidth-0.2.13.tar.gz", hash = "sha256:72ea0c06399eb286d978fdedb6923a9eb47e1c486ce63e9b4e64fc18303972b5"},
 ]
 markers = {main = "extra == \"celery\""}
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "wrapt"
@@ -3913,6 +4663,11 @@ files = [
     {file = "wrapt-1.17.2-py3-none-any.whl", hash = "sha256:b18f2d1533a71f069c7f82d524a52599053d4c7166e9dd374ae2136b7f40f7c8"},
     {file = "wrapt-1.17.2.tar.gz", hash = "sha256:41388e9d4d1522446fe79d3213196bd9e3b301a336965b9e27ca2788ebd122f3"},
 ]
+
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
 
 [[package]]
 name = "yarl"
@@ -4034,6 +4789,11 @@ idna = ">=2.0"
 multidict = ">=4.0"
 propcache = ">=0.2.1"
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [[package]]
 name = "zipp"
 version = "3.23.0"
@@ -4054,6 +4814,11 @@ enabler = ["pytest-enabler (>=2.2)"]
 test = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more_itertools", "pytest (>=6,!=8.1.*)", "pytest-ignore-flaky"]
 type = ["pytest-mypy"]
 
+[package.source]
+type = "legacy"
+url = "https://nexus.bluprint.ir/repository/group-package-registry/simple"
+reference = "nexus-registry"
+
 [extras]
 celery = ["celery", "opentelemetry-instrumentation-celery"]
 fastapi = ["fastapi", "opentelemetry-instrumentation-asgi", "opentelemetry-instrumentation-fastapi", "python-multipart", "uvicorn"]
@@ -4067,4 +4832,4 @@ requests = ["opentelemetry-instrumentation-requests", "requests"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "fe4c039afc8513394dfaa39439aefa72ea43361f03009066ab4fc5d8298ff091"
+content-hash = "c2cad8638d06e4656c9a4b32583659cdda5cbb0aa8769b2fe5ef70ad6b90e146"

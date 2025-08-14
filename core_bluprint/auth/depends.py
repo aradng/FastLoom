@@ -5,6 +5,7 @@ from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose.jwt import get_unverified_claims
 
+from core_bluprint.auth import Claims
 from core_bluprint.auth.protocols import OAuth2Settings
 from core_bluprint.auth.schemas import UserClaims
 
@@ -32,7 +33,9 @@ class OptionalJWTAuth:
         ) -> UserClaims | None:
             if token is None:
                 return None
-            return self._parse_token(token)
+            claims = self._parse_token(token)
+            Claims.set(claims)
+            return claims
 
         return _inner
 
@@ -48,6 +51,8 @@ class JWTAuth(OptionalJWTAuth):
         async def _inner(
             token: Annotated[str, Depends(self._oauth2_schema)],
         ) -> UserClaims:
-            return self._parse_token(token)
+            claims = self._parse_token(token)
+            Claims.set(claims)
+            return claims
 
         return _inner

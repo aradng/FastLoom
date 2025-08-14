@@ -9,6 +9,7 @@ from pydantic import StringConstraints
 
 from core_bluprint.auth.depends import JWTAuth, OptionalJWTAuth
 from core_bluprint.auth.schemas import UserClaims
+from core_bluprint.tenant import Tenant
 from core_bluprint.tenant.base.utils import get_general_settings
 from core_bluprint.tenant.protocols import TenantHostSchema, TenantNameSchema
 
@@ -66,8 +67,10 @@ class BaseTenantSource(Generic[K]):
 class HeaderSource(BaseTenantSource[TenantHostSchema]):
     async def _dep(
         self, x_forwarded_host: Annotated[str, Header(include_in_schema=False)]
-    ) -> str:
-        return self.hosts[x_forwarded_host]
+    ) -> str | None:
+        tenant = self.hosts[x_forwarded_host]
+        Tenant.set(tenant)
+        return tenant
 
     @property
     def hosts(self) -> dict[str, str]:
@@ -91,6 +94,7 @@ class HeaderSource(BaseTenantSource[TenantHostSchema]):
 
 class PathSource(BaseTenantSource):
     async def _dep(self, tenant: Annotated[str, Path()]) -> str:
+        Tenant.set(tenant)
         return tenant
 
 
@@ -105,7 +109,10 @@ class TokenBodySource(BaseTenantSource):
             raise HTTPException(
                 status_code=400, detail="Request body is not JSON decodable."
             ) from er
-        return self.auth._parse_token(req_json["token"]).tenant
+
+        tenant = self.auth._parse_token(req_json["token"]).tenant
+        Tenant.set(tenant)
+        return tenant
 
     @property
     def auth(self) -> JWTAuth:
@@ -127,6 +134,7 @@ class OptionalTokenHeaderSource(BaseTenantSource):
 
     def _get_tenant_from_claims(self, claims: UserClaims) -> str:
         tenant = claims.tenant
+        Tenant.set(tenant)
         if tenant not in self.settings:
             raise TenantNotFound(tenant)
         return tenant
@@ -160,6 +168,7 @@ try:
         ) -> str | None:
             if tenant not in self.settings:
                 raise TenantNotFound(tenant)
+            Tenant.set(tenant)
             return tenant
 
         return _inner

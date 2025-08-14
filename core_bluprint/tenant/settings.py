@@ -9,6 +9,7 @@ from core_bluprint.auth.introspect.depends import (
     OptionalVerifiedAuth,
     VerifiedAuth,
 )
+from core_bluprint.meta import SelfSustaining
 from core_bluprint.tenant.depends import (
     ContextSource,
     HeaderSource,
@@ -53,29 +54,31 @@ def load_settings(
     )
 
 
-class TenantConfigs(Generic[T]):
+class TenantConfigs(Generic[T], SelfSustaining):
     settings: MutableMapping[str, T]
     settings_cls: type[T]
+    general: T
+    from_: TenantDependancySelector[T]
+    auth: VerifiedAuth
+    optional_auth: OptionalVerifiedAuth
 
-    @classmethod
-    def load(
-        cls, settings_cls: type[T], config_path: Path | None = None
+    def __init__(
+        self, settings_cls: type[T], config_path: Path | None = None
     ) -> None:
-        cls.settings = load_settings(settings_cls, config_path)
-        cls.settings_cls = settings_cls
+        super().__init__()
+        self.settings = load_settings(settings_cls, config_path)
+        self.settings_cls = settings_cls
+        self.general = self._general()
+        self.from_ = self._from_()
+        self.auth = self._auth()
+        self.optional_auth = self._optional_auth()
 
-    @classmethod
-    def get(cls, tenant: str) -> T:
-        return cls.settings[tenant]
+    def _general(self) -> T:
+        return next(iter(self.settings.values()))
 
-    @classmethod
-    def general(cls) -> T:
-        return next(iter(cls.settings.values()))
-
-    @classmethod
-    def from_(cls) -> TenantDependancySelector[T]:
-        return TenantDependancySelector[cls.settings_cls](  # type: ignore[name-defined]  # noqa: E501
-            lambda: load_settings(cls.settings_cls),
+    def _from_(self) -> TenantDependancySelector[T]:
+        return TenantDependancySelector[self.settings_cls](  # type: ignore[name-defined]
+            lambda: load_settings(self.settings_cls),
             (
                 TokenHeaderSource,
                 PathSource,
@@ -86,15 +89,8 @@ class TenantConfigs(Generic[T]):
             ),
         )
 
-    @classmethod
-    def auth(cls) -> VerifiedAuth:
-        return VerifiedAuth(cls.general())  # type: ignore[arg-type]
+    def _auth(self) -> VerifiedAuth:
+        return VerifiedAuth(self.general)  # type: ignore[arg-type]
 
-    @classmethod
-    def optional_auth(cls) -> OptionalVerifiedAuth:
-        return OptionalVerifiedAuth(cls.general())  # type: ignore[arg-type]
-
-    def __init__(
-        self, settings_cls: type[T], config_path: Path | None = None
-    ) -> None:
-        self.settings = load_settings(settings_cls, config_path)
+    def _optional_auth(self) -> OptionalVerifiedAuth:
+        return OptionalVerifiedAuth(self.general)  # type: ignore[arg-type]

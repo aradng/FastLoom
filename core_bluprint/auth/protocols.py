@@ -5,7 +5,7 @@ from pydantic import HttpUrl
 
 
 class OAuth2Settings(Protocol):
-    IAM_TOKEN_URL: Path
+    IAM_TOKEN_URL: HttpUrl | Path
 
 
 class SidecarSettings(OAuth2Settings, Protocol):
