@@ -1,22 +1,54 @@
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
 stages:
+  - analysis-build
   - static-analysis
   - build
 
-static-analysis:
-  stage: static-analysis
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  FF_NETWORK_PER_BUILD: "true"
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+  IMAGE_TAG: $DOWNSTREAM_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME
+  PRECOMMIT_TAG: $IMAGE_TAG/pre-commit
+
+pre-commit-build:
+  stage: analysis-build
   tags:
     - docker
-  image: $CI_REGISTRY/microservice/core-bluprint/poetry.dev:latest
   variables:
     GIT_STRATEGY: clone
   script:
-    - poetry run -q ruff check --ignore-noqa .
-    - poetry run -q codespell --check-filenames
-    - poetry run -q black --check --preview .
-    - poetry run -q isort --check .
-    - poetry check
-    - poetry run -q mypy .
-    - find . -name '*.py' -exec poetry run -q pyupgrade --py312-plus {} \;
+    - docker build -t $PRECOMMIT_TAG --push
+      --target=builder-dev
+      --build-arg USERNAME=$NEXUS_USERNAME
+      --build-arg PASSWORD=$NEXUS_PASSWORD .
+  rules:
+    - changes:
+        paths:
+          - .pre-commit-config.yaml
+          - Dockerfile
+        compare_to: 'refs/heads/$CI_COMMIT_REF_NAME~1'
+
+pre-commit:
+  stage: static-analysis
+  tags:
+    - docker
+  image: $PRECOMMIT_TAG
+  variables:
+    GIT_STRATEGY: clone
+  services: []
+  script:
+    - poetry config http-basic.nexus-registry "$NEXUS_USERNAME" "$NEXUS_PASSWORD"
+    - pre-commit run --all-files --show-diff-on-failure
     - git diff --quiet
   after_script:
     - >
@@ -28,7 +60,8 @@ build-core:
   stage: build
   tags:
     - docker
-  image: $CI_REGISTRY/microservice/core-bluprint/system:latest
+  image: $PRECOMMIT_TAG
+  services: []
   script:
     - poetry build
     - poetry config repositories.nexus-registry "https://nexus.bluprint.ir/repository/private-package-registry/"
