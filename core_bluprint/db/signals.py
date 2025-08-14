@@ -101,8 +101,8 @@ class BaseDocumentSignal(BaseDocument):
             changes=(class_changes, ...),
             operation=(Literal[operation], ...),
         )
-        return RabbitSubscriber.router.broker.publisher(
-            cls.get_subscription_topic(operation),
+        return RabbitSubscriber.publisher(
+            routing_key=cls.get_subscription_topic(operation),
             schema=narrowed_signal_message,
         )
 

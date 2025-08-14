@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from aio_pika import IncomingMessage, Message
 from faststream import Context, ExceptionMiddleware
@@ -16,6 +16,8 @@ from faststream.rabbit.schemas.queue import ClassicQueueArgs
 from faststream.rabbit.subscriber.asyncapi import AsyncAPISubscriber
 from opentelemetry import trace
 
+from core_bluprint.meta import SelfSustaining
+from core_bluprint.settings.base import MonitoringSettings
 from core_bluprint.signals.middlewares import RabbitPayloadTelemetryMiddleware
 from core_bluprint.signals.settings import RabbitmqSettings
 
@@ -46,12 +48,10 @@ def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
     )
 
 
-class RabbitSubscriptable(RabbitmqSettings):
-    ENVIRONMENT: str
-    PROJECT_NAME: str
+class RabbitSubscriptable(RabbitmqSettings, MonitoringSettings): ...
 
 
-class RabbitSubscriber:
+class RabbitSubscriber(SelfSustaining):
     """A class to encapsulate the common logic for RabbitMQ subscribers"""
 
     router: RabbitRouter
@@ -86,6 +86,7 @@ class RabbitSubscriber:
             async def handler(message: StreamMessage[IncomingMessage]): ...
             ```
         """
+        super().__init__()
         self._settings = settings
         if exceptions is None:
             exceptions = [Exception]
@@ -108,19 +109,21 @@ class RabbitSubscriber:
             f"{self._settings.ENVIRONMENT}_{self._settings.PROJECT_NAME}"
         )
 
-    def _get_queue(self, name: str) -> RabbitQueue:
+    @classmethod
+    def _get_queue(cls, name: str) -> RabbitQueue:
         """
         :param name: name of the queue
         :return: RabbitQueue
         """
         return RabbitQueue(
-            name=f"{self._queue_prefix}_{name}",
+            name=f"{cls._queue_prefix}_{name}",
             routing_key=name,
             durable=True,
         )
 
+    @classmethod
     async def _get_dlx_queue(
-        self,
+        cls,
         routing_key: str,
         delay: int,
     ) -> RabbitQueue:
@@ -132,37 +135,38 @@ class RabbitSubscriber:
         creates a dead letter queue with specified delay
         and binds it to the exchange
         """
-        dlx = await self.router.broker.declare_exchange(self.exchange)
+        dlx = await cls.router.broker.declare_exchange(cls.exchange)
 
         queue = RabbitQueue(
-            name=f"{self._queue_prefix}_{routing_key}."
-            f"{self._settings.PROJECT_NAME}.{delay}",
-            routing_key=f"{routing_key}.{self._settings.PROJECT_NAME}.{delay}",
+            name=f"{cls._queue_prefix}_{routing_key}."
+            f"{cls._settings.PROJECT_NAME}.{delay}",
+            routing_key=f"{routing_key}.{cls._settings.PROJECT_NAME}.{delay}",
             durable=True,
             arguments=ClassicQueueArgs(
                 {
-                    "x-dead-letter-exchange": self.exchange.name,
+                    "x-dead-letter-exchange": cls.exchange.name,
                     "x-dead-letter-routing-key": f"{routing_key}."
-                    f"{self._settings.PROJECT_NAME}",
+                    f"{cls._settings.PROJECT_NAME}",
                     "x-message-ttl": delay * 1000,
                     # "x-expires": delay * 2000,
                 }
             ),
         )
 
-        robust_queue = await self.router.broker.declare_queue(
+        robust_queue = await cls.router.broker.declare_queue(
             queue=queue,
         )
 
         await robust_queue.bind(
             dlx,
-            routing_key=f"{routing_key}.{self._settings.PROJECT_NAME}.{delay}",
+            routing_key=f"{routing_key}.{cls._settings.PROJECT_NAME}.{delay}",
         )
 
         return queue
 
+    @classmethod
     async def _exc_handler(
-        self,
+        cls,
         exc: Exception,
         message: Annotated[StreamMessage[IncomingMessage], Context()],
     ):
@@ -172,40 +176,38 @@ class RabbitSubscriber:
 
         assert isinstance(message.raw_message.routing_key, str)
         if (routing_key := message.raw_message.routing_key).endswith(
-            f".{self._settings.PROJECT_NAME}"
+            f".{cls._settings.PROJECT_NAME}"
         ) and message.headers["x-delivery-count"] > 1:
-            routing_key = routing_key[
-                : -len(f".{self._settings.PROJECT_NAME}")
-            ]
-        queue = await self._get_dlx_queue(
+            routing_key = routing_key[: -len(f".{cls._settings.PROJECT_NAME}")]
+        queue = await cls._get_dlx_queue(
             routing_key,
             min(
-                self._base_delay
+                cls._base_delay
                 * 2 ** (message.headers["x-delivery-count"] - 1),
-                self._max_delay,
+                cls._max_delay,
             ),
         )
 
-        await self.router.broker.publish(
+        await cls.router.broker.publish(
             Message(body=message.body, headers=message.headers),
             queue=queue,
-            exchange=self.exchange,
+            exchange=cls.exchange,
             persist=True,
         )
         # re-raise for observability in sentry/otel
         raise exc
 
-    def _get_subscriber(
-        self, routing_key: str, **kwargs
-    ) -> AsyncAPISubscriber:
-        return self.router.subscriber(
-            queue=self._get_queue(routing_key),
-            exchange=self.exchange,
+    @classmethod
+    def _get_subscriber(cls, routing_key: str, **kwargs) -> AsyncAPISubscriber:
+        return cls.router.subscriber(
+            queue=cls._get_queue(routing_key),
+            exchange=cls.exchange,
             **kwargs,
         )
 
+    @classmethod
     def subscriber(
-        self,
+        cls,
         routing_key: str,
         retry_backoff: bool = False,
         **kwargs,
@@ -218,11 +220,11 @@ class RabbitSubscriber:
         """
 
         def _inner(func):
-            decorators = [self._get_subscriber(routing_key, **kwargs)]
+            decorators = [cls._get_subscriber(routing_key, **kwargs)]
             if retry_backoff:
                 decorators.append(
-                    self._get_subscriber(
-                        f"{routing_key}.{self._settings.PROJECT_NAME}",
+                    cls._get_subscriber(
+                        f"{routing_key}.{cls._settings.PROJECT_NAME}",
                         **kwargs,
                     )
                 )
@@ -233,8 +235,30 @@ class RabbitSubscriber:
 
         return _inner
 
+    @classmethod
+    def publisher(
+        cls,
+        routing_key: str,
+        schema: Any | None = None,
+        **kwargs,
+    ):
+        """
+        :param routing_key: routing key
+        :param schema : pydantic schema
+        :param kwargs: additional faststream subscriber arguments
+        :return: persistent publisher
+        """
+        return cls.router.publisher(
+            routing_key=routing_key,
+            exchange=cls.exchange,
+            schema=schema,
+            persist=True,
+            **kwargs,
+        )
+
+    @classmethod
     def multi_subscriber(
-        self,
+        cls,
         routing_keys: list[str],
         retry_backoff: bool = False,
         **kwargs,
@@ -247,7 +271,7 @@ class RabbitSubscriber:
 
         def _inner(func):
             for routing_key in routing_keys:
-                func = self.subscriber(
+                func = cls.subscriber(
                     routing_key,
                     retry_backoff=retry_backoff,
                     **kwargs,
@@ -256,9 +280,10 @@ class RabbitSubscriber:
 
         return _inner
 
+    @classmethod
     def multi_publisher(
-        self,
-        routing_keys: list[str],
+        cls,
+        routing_keys: dict[str, str],
         schema: type | None = None,
         **kwargs,
     ) -> dict[str, AsyncAPIPublisher]:
@@ -268,12 +293,12 @@ class RabbitSubscriber:
         :param kwargs: additional arguments for the faststream publishers
         """
         return {
-            routing_key: self.router.publisher(
-                exchange=self.exchange,
+            key: cls.router.publisher(
+                exchange=cls.exchange,
                 routing_key=routing_key,
                 schema=schema,
                 persist=True,
                 **kwargs,
             )
-            for routing_key in routing_keys
+            for key, routing_key in routing_keys.items()
         }

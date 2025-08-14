@@ -5,6 +5,7 @@ from logging import Logger
 
 import uvicorn
 from fastapi import FastAPI
+from pydantic import ValidationError
 from starlette.middleware.cors import CORSMiddleware
 
 from core_bluprint.launcher.settings import LauncherSettings
@@ -14,8 +15,10 @@ from core_bluprint.launcher.utils import (
     get_settings_cls,
 )
 from core_bluprint.monitoring import InitMonitoring, Instruments
-
-# from core_bluprint.signals.depends import RabbitSubscriber as RR
+from core_bluprint.observability.settings import ObservabilitySettings
+from core_bluprint.settings.base import FastAPISettings, GeneralSettings
+from core_bluprint.signals.depends import RabbitSubscriber, RabbitSubscriptable
+from core_bluprint.signals.settings import RabbitmqSettings
 from core_bluprint.tenant.settings import TenantConfigs as TC
 
 logger: Logger = logging.getLogger(__name__)
@@ -30,16 +33,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def initial_app():
-    TC.load(get_settings_cls())
+    TC(get_settings_cls())
     logging.getLogger("uvicorn.access").addFilter(
-        EndpointFilter(
-            TC[LauncherSettings].general().LOGGING_EXCLUDED_ENDPOINTS
-        )
+        EndpointFilter(TC[LauncherSettings].general.LOGGING_EXCLUDED_ENDPOINTS)
     )
-
-    # RR.load(TC.general())
+    if isinstance(TC[RabbitSubscriptable].general, RabbitmqSettings):
+        RabbitSubscriber(TC[RabbitSubscriptable].general)
+    else:
+        logging.warning("Settings Does Not Inherit from RabbitmqSettings")
+    # ^IMPORTANT:rabbit has to init first
+    service_app = get_app()
+    if (
+        service_app.project_name is None
+        and not TC[GeneralSettings].general.PROJECT_NAME
+    ):
+        raise ValidationError("PROJECT_NAME")
+    if (PN := service_app.project_name) is not None and TC[
+        GeneralSettings
+    ].general._is_derived:
+        for k in TC[GeneralSettings].settings:
+            TC[GeneralSettings].settings[k].PROJECT_NAME = PN
     with InitMonitoring(
-        TC.general(),
+        TC[ObservabilitySettings].general,
         instruments=(
             Instruments.HTTPX,
             Instruments.RABBIT,
@@ -48,9 +63,9 @@ def initial_app():
     ) as monitor:
         app = FastAPI(
             lifespan=lifespan,
-            title=TC.general().PROJECT_NAME,
-            docs_url=f"{TC.general().API_PREFIX}/docs",
-            openapi_url=f"{TC.general().API_PREFIX}/openapi.json",
+            title=TC[FastAPISettings].general.PROJECT_NAME,
+            docs_url=f"{TC[FastAPISettings].general.API_PREFIX}/docs",
+            openapi_url=f"{TC[FastAPISettings].general.API_PREFIX}/openapi.json",
         )
         monitor.instrument(app)
 
@@ -61,12 +76,14 @@ def initial_app():
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    service_app = get_app()
+
     service_app.load_exception_handlers(app)
     service_app.load_healthchecks(app)
 
-    app.include_router(get_app().root_router, prefix="/api")
-    # app.include_router(RR.get().router)
+    app.include_router(
+        service_app.root_router, prefix=TC[FastAPISettings].general.API_PREFIX
+    )
+    app.include_router(RabbitSubscriber.router)
     return app
 
 
@@ -75,9 +92,9 @@ app = initial_app()
 
 def main():
     uvicorn.run(
-        "core_launcher.main:app",
+        app="core_bluprint.launcher.main:app",
         host="0.0.0.0",
-        port=TC.general().APP_PORT,
-        reload=TC.general().DEBUG,
-        workers=TC.general().WORKERS,
+        port=TC[LauncherSettings].general.APP_PORT,
+        reload=TC[LauncherSettings].general.DEBUG,
+        workers=TC[LauncherSettings].general.WORKERS,
     )

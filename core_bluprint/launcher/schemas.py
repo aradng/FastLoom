@@ -4,21 +4,31 @@ from contextlib import asynccontextmanager
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Self
 
 from beanie import View
+from beanie.odm.documents import Document
+from beanie.odm.union_doc import UnionDoc
 from fastapi import APIRouter, FastAPI
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    model_validator,
+)
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Lifespan
 
 from core_bluprint.db.healthcheck import get_healthcheck as db_hc
-from core_bluprint.db.lifehooks import init_db
-from core_bluprint.db.schemas import BaseDocument
+from core_bluprint.db.lifehooks import get_models, init_db
+from core_bluprint.db.settings import MongoSettings
 from core_bluprint.healthcheck.handler import init_healthcheck
 from core_bluprint.i18n.base import CustomI18NException
 from core_bluprint.i18n.handler import i18n_exception_handler
+from core_bluprint.settings.base import FastAPISettings
+from core_bluprint.signals.depends import RabbitSubscriber
 from core_bluprint.signals.healthcheck import (
     get_healthcheck as signal_hc,
 )
@@ -45,13 +55,21 @@ class App(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     signals_module: ModuleType | None = None
+    models_module: ModuleType | None = None
     healthchecks: list[Healthcheck] = Field(default_factory=list)
     routes: list[Route] = Field(default_factory=list)
-    models: list[type[BaseDocument] | type[View]] = Field(default_factory=list)
+    models: list[type[Document] | type[UnionDoc] | type[View]] = Field(
+        default_factory=list
+    )
     lifespan_fn: Lifespan = Field(default_factory=default_lifespan)
     exception_handlers: list[ExceptionHandlerRegister] = Field(
         default_factory=list
     )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def project_name(self) -> str | None:
+        return self.models[0].__module__.split(".")[0] if self.models else None
 
     @property
     def root_router(self) -> APIRouter:
@@ -62,18 +80,18 @@ class App(BaseModel):
 
     async def load(self, app: FastAPI):
         await self.load_db()
-        await self.load_signals()
+        self.load_signals()
 
     async def load_db(self):
         if not self.models:
             return
         await init_db(
-            database_name=TC.general().MONGO_DATABASE,
+            database_name=TC[MongoSettings].general.MONGO_DATABASE,
             models=self.models,
-            mongo_uri=TC.general().MONGO_URI,
+            mongo_uri=TC[MongoSettings].general.MONGO_URI,
         )
 
-    async def load_signals(self):
+    def load_signals(self):
         if not self.signals_module:
             return
         for i in pkgutil.iter_modules(self.signals_module.__path__):
@@ -91,14 +109,14 @@ class App(BaseModel):
         ]
 
         if self.models:
-            handlers.append(db_hc(TC.general().MONGO_URI))  # type: ignore[attr-defined]
+            handlers.append(db_hc(TC[MongoSettings].general.MONGO_URI))  # type: ignore[misc]
         if self.signals_module:
-            handlers.append(signal_hc(TC.general().RABBIT_URI))  # type: ignore[attr-defined]
+            handlers.append(signal_hc(RabbitSubscriber.router))
 
         init_healthcheck(
             app=app,
-            healthcheck_handlers=handlers,  # type: ignore[attr-defined]
-            prefix=TC.general().API_PREFIX,  # type: ignore[attr-defined]
+            healthcheck_handlers=handlers,
+            prefix=TC[FastAPISettings].general.API_PREFIX,  # type: ignore[misc]
         )
 
     def load_exception_handlers(self, app: FastAPI):
@@ -107,3 +125,9 @@ class App(BaseModel):
             *self.exception_handlers,
         ):
             app.exception_handler(exc_class_or_status_code)(handler)
+
+    @model_validator(mode="after")
+    def module_to_models(self) -> Self:
+        if self.models_module is not None and not self.models:
+            self.models = get_models(self.models_module)
+        return self
