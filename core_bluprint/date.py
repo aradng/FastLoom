@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
-import jdatetime
+import jdatetime  # type: ignore[import-untyped]
 
 
 def datetime_to_jalali(dt: datetime, date_only: bool = False) -> str:

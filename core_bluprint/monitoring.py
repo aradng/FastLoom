@@ -1,7 +1,9 @@
+import contextlib
 import json
 import logging
 from collections.abc import Callable, Sequence
 from enum import Enum
+from os import getenv
 from typing import TYPE_CHECKING, Any
 
 import logfire
@@ -10,21 +12,10 @@ from bson import DBRef
 from jose.exceptions import JWTError
 from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.http._log_exporter import (
-    OTLPLogExporter,
-)
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
     OTLPMetricExporter,
 )
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter,
-)
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.sdk.resources import HOST_NAME, SERVICE_NAME, Resource
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Span
 from pydantic import HttpUrl
 from sentry_sdk import init as sentry_init
@@ -34,10 +25,14 @@ from core_bluprint.tenant.protocols import TenantMonitoringSchema
 from core_bluprint.utils import ColoredFormatter
 
 if TYPE_CHECKING:
+    with contextlib.suppress(ImportError):
+        from fastapi import FastAPI
+
+if not TYPE_CHECKING:
     try:
         from fastapi import FastAPI
     except ImportError:
-        FastAPI = Any  # type: ignore[no-redef, misc, assignment]
+        from typing import Any as FastAPI
 
 
 def init_sentry(dsn: HttpUrl | str | None, environment: str):
@@ -56,19 +51,6 @@ def init_sentry(dsn: HttpUrl | str | None, environment: str):
         environment=environment,
         send_default_pii=True,
     )
-
-
-def _get_resource(settings):
-    return Resource(
-        attributes={
-            SERVICE_NAME: settings.PROJECT_NAME,
-            HOST_NAME: settings.ENVIRONMENT,
-        }
-    )
-
-
-def get_span_proccessor() -> BatchSpanProcessor:
-    return BatchSpanProcessor(OTLPSpanExporter())
 
 
 def get_metrics_reader() -> PeriodicExportingMetricReader:
@@ -95,7 +77,7 @@ def _set_user_attributes_to_span(span: Span, token: str):
         return
 
 
-def instrument_fastapi(app: "FastAPI"):
+def instrument_fastapi(app: FastAPI):
     from fastapi.responses import PlainTextResponse
     from fastapi.security.utils import get_authorization_scheme_param
     from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -142,35 +124,29 @@ def instrument_fastapi(app: "FastAPI"):
 
 
 def instrument_logging(settings):
+    class AttributedLogfireLoggingHandler(logfire.LogfireLoggingHandler):
+        def fill_attributes(self, record: logging.LogRecord):
+            record.SERVICE_NAME = settings.PROJECT_NAME
+            record.HOST_NAME = settings.ENVIRONMENT
+            return super().fill_attributes(record)
+
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    otel_logger_provider = LoggerProvider(resource=_get_resource(settings))
-    set_logger_provider(otel_logger_provider)
-    otel_logger_provider.add_log_record_processor(
-        BatchLogRecordProcessor(OTLPLogExporter())
-    )
 
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    otel_handler = LoggingHandler(
-        level=logging.DEBUG, logger_provider=otel_logger_provider
-    )
-    otel_handler.setFormatter(formatter)
-    logger.addHandler(otel_handler)
-
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(ColoredFormatter())
     logger.addHandler(stream_handler)
 
-    logfire_handler = logfire.LogfireLoggingHandler(level=logging.DEBUG)
+    logfire_handler = AttributedLogfireLoggingHandler()
     logfire_handler.setFormatter(formatter)
     logger.addHandler(logfire_handler)
 
 
 def instrument_metrics():
-    logfire.instrument_system_metrics(base="full")
+    logfire.instrument_system_metrics(base="basic")
 
 
 def instrument_httpx():
@@ -204,7 +180,7 @@ def instrument_confluent_kafka():
     )
 
 
-def instrument_rabbit():
+def instrument_rabbit():  # TODO: check if logfire picks this up
     from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 
     AioPikaInstrumentor().instrument(
@@ -265,43 +241,41 @@ class Instruments(Enum):
 
 def instrument_otel(
     settings: TenantMonitoringSchema,
-    app: "FastAPI | None" = None,
-    only: tuple[Instruments, ...] | None = None,
+    app: FastAPI | None = None,
+    only: Sequence[Instruments] = (),
 ):
     logfire.configure(
-        send_to_logfire=False,
+        send_to_logfire="if-token-present",
         service_name=settings.PROJECT_NAME,
         console=False,
         metrics=logfire.MetricsOptions(
             additional_readers=[get_metrics_reader()]
-        ),
+        )
+        if getenv("OTEL_EXPORTER_OTLP_ENDPOINT") is not None
+        else None,
     )
 
-    instrument_metrics()
     instrument_logging(settings)
     if app:
         instrument_fastapi(app)
-    if only is None:
-        instrument_httpx()
-    else:
-        for item in only:
-            instrument: Instruments
-            args: Sequence[Any] | None = None
-            if isinstance(item, Sequence):
-                instrument, args = item
-            else:
-                instrument = item
-            func: Callable = (
-                instrument if callable(instrument) else instrument.value
-            )
-            func(*args) if args is not None else func()
+    for item in only:
+        instrument: Instruments
+        args: Sequence[Any] | None = None
+        if isinstance(item, Sequence):
+            instrument, args = item
+        else:
+            instrument = item
+        func: Callable = (
+            instrument if callable(instrument) else instrument.value
+        )
+        func(*args) if args is not None else func()
 
 
 class InitMonitoring:
     def __init__(
         self,
         settings: ObservabilitySettings,
-        instruments: tuple[Instruments, ...] | None = None,
+        instruments: Sequence[Instruments] = (),
     ):
         self.settings = settings
         self.instruments = instruments
@@ -317,6 +291,6 @@ class InitMonitoring:
 
     def __exit__(self, exc_type, exc_val, exc_tb): ...
 
-    def instrument(self, app: "FastAPI"):
+    def instrument(self, app: FastAPI):
         if app is not None and int(self.settings.OTEL_ENABLED):
             instrument_fastapi(app)

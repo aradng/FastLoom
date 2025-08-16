@@ -1,6 +1,6 @@
 [project]
 name = "core-bluprint"
-version = "0.2.9"
+version = "0.2.10"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -12,28 +12,6 @@ priority = "primary"
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
-ignore_missing_imports = true
-
-
-follow_imports = 'normal'
-[[tool.mypy.overrides]]
-module = 'redis.asyncio.client'
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = 'redis.asyncio'
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = 'redis'
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = 'dateutil.relativedelta'
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = 'requests'
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = 'aiofiles'
-ignore_missing_imports = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
@@ -43,10 +21,9 @@ warn_required_dynamic_aliases = true
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
 jdatetime = "^4.1.1"
-beanie = "2.0.0"
-python-jose = "^3.3.0"
+beanie = "^2.0.0"
+python-jose = "^3.5.0"
 pydantic = { version = "^2.11", extras = ["email"] }
-pydantic-settings = "^2.1.0"
 uvicorn = "^0.35.0"
 orjson = "3.10.14"
 pyyaml = "^6.0.2"
@@ -57,54 +34,44 @@ faststream = { version = "^0.5.28", extras = [
     "rabbit",
     "otel",
 ], optional = true }
-celery = { version = "^5.3.6", optional = true }
+celery = { version = "^5.5.3", optional = true }
 httpx = { version = "^0.28.0", optional = true }
-requests = { version = "^2.31.0", optional = true }
-redis = { version = "^5.0.1", optional = true }
-openai = { version = "^1.51.2", optional = true }
-
-# OTEL
-logfire = { version = "^4.0.0", extras = ["system-metrics"] }
+requests = { version = "^2.32.0", optional = true }
+redis = { version = "^6.4.0", optional = true }
+openai = { version = "^1", optional = true }
+logfire = { version = "^4.0.0", extras = ["system-metrics", "asgi", "fastapi", "celery", "httpx", "requests", "redis", "pymongo", "openai"] }
 sentry-sdk = { extras = ["fastapi"], version = "^2.0.0" }
 opentelemetry-distro = "*"
 opentelemetry-exporter-otlp = "*"
-opentelemetry-instrumentation-logging = { version = "*" }
-opentelemetry-instrumentation-urllib = { version = "*" }
-opentelemetry-instrumentation-system-metrics = { version = "*" }
-opentelemetry-instrumentation-urllib3 = { version = "*" }
-opentelemetry-instrumentation-asgi = { version = "*", optional = true }
-opentelemetry-instrumentation-fastapi = "*"
 opentelemetry-instrumentation-aio-pika = { version = "*", optional = true }
-opentelemetry-instrumentation-celery = { version = "*", optional = true }
-opentelemetry-instrumentation-httpx = { version = "*", optional = true }
-opentelemetry-instrumentation-requests = { version = "*", optional = true }
-opentelemetry-instrumentation-redis = { version = "*", optional = true }
-opentelemetry-instrumentation-pymongo = { version = "*", optional = true }
 babel = "^2.17.0"
 jinja2 = "^3.1.6"
+
+# dev
+pre-commit = { version = "^4.2.0", optional = true }
+ruff = { version = "^0.12.5", optional = true }
+mypy = { version = "^1.17.0", optional = true }
+ipykernel = { version = "^6.30.0", optional = true }
 
 [tool.poetry.extras]
 FastAPI = [
     "fastapi",
     "python-multipart",
     "uvicorn",
-    "opentelemetry-instrumentation-asgi",
-    "opentelemetry-instrumentation-fastapi",
 ]
 Rabbit = [
     "fastapi",
     "uvicorn",
     "faststream",
-    "opentelemetry-instrumentation-asgi",
-    "opentelemetry-instrumentation-fastapi",
     "opentelemetry-instrumentation-aio-pika",
 ]
-Celery = ["celery", "opentelemetry-instrumentation-celery"]
-HTTPx = ["httpx", "opentelemetry-instrumentation-httpx"]
-Requests = ["requests", "opentelemetry-instrumentation-requests"]
-Redis = ["redis", "opentelemetry-instrumentation-redis"]
-Mongodb = ["beanie", "opentelemetry-instrumentation-pymongo"]
+Celery = ["celery"]
+HTTPx = ["httpx"]
+Requests = ["requests"]
+Redis = ["redis"]
+Mongodb = ["beanie"]
 OpenAI = ["openai"]
+Dev = ["pre-commit", "ruff", "mypy", "ipykernel"]
 
 [tool.poetry.group.test.dependencies]
 pytest-asyncio = "^0.21.1"
@@ -119,11 +86,10 @@ pytest-xdist = "^3.5.0"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-pre-commit = "^4.2.0"
-ruff = "^0.12.5"
-mypy = "^1.17.0"
-ipykernel = "^6.30.0"
 types-pyyaml = "^6.0.12.20240917"
+types-requests = "^2.32.4.20250809"
+types-redis = "^4.6.0.20241004"
+types-python-jose = "^3.5.0.20250531"
 
 [project.scripts]
 launch = "core_bluprint.launcher.main:main"

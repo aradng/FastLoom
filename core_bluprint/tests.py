@@ -2,7 +2,7 @@ import random
 import typing
 from pprint import pformat
 
-from deepdiff import DeepDiff
+from deepdiff import DeepDiff  # type: ignore[import-untyped]
 
 if typing.TYPE_CHECKING:
 

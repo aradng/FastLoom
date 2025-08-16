@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 from starlette.middleware.cors import CORSMiddleware
 
+from core_bluprint.db.settings import MongoSettings
 from core_bluprint.launcher.settings import LauncherSettings
 from core_bluprint.launcher.utils import (
     EndpointFilter,
@@ -53,13 +54,15 @@ def initial_app():
     ].general._is_derived:
         for k in TC[GeneralSettings].settings:
             TC[GeneralSettings].settings[k].PROJECT_NAME = PN
+    instruments = [Instruments.HTTPX]
+    if isinstance(TC.general, RabbitmqSettings):
+        instruments.append(Instruments.RABBIT)
+    if isinstance(TC.general, MongoSettings):
+        instruments.append(Instruments.MONGODB)
+    if TC[ObservabilitySettings].general.METRICS:
+        instruments.append(Instruments.METRICS)
     with InitMonitoring(
-        TC[ObservabilitySettings].general,
-        instruments=(
-            Instruments.HTTPX,
-            Instruments.RABBIT,
-            Instruments.MONGODB,
-        ),
+        TC[ObservabilitySettings].general, instruments=instruments
     ) as monitor:
         app = FastAPI(
             lifespan=lifespan,
