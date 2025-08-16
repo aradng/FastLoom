@@ -4,13 +4,15 @@ from itertools import chain
 from json import JSONDecodeError
 from typing import Annotated, Generic, TypeAliasType, TypeVar
 
+from aredis_om.model.model import NotFoundError  # type: ignore[import-untyped]
 from fastapi import Depends, Header, HTTPException, Path, Request
 from pydantic import StringConstraints
 
 from core_bluprint.auth.depends import JWTAuth, OptionalJWTAuth
 from core_bluprint.auth.schemas import UserClaims
+from core_bluprint.cache.base import HostTenantMapping
+from core_bluprint.cache.lifehooks import RedisHandler
 from core_bluprint.tenant import Tenant
-from core_bluprint.tenant.base.utils import get_general_settings
 from core_bluprint.tenant.protocols import TenantHostSchema, TenantNameSchema
 
 TenantName = Annotated[str, StringConstraints(strip_whitespace=True)]
@@ -34,10 +36,14 @@ class TenantNotFound(Exception):
 
 
 class BaseTenantSource(Generic[K]):
-    settings_fn: SettingsMappingGetter[K]
+    settings: MutableMapping[TenantName, K]
+    general: K
 
-    def __init__(self, settings_fn: SettingsMappingGetter[K]) -> None:
-        self.settings_fn = settings_fn
+    def __init__(
+        self, settings: MutableMapping[TenantName, K], general: K
+    ) -> None:
+        self.settings = settings
+        self.general = general
 
     @abstractmethod
     async def _dep(self, *args, **kwargs) -> str | None:
@@ -55,20 +61,18 @@ class BaseTenantSource(Generic[K]):
 
         return _inner
 
-    @property
-    def settings(self) -> SettingsMapping[K]:
-        return self.settings_fn()
-
-    @property
-    def general_settings(self) -> K:
-        return get_general_settings(self.settings)
-
 
 class HeaderSource(BaseTenantSource[TenantHostSchema]):
     async def _dep(
         self, x_forwarded_host: Annotated[str, Header(include_in_schema=False)]
     ) -> str | None:
-        tenant = self.hosts[x_forwarded_host]
+        if RedisHandler.enabled:
+            try:
+                tenant = (await HostTenantMapping.get(x_forwarded_host)).tenant
+            except NotFoundError:
+                tenant = self.hosts[x_forwarded_host]
+        else:
+            tenant = self.hosts[x_forwarded_host]
         Tenant.set(tenant)
         return tenant
 
@@ -116,7 +120,7 @@ class TokenBodySource(BaseTenantSource):
 
     @property
     def auth(self) -> JWTAuth:
-        return JWTAuth(self.general_settings)
+        return JWTAuth(self.general)
 
 
 class OptionalTokenHeaderSource(BaseTenantSource):
@@ -133,15 +137,12 @@ class OptionalTokenHeaderSource(BaseTenantSource):
         return _inner
 
     def _get_tenant_from_claims(self, claims: UserClaims) -> str:
-        tenant = claims.tenant
-        Tenant.set(tenant)
-        if tenant not in self.settings:
-            raise TenantNotFound(tenant)
-        return tenant
+        Tenant.set(claims.tenant)
+        return claims.tenant
 
     @property
     def auth(self) -> OptionalJWTAuth:
-        return OptionalJWTAuth(self.general_settings)
+        return OptionalJWTAuth(self.general)
 
 
 class TokenHeaderSource(OptionalTokenHeaderSource):
@@ -166,8 +167,6 @@ try:
         def _inner(
             tenant: Annotated[str, StreamDepends(self._dep)],
         ) -> str | None:
-            if tenant not in self.settings:
-                raise TenantNotFound(tenant)
             Tenant.set(tenant)
             return tenant
 
@@ -178,15 +177,18 @@ except ImportError:
 
 
 class TenantDependancySelector(Generic[K]):
-    settings_fn: SettingsMappingGetter[K]
+    settings: MutableMapping[TenantName, K]
+    general: K
     source_clses: tuple[type[BaseTenantSource], ...]
 
     def __init__(
         self,
-        settings_fn: SettingsMappingGetter[K],
+        settings: MutableMapping[TenantName, K],
+        general: K,
         source_clses: tuple[type[BaseTenantSource], ...],
     ) -> None:
-        self.settings_fn = settings_fn
+        self.settings = settings
+        self.general = general
         self.source_clses = source_clses
 
     def __getitem__(
@@ -197,7 +199,7 @@ class TenantDependancySelector(Generic[K]):
     @property
     def sources(self) -> dict[TenantName, BaseTenantSource]:
         return {
-            source_cls.__name__: source_cls(self.settings_fn)
+            source_cls.__name__: source_cls(self.settings, self.general)
             for source_cls in self.source_clses
         }
 
@@ -209,20 +211,13 @@ class BaseGetFrom[K]:
         self.dep_selector = dep_selector
 
     @abstractmethod
-    def _item_getter(self, tenant: str):
+    async def _item_getter(self, tenant: str):
         raise NotImplementedError("Must implement _item_getter method")
 
-    def __getitem__(
-        self, source_cls: type[BaseTenantSource]
-    ) -> Callable[..., K]:
-        def _inner(
+    def __getitem__(self, source_cls: type[BaseTenantSource]):
+        async def _inner(
             tenant: Annotated[str, Depends(self.dep_selector[source_cls])],
         ) -> K:
-            return self._item_getter(tenant)
+            return await self._item_getter(tenant)
 
         return _inner
-
-
-class GetSettingsFrom[K](BaseGetFrom):
-    def _item_getter(self, tenant: str) -> K:
-        return self.dep_selector.settings_fn()[tenant]

@@ -28,8 +28,18 @@ class CustomI18NException(Exception):
 
 
 # Global
+class SettingNotSet(CustomI18NException):
+    message = _("{name} not set")
+    error_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    name: str
+
+    def __init__(self, name: str):
+        self.name = name
+        super().__init__(self.message, self.error_code)
+
+
 class DoesNotExist(CustomI18NException):
-    message = _("{name} does not exist.")
+    message = _("{name} does not exist")
     error_code = status.HTTP_404_NOT_FOUND
     name: str
 

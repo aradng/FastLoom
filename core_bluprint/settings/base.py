@@ -10,7 +10,7 @@ from pydantic import (
 )
 
 
-class GeneralSettings(BaseModel):
+class ProjectSettings(BaseModel):
     PROJECT_NAME: str = Field(default_factory=lambda: Path.cwd().name)
     _is_derived: bool = PrivateAttr(default=False)
 
@@ -22,7 +22,7 @@ class GeneralSettings(BaseModel):
         return data
 
 
-class FastAPISettings(GeneralSettings):
+class FastAPISettings(ProjectSettings):
     DEBUG: bool = True
 
     @computed_field  # type: ignore[misc]
@@ -38,21 +38,8 @@ class IAMSettings(BaseModel):
     IAM_TOKEN_URL: HttpUrl | Path = Path("/api/iam/auth/login/basic")
 
 
-class TenantSettings(BaseModel):
-    name: str
-
-
-class TenantWithHostSettings(TenantSettings):
-    website_url: HttpUrl | list[HttpUrl]
-
-
-class MonitoringSettings(GeneralSettings):
+class MonitoringSettings(ProjectSettings):
     ENVIRONMENT: str
 
 
-class BaseTenantSettings(IAMSettings, TenantSettings, MonitoringSettings): ...
-
-
-class BaseTenantWithHostSettings(
-    IAMSettings, TenantWithHostSettings, MonitoringSettings, FastAPISettings
-): ...
+class BaseGeneralSettings(IAMSettings, MonitoringSettings): ...

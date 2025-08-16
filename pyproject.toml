@@ -1,6 +1,6 @@
 [project]
 name = "core-bluprint"
-version = "0.2.10"
+version = "0.3.0"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -12,6 +12,9 @@ priority = "primary"
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
+[[tool.mypy.overrides]]
+module = "aredis_om"
+ignore_missing_imports = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
@@ -37,7 +40,7 @@ faststream = { version = "^0.5.28", extras = [
 celery = { version = "^5.5.3", optional = true }
 httpx = { version = "^0.28.0", optional = true }
 requests = { version = "^2.32.0", optional = true }
-redis = { version = "^6.4.0", optional = true }
+redis-om = {git = "https://github.com/redis/redis-om-python", rev = "main", optional = true}
 openai = { version = "^1", optional = true }
 logfire = { version = "^4.0.0", extras = ["system-metrics", "asgi", "fastapi", "celery", "httpx", "requests", "redis", "pymongo", "openai"] }
 sentry-sdk = { extras = ["fastapi"], version = "^2.0.0" }
@@ -68,7 +71,7 @@ Rabbit = [
 Celery = ["celery"]
 HTTPx = ["httpx"]
 Requests = ["requests"]
-Redis = ["redis"]
+Redis = ["redis-om"]
 Mongodb = ["beanie"]
 OpenAI = ["openai"]
 Dev = ["pre-commit", "ruff", "mypy", "ipykernel"]

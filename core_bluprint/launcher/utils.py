@@ -39,6 +39,10 @@ def get_settings_cls() -> SettingsCls:
     return _dynamic_import("settings").Settings
 
 
+def get_tenant_cls() -> SettingsCls:
+    return _dynamic_import("settings").TenantSettings
+
+
 class EndpointFilter(logging.Filter):
     def __init__(
         self, excluded_endpoints: tuple[Pattern | str, ...] = ()

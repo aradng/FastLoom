@@ -5,7 +5,6 @@ from logging import Logger
 
 import uvicorn
 from fastapi import FastAPI
-from pydantic import ValidationError
 from starlette.middleware.cors import CORSMiddleware
 
 from core_bluprint.db.settings import MongoSettings
@@ -14,13 +13,14 @@ from core_bluprint.launcher.utils import (
     EndpointFilter,
     get_app,
     get_settings_cls,
+    get_tenant_cls,
 )
 from core_bluprint.monitoring import InitMonitoring, Instruments
 from core_bluprint.observability.settings import ObservabilitySettings
-from core_bluprint.settings.base import FastAPISettings, GeneralSettings
+from core_bluprint.settings.base import BaseGeneralSettings, FastAPISettings
 from core_bluprint.signals.depends import RabbitSubscriber, RabbitSubscriptable
 from core_bluprint.signals.settings import RabbitmqSettings
-from core_bluprint.tenant.settings import TenantConfigs as TC
+from core_bluprint.tenant.settings import ConfigAlias as Configs
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -34,41 +34,37 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def initial_app():
-    TC(get_settings_cls())
+    Configs(get_settings_cls(), get_tenant_cls())
     logging.getLogger("uvicorn.access").addFilter(
-        EndpointFilter(TC[LauncherSettings].general.LOGGING_EXCLUDED_ENDPOINTS)
+        EndpointFilter(
+            Configs[LauncherSettings].general.LOGGING_EXCLUDED_ENDPOINTS
+        )
     )
-    if isinstance(TC[RabbitSubscriptable].general, RabbitmqSettings):
-        RabbitSubscriber(TC[RabbitSubscriptable].general)
+    if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
+        RabbitSubscriber(Configs[RabbitSubscriptable].general)
     else:
         logging.warning("Settings Does Not Inherit from RabbitmqSettings")
     # ^IMPORTANT:rabbit has to init first
     service_app = get_app()
-    if (
-        service_app.project_name is None
-        and not TC[GeneralSettings].general.PROJECT_NAME
-    ):
-        raise ValidationError("PROJECT_NAME")
-    if (PN := service_app.project_name) is not None and TC[
-        GeneralSettings
+    if (PN := service_app.project_name) is not None and Configs[
+        BaseGeneralSettings
     ].general._is_derived:
-        for k in TC[GeneralSettings].settings:
-            TC[GeneralSettings].settings[k].PROJECT_NAME = PN
-    instruments = [Instruments.HTTPX]
-    if isinstance(TC.general, RabbitmqSettings):
+        Configs[BaseGeneralSettings].general.PROJECT_NAME = PN
+    instruments = [Instruments.HTTPX, Instruments.REDIS]
+    if isinstance(Configs.general, RabbitmqSettings):
         instruments.append(Instruments.RABBIT)
-    if isinstance(TC.general, MongoSettings):
+    if isinstance(Configs.general, MongoSettings):
         instruments.append(Instruments.MONGODB)
-    if TC[ObservabilitySettings].general.METRICS:
+    if Configs[ObservabilitySettings].general.METRICS:
         instruments.append(Instruments.METRICS)
     with InitMonitoring(
-        TC[ObservabilitySettings].general, instruments=instruments
+        Configs[ObservabilitySettings].general, instruments=instruments
     ) as monitor:
         app = FastAPI(
             lifespan=lifespan,
-            title=TC[FastAPISettings].general.PROJECT_NAME,
-            docs_url=f"{TC[FastAPISettings].general.API_PREFIX}/docs",
-            openapi_url=f"{TC[FastAPISettings].general.API_PREFIX}/openapi.json",
+            title=Configs[FastAPISettings].general.PROJECT_NAME,
+            docs_url=f"{Configs[FastAPISettings].general.API_PREFIX}/docs",
+            openapi_url=f"{Configs[FastAPISettings].general.API_PREFIX}/openapi.json",
         )
         monitor.instrument(app)
 
@@ -84,7 +80,8 @@ def initial_app():
     service_app.load_healthchecks(app)
 
     app.include_router(
-        service_app.root_router, prefix=TC[FastAPISettings].general.API_PREFIX
+        service_app.root_router,
+        prefix=Configs[FastAPISettings].general.API_PREFIX,
     )
     app.include_router(RabbitSubscriber.router)
     return app
@@ -97,7 +94,7 @@ def main():
     uvicorn.run(
         app="core_bluprint.launcher.main:app",
         host="0.0.0.0",
-        port=TC[LauncherSettings].general.APP_PORT,
-        reload=TC[LauncherSettings].general.DEBUG,
-        workers=TC[LauncherSettings].general.WORKERS,
+        port=Configs[LauncherSettings].general.APP_PORT,
+        reload=Configs[LauncherSettings].general.DEBUG,
+        workers=Configs[LauncherSettings].general.WORKERS,
     )

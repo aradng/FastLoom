@@ -32,7 +32,7 @@ from core_bluprint.signals.depends import RabbitSubscriber
 from core_bluprint.signals.healthcheck import (
     get_healthcheck as signal_hc,
 )
-from core_bluprint.tenant.settings import TenantConfigs as TC
+from core_bluprint.tenant.settings import ConfigAlias as Configs
 
 Route = tuple[APIRouter, str, str]
 SettingsCls = type[BaseModel]
@@ -53,7 +53,6 @@ def default_lifespan():
 
 class App(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
     signals_module: ModuleType | None = None
     models_module: ModuleType | None = None
     healthchecks: list[Healthcheck] = Field(default_factory=list)
@@ -86,9 +85,9 @@ class App(BaseModel):
         if not self.models:
             return
         await init_db(
-            database_name=TC[MongoSettings].general.MONGO_DATABASE,
-            models=self.models,
-            mongo_uri=TC[MongoSettings].general.MONGO_URI,
+            database_name=Configs[MongoSettings].general.MONGO_DATABASE,
+            models=self.models + [Configs.tenant_document_cls],
+            mongo_uri=Configs[MongoSettings].general.MONGO_URI,
         )
 
     def load_signals(self):
@@ -109,14 +108,14 @@ class App(BaseModel):
         ]
 
         if self.models:
-            handlers.append(db_hc(TC[MongoSettings].general.MONGO_URI))  # type: ignore[misc]
+            handlers.append(db_hc(Configs[MongoSettings].general.MONGO_URI))  # type: ignore[misc]
         if self.signals_module:
             handlers.append(signal_hc(RabbitSubscriber.router))
 
         init_healthcheck(
             app=app,
             healthcheck_handlers=handlers,
-            prefix=TC[FastAPISettings].general.API_PREFIX,  # type: ignore[misc]
+            prefix=Configs[FastAPISettings].general.API_PREFIX,  # type: ignore[misc]
         )
 
     def load_exception_handlers(self, app: FastAPI):
