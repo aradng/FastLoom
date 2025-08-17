@@ -2,6 +2,8 @@ from aredis_om import Field, JsonModel
 
 from core_bluprint.cache.lifehooks import RedisHandler
 
+RedisHandler()
+
 
 class BaseCache(JsonModel):
     class Meta:
@@ -13,6 +15,10 @@ class BaseCache(JsonModel):
 
 class BaseTenantSettingCache(BaseCache):
     tenant: str = Field(primary_key=True)
+
+
+class BaseServiceSettingCache(BaseCache):
+    PROJECT_NAME: str = Field(primary_key=True)
 
 
 class HostTenantMapping(BaseCache):

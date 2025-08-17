@@ -3,6 +3,7 @@ import importlib.util
 import logging
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 from re import Pattern
 from typing import TYPE_CHECKING
@@ -35,12 +36,17 @@ def get_app() -> "App":
     return _dynamic_import("app").app
 
 
+@lru_cache
+def _get_settings_module():
+    return _dynamic_import("settings")
+
+
 def get_settings_cls() -> SettingsCls:
-    return _dynamic_import("settings").Settings
+    return _get_settings_module().Settings
 
 
 def get_tenant_cls() -> SettingsCls:
-    return _dynamic_import("settings").TenantSettings
+    return _get_settings_module().TenantSettings
 
 
 class EndpointFilter(logging.Filter):

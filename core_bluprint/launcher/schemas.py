@@ -86,7 +86,7 @@ class App(BaseModel):
             return
         await init_db(
             database_name=Configs[MongoSettings].general.MONGO_DATABASE,
-            models=self.models + [Configs.tenant_document_cls],
+            models=self.models + [Configs.tenant_schema.document],
             mongo_uri=Configs[MongoSettings].general.MONGO_URI,
         )
 

@@ -78,7 +78,7 @@ class BaseDocumentSignal(BaseDocument):
             f"{cls.__name__}Changes",
             __base__=cls,
             field_definitions={
-                field_name: (f"{field_info.annotation} | None", None)
+                field_name: (f"{field_info.annotation | None}", None)
                 for field_name, field_info in cls.model_fields.items()
             },
         )

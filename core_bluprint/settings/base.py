@@ -1,3 +1,4 @@
+from os import getenv
 from pathlib import Path
 
 from pydantic import (
@@ -17,6 +18,8 @@ class ProjectSettings(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def check_derived(cls, data: dict) -> dict:
+        if (PROJECT_NAME := getenv("PROJECT_NAME")) is not None:
+            data["PROJECT_NAME"] = PROJECT_NAME
         if "PROJECT_NAME" not in data:
             cls._is_derived = True
         return data

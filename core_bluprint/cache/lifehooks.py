@@ -1,4 +1,4 @@
-from asyncio import run
+from contextlib import suppress
 from os import getenv
 
 from aredis_om import get_redis_connection
@@ -10,20 +10,19 @@ from core_bluprint.meta import SelfSustaining
 
 
 class RedisHandler(SelfSustaining):
-    enabled: bool = False
+    enabled: bool
     redis: Redis
+    sync_redis: Redis
 
     def __init__(self):
         super().__init__()
+        self.enabled = False
         settings = RedisSettings.model_validate(
-            dict(redis_url=getenv("REDIS_URL")) if getenv("REDIS_URL") else {}
+            dict(redis_url=getenv("REDIS_OM_URL"))
+            if getenv("REDIS_OM_URL")
+            else {}
         )
         self.redis = get_redis_connection(url=str(settings.redis_url))
-        try:
-            run(self.redis.ping())
-            self.enabled = True
-        except ConnectionError:
-            ...
-
-
-RedisHandler()
+        self.sync_redis = Redis.from_url(url=str(settings.redis_url))
+        with suppress(ConnectionError):
+            self.enabled = self.sync_redis
