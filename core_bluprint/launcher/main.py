@@ -76,6 +76,7 @@ def initial_app():
 
     service_app.load_exception_handlers(app)
     service_app.load_healthchecks(app)
+    service_app.load_system_endpoints(app)
 
     app.include_router(
         service_app.root_router,

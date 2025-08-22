@@ -6,6 +6,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
+from core_bluprint.tenant.handler import init_settings_endpoints
+
 if TYPE_CHECKING:
     from beanie import View
     from beanie.odm.documents import Document
@@ -129,6 +131,9 @@ class App(BaseModel):
             healthcheck_handlers=handlers,
             prefix=Configs[FastAPISettings].general.API_PREFIX,  # type: ignore[misc]
         )
+
+    def load_system_endpoints(self, app: FastAPI):
+        init_settings_endpoints(app=app, configs=Configs)
 
     def load_exception_handlers(self, app: FastAPI):
         for exc_class_or_status_code, handler in (

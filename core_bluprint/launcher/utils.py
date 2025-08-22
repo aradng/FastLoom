@@ -1,7 +1,9 @@
 import importlib
 import importlib.util
 import logging
+import os
 import re
+import signal
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -63,3 +65,22 @@ class EndpointFilter(logging.Filter):
         return not any(
             re.match(exp, endpoint) for exp in self.excluded_endpoints
         )
+
+
+def reload_app():
+    import inspect
+    from pathlib import Path
+
+    from core_bluprint.launcher.settings import LauncherSettings
+    from core_bluprint.tenant.settings import ConfigAlias as Configs
+
+    Path(
+        next(
+            filter(
+                lambda x: __name__.split(".")[0] not in x.filename,
+                inspect.stack(),
+            )
+        ).filename
+    ).touch()
+    if not Configs[LauncherSettings].general.DEBUG:
+        os.kill(os.getppid(), signal.SIGHUP)
