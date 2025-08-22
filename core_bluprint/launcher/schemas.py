@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
+from core_bluprint.launcher.settings import LauncherSettings
 from core_bluprint.tenant.handler import init_settings_endpoints
 
 if TYPE_CHECKING:
@@ -126,6 +127,8 @@ class App(BaseModel):
         if self.signals_module:
             handlers.append(signal_hc(RabbitSubscriber.router))
 
+        init_healthcheck(app=app, healthcheck_handlers=handlers)
+        # ^for docker and system healthcheck
         init_healthcheck(
             app=app,
             healthcheck_handlers=handlers,
@@ -134,6 +137,12 @@ class App(BaseModel):
 
     def load_system_endpoints(self, app: FastAPI):
         init_settings_endpoints(app=app, configs=Configs)
+        if Configs[LauncherSettings].general.SETTINGS_PUBLIC:  # type: ignore[misc]
+            init_settings_endpoints(
+                app=app,
+                configs=Configs,
+                prefix=Configs[FastAPISettings].general.API_PREFIX,  # type: ignore[misc]
+            )
 
     def load_exception_handlers(self, app: FastAPI):
         for exc_class_or_status_code, handler in (

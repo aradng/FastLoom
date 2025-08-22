@@ -1,4 +1,6 @@
-from pydantic import AnyHttpUrl, BaseModel
+from typing import Annotated
+
+from pydantic import AnyHttpUrl, BaseModel, Field
 
 WebsiteUrlType = AnyHttpUrl
 
@@ -8,4 +10,6 @@ class TenantMixin(BaseModel):
 
 
 class BaseTenantWithHostSettings(BaseModel):
-    website_url: WebsiteUrlType | list[WebsiteUrlType]
+    website_url: (
+        WebsiteUrlType | Annotated[list[WebsiteUrlType], Field(min_length=1)]
+    )

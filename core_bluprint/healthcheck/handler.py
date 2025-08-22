@@ -12,7 +12,6 @@ def init_healthcheck(
 ) -> None:
     router = APIRouter()
 
-    @router.get("/healthcheck")
     @router.get(f"{prefix}/healthcheck")
     async def healthcheck_endpoint() -> JSONResponse:
         for handler in healthcheck_handlers:

@@ -1,9 +1,9 @@
 from gettext import gettext as _
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from core_bluprint.i18n.base import DoesNotExist
 from core_bluprint.launcher.utils import reload_app
@@ -18,12 +18,10 @@ def init_settings_endpoints(
 ) -> None:
     router = APIRouter()
 
-    @router.get("/tenant_schema")
     @router.get(f"{prefix}/tenant_schema")
     async def get_tenant_schema() -> dict[str, Any]:
         return configs.tenant_schema.get_schema()
 
-    @router.get("/tenant_settings")
     @router.get(f"{prefix}/tenant_settings")
     async def get_tenant_settings(tenant: str):
         try:
@@ -31,19 +29,32 @@ def init_settings_endpoints(
         except TenantNotFound as e:
             raise DoesNotExist(_("Tenant")) from e
 
-    @router.post("/tenant_settings")
     @router.post(f"{prefix}/tenant_settings")
     async def set_tenant_settings(setting: dict[str, Any], tenant: str):
-        doc = configs.tenant_schema.document.model_validate(
-            setting | {"id": tenant}
+        old_doc = (
+            old_doc.model_dump()
+            if (old_doc := await configs.tenant_schema.document.get(tenant))
+            is not None
+            else {}
         )
-        configs.tenant_schema.validate(doc)
-        # ^check if its valid with current default configs
+        try:
+            doc = configs.tenant_schema.document.model_validate(
+                old_doc | setting | {"id": tenant}
+            )
+            configs.tenant_schema.validate(doc)
+            # ^check if its valid with current default configs
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": _("Invalid tenant settings"),
+                    "errors": e.errors(),
+                },
+            ) from e
         await doc.save()
         await configs.tenant_schema.cache.delete(tenant)
         # ^invalidate cache
 
-    @router.get("/reload")
     @router.get(f"{prefix}/reload")
     async def reload_endpoint() -> JSONResponse:
         reload_app()
