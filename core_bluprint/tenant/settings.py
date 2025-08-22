@@ -1,27 +1,39 @@
-import logging
 from collections.abc import MutableMapping
 from contextlib import suppress
 from pathlib import Path
 from types import new_class
-from typing import Annotated, Any, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Annotated, Any, Generic, TypeVar
 
 import yaml
-from aredis_om.model.model import NotFoundError  # type: ignore[import-untyped]
 from pydantic import BaseModel, RootModel, StringConstraints
 
 from core_bluprint.auth.introspect.depends import (
     OptionalVerifiedAuth,
     VerifiedAuth,
 )
-from core_bluprint.cache.base import (
-    BaseServiceSettingCache,
-    BaseTenantSettingCache,
-)
+from core_bluprint.cache.base import BaseTenantSettingCache
 from core_bluprint.cache.lifehooks import RedisHandler
-from core_bluprint.db.schemas import BaseTenantSettingsDocument
+
+if TYPE_CHECKING:
+    from aredis_om.model.model import (  # type: ignore[import-untyped]
+        NotFoundError,
+    )
+
+    from core_bluprint.db.schemas import BaseTenantSettingsDocument
+else:
+    try:
+        from core_bluprint.db.schemas import BaseTenantSettingsDocument
+    except ImportError:
+        from pydantic import BaseModel as BaseTenantSettingsDocument
+
+    try:
+        from aredis_om.model.model import NotFoundError
+    except ImportError:
+        NotFoundError = Exception
+
 from core_bluprint.db.settings import MongoSettings
 from core_bluprint.meta import SelfSustaining
-from core_bluprint.settings.base import MonitoringSettings, ProjectSettings
+from core_bluprint.settings.base import MonitoringSettings
 from core_bluprint.tenant.depends import (
     BaseGetFrom,
     ContextSource,
@@ -34,7 +46,7 @@ from core_bluprint.tenant.depends import (
     TokenHeaderSource,
 )
 from core_bluprint.tenant.protocols import TenantHostSchema, TenantNameSchema
-from core_bluprint.tenant.utils import SettingCacheSchema, run_sync
+from core_bluprint.tenant.utils import SettingCacheSchema
 
 DEFAULT_CONFIG_KEY: str = "default"
 
@@ -88,72 +100,58 @@ class Configs(Generic[T, V], SelfSustaining):
     settings_from: GetSettingsFrom[V]
     auth: VerifiedAuth
     optional_auth: OptionalVerifiedAuth
-    _documents_enabled: bool = False
+    documents_enabled: bool = False
+    cache_enabled: bool = False
     # cache
-    service_schema: SettingCacheSchema[T, BaseModel, BaseServiceSettingCache]
     tenant_schema: SettingCacheSchema[
         V, BaseTenantSettingsDocument, BaseTenantSettingCache
     ]
 
     def __init__(
         self,
-        settings_cls: type[T],
+        service_cls: type[T],
         tenant_cls: type[V],
     ) -> None:
         if self.self is not None:
             return
         super().__init__()
-        BaseServiceSettingCache.Meta.database = RedisHandler().redis
         BaseTenantSettingCache.Meta.database = RedisHandler().redis
-        self.service_schema = SettingCacheSchema(
-            settings_cls, BaseModel, BaseServiceSettingCache
-        )
         self.tenant_schema = SettingCacheSchema(
             tenant_cls, BaseTenantSettingsDocument, BaseTenantSettingCache
         )
-        if not run_sync(self._load_redis()):
-            self._load_yaml()
+        self._load_yaml(service_cls)
         self.from_ = self._from_()
         self.settings_from = GetSettingsFrom[V](self.from_)
         self.auth = self._auth()
         self.optional_auth = self._optional_auth()
         # cache
-        if issubclass(settings_cls, MongoSettings):
-            self._documents_enabled = True
+        if issubclass(service_cls, MongoSettings):
+            self.documents_enabled = True
+        self.cache_enabled = RedisHandler.enabled
         if isinstance(self.general, MonitoringSettings):
             narrowed_general = self.general
             self.tenant_schema.cache.Meta.model_key_prefix = (
-                f"{narrowed_general.ENVIRONMENT}:"
                 f"{narrowed_general.PROJECT_NAME}"
             )
 
-    def _load_yaml(self):
-        # backward compatibility
+    def _load_yaml(
+        self,
+        service_cls: type[T],
+    ):
         self.settings = load_settings(
             new_class(
                 "_SettingsWithTenants",
-                (self.service_schema.model, self.tenant_schema.model),
+                (service_cls, self.tenant_schema.model),
             ),
         )
-        self.general = load_settings(
-            self.service_schema.model, defaults_only=True
-        )[DEFAULT_CONFIG_KEY]
+        # ^backward compatibility
+        self.general = load_settings(service_cls, defaults_only=True)[
+            DEFAULT_CONFIG_KEY
+        ]
         self.tenant_schema.config_default = load_settings(
             settings_cls=self.tenant_schema.config,
             defaults_only=True,
         )[DEFAULT_CONFIG_KEY].model_dump()
-
-    async def _load_redis(self) -> bool:
-        PROJECT_NAME = ProjectSettings.model_validate({}).PROJECT_NAME
-        if not RedisHandler.enabled:
-            return False
-        with suppress(NotFoundError):
-            self.general = self.service_schema.validate(
-                await self.service_schema.cache.get(PROJECT_NAME),
-            )
-            return True
-        logging.warning("Failed to fetch Settings from redis")
-        return False
 
     def _from_(self) -> TenantDependancySelector[T]:
         return TenantDependancySelector[T](
@@ -179,27 +177,36 @@ class Configs(Generic[T, V], SelfSustaining):
         return self.get(tenant)
 
     async def get(self, tenant: str) -> V:
-        if RedisHandler.enabled:
-            try:
+        if self.cache_enabled:
+            with suppress(NotFoundError):
                 return self.tenant_schema.validate(
                     await self.tenant_schema.cache.get(tenant),
                 )
-            except NotFoundError:
-                ...
-        if self._documents_enabled:
-            result = await self.tenant_schema.document.find_one(
-                self.tenant_schema.document.tenant == tenant
-            )
+        if self.documents_enabled:
+            result = await self.tenant_schema.document.get(tenant)
             if result is not None:
-                if RedisHandler.enabled:
+                if self.cache_enabled:
                     await self.tenant_schema.cache.model_validate(
-                        result, from_attributes=True
+                        result.model_dump()
                     ).save()
                     # ^save in cache for better access time
                 return self.tenant_schema.validate(result)
-        if result is None and tenant in self.settings:
-            return self.tenant_schema.validate(cast(V, self.settings[tenant]))
+        if tenant in self.settings:
+            return self.tenant_schema.model.model_validate(
+                self.settings[tenant].model_dump()
+            )
         raise TenantNotFound(tenant)
+
+    def __setitem__(self, tenant: str, value: V):  # farming lels
+        return self.set(tenant, value)
+
+    async def set(self, tenant: str, value: V):
+        # strip defaults before saving
+        stripped = self.tenant_schema.strip_defaults(value) | {"id": tenant}
+        if self.cache_enabled:
+            await self.tenant_schema.cache.model_validate(stripped).save()
+        if self.documents_enabled:
+            await self.tenant_schema.document.model_validate(stripped).save()
 
 
 ConfigAlias = Configs[T, BaseModel]

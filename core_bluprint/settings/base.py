@@ -1,28 +1,19 @@
-from os import getenv
 from pathlib import Path
 
 from pydantic import (
+    AnyHttpUrl,
     BaseModel,
     Field,
-    HttpUrl,
-    PrivateAttr,
     computed_field,
-    model_validator,
 )
+
+from core_bluprint.settings.utils import get_env_or_err
 
 
 class ProjectSettings(BaseModel):
-    PROJECT_NAME: str = Field(default_factory=lambda: Path.cwd().name)
-    _is_derived: bool = PrivateAttr(default=False)
-
-    @model_validator(mode="before")
-    @classmethod
-    def check_derived(cls, data: dict) -> dict:
-        if (PROJECT_NAME := getenv("PROJECT_NAME")) is not None:
-            data["PROJECT_NAME"] = PROJECT_NAME
-        if "PROJECT_NAME" not in data:
-            cls._is_derived = True
-        return data
+    PROJECT_NAME: str = Field(
+        default_factory=get_env_or_err("PROJECT_NAME"),
+    )
 
 
 class FastAPISettings(ProjectSettings):
@@ -35,10 +26,10 @@ class FastAPISettings(ProjectSettings):
 
 
 class IAMSettings(BaseModel):
-    IAM_SIDECAR_URL: HttpUrl = Field(
-        HttpUrl("http://iam:8000/api/iam/sidecar")
+    IAM_SIDECAR_URL: AnyHttpUrl = Field(
+        AnyHttpUrl("http://iam:8000/api/iam/sidecar")
     )
-    IAM_TOKEN_URL: HttpUrl | Path = Path("/api/iam/auth/login/basic")
+    IAM_TOKEN_URL: AnyHttpUrl | Path = Path("/api/iam/auth/login/basic")
 
 
 class MonitoringSettings(ProjectSettings):

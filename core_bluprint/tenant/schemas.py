@@ -1,13 +1,11 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import AnyHttpUrl, BaseModel
+
+WebsiteUrlType = AnyHttpUrl
 
 
 class TenantMixin(BaseModel):
     tenant: str
 
 
-class TenantSettings(BaseModel):
-    name: str
-
-
-class TenantWithHostSettings(TenantSettings):
-    website_url: HttpUrl | list[HttpUrl]
+class BaseTenantWithHostSettings(BaseModel):
+    website_url: WebsiteUrlType | list[WebsiteUrlType]

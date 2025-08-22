@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 import logfire
 import orjson
-from bson import DBRef
 from jose.exceptions import JWTError
 from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
@@ -17,7 +16,7 @@ from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
 )
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.trace import Span
-from pydantic import HttpUrl
+from pydantic import AnyHttpUrl
 from sentry_sdk import init as sentry_init
 
 from core_bluprint.observability.settings import ObservabilitySettings
@@ -35,10 +34,10 @@ if not TYPE_CHECKING:
         from typing import Any as FastAPI
 
 
-def init_sentry(dsn: HttpUrl | str | None, environment: str):
+def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
     if dsn is None:
         return
-    if isinstance(dsn, HttpUrl):
+    if isinstance(dsn, AnyHttpUrl):
         dsn = str(dsn)
 
     sentry_init(
@@ -189,7 +188,7 @@ def instrument_rabbit():  # TODO: check if logfire picks this up
 
 
 def instrument_mongodb():
-    from bson import Decimal128, ObjectId
+    from bson import DBRef, Decimal128, ObjectId
     from pymongo import monitoring
 
     def parse_mongo_types(obj: object):

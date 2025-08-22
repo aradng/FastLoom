@@ -1,12 +1,12 @@
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import HttpUrl
+from pydantic import AnyHttpUrl
 
 
 class OAuth2Settings(Protocol):
-    IAM_TOKEN_URL: HttpUrl | Path
+    IAM_TOKEN_URL: AnyHttpUrl | Path
 
 
 class SidecarSettings(OAuth2Settings, Protocol):
-    IAM_SIDECAR_URL: HttpUrl
+    IAM_SIDECAR_URL: AnyHttpUrl

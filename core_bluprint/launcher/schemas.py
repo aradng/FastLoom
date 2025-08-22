@@ -4,11 +4,22 @@ from contextlib import asynccontextmanager
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
-from beanie import View
-from beanie.odm.documents import Document
-from beanie.odm.union_doc import UnionDoc
+if TYPE_CHECKING:
+    from beanie import View
+    from beanie.odm.documents import Document
+    from beanie.odm.union_doc import UnionDoc
+else:
+    try:
+        from beanie import View
+        from beanie.odm.documents import Document
+        from beanie.odm.union_doc import UnionDoc
+    except ImportError:
+        from pydantic import BaseModel as Document
+        from pydantic import BaseModel as UnionDoc
+        from pydantic import BaseModel as View
+
 from fastapi import APIRouter, FastAPI
 from pydantic import (
     BaseModel,
@@ -34,13 +45,12 @@ from core_bluprint.signals.healthcheck import (
 )
 from core_bluprint.tenant.settings import ConfigAlias as Configs
 
+E = TypeVar("E", bound=Exception)
 Route = tuple[APIRouter, str, str]
 SettingsCls = type[BaseModel]
 Healthcheck = Callable[[], Coroutine[Any, Any, None]]
-ExceptionHandler = Callable[
-    [Request, Exception], Response | Awaitable[Response]
-]
-ExceptionHandlerRegister = tuple[int | type[Exception], ExceptionHandler]
+ExceptionHandler = Callable[[Request, E], Response | Awaitable[Response]]
+ExceptionHandlerRegister = tuple[int | type[E], ExceptionHandler]
 
 
 def default_lifespan():
@@ -93,6 +103,8 @@ class App(BaseModel):
     def load_signals(self):
         if not self.signals_module:
             return
+        if not hasattr(self.signals_module, "__path__"):
+            return import_module(self.signals_module.__name__)
         for i in pkgutil.iter_modules(self.signals_module.__path__):
             target = f"{self.signals_module.__name__}.{i.name}"
             if i.ispkg:

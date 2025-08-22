@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from pydantic import HttpUrl
+from pydantic import AnyHttpUrl
 
 
 class TenantNameSchema(Protocol):
@@ -8,7 +8,7 @@ class TenantNameSchema(Protocol):
 
 
 class TenantHostSchema(TenantNameSchema, Protocol):
-    website_url: HttpUrl | list[HttpUrl]
+    website_url: AnyHttpUrl | list[AnyHttpUrl]
 
 
 class TenantMonitoringSchema(Protocol):

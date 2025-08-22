@@ -12,16 +12,16 @@ class BaseCache(JsonModel):
         model_key_prefix = "base"
         # ^should be overriden in sub
 
+    @property
+    async def invalidate(self):
+        return await self.expire(0)
+
 
 class BaseTenantSettingCache(BaseCache):
-    tenant: str = Field(primary_key=True)
+    id: str = Field(primary_key=True)
 
 
-class BaseServiceSettingCache(BaseCache):
-    PROJECT_NAME: str = Field(primary_key=True)
-
-
-class HostTenantMapping(BaseCache):
+class HostTenantMapping(BaseCache, index=True):  # type: ignore[call-arg]
     host: str = Field(primary_key=True)
     tenant: str = Field(index=True)
 

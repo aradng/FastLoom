@@ -1,11 +1,9 @@
 from datetime import datetime
-from typing import Annotated, Any, Self
+from typing import Self
 
 import bson
-import pymongo
 from beanie import (
     Document,
-    Indexed,
     Insert,
     PydanticObjectId,
     Replace,
@@ -81,13 +79,13 @@ class BasePaginationQuery(BaseModel):
         return None
 
 
-class PaginatedResponse(BaseModel):
-    data: list[Any] = Field(default_factory=list)
+class PaginatedResponse[T](BaseModel):
+    data: list[T] = Field(default_factory=list)
     count: int = Field(default=0, ge=0)
 
 
-class BaseTenantSettingsDocument(Document):
-    tenant: Annotated[str, Indexed(str, index_type=pymongo.TEXT, unique=True)]
+class BaseTenantSettingsDocument(Document, CreatedUpdatedAtSchema):
+    id: str  # type: ignore[assignment]
 
     class Settings:
         name = "settings"

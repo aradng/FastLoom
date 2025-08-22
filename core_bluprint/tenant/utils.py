@@ -1,4 +1,3 @@
-import asyncio
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, create_model
@@ -15,6 +14,7 @@ def config_default(field: FieldInfo, strip: bool = False) -> FieldInfo:
         field.default = None
         field.default_factory = None
         field.validate_default = False
+        # field.annotation = field.annotation | None
     return field
 
 
@@ -25,7 +25,7 @@ class SettingCacheSchema(Generic[V, U, Z]):
     optional: type[BaseModel]
     document: type[U]
     cache: type[Z]
-    config_default: dict[str, Any]
+    config_default: dict[str, Any] = {}
 
     def __init__(
         self, model: type[V], document_cls: type[U], cache_class: type[Z]
@@ -43,7 +43,6 @@ class SettingCacheSchema(Generic[V, U, Z]):
         )
         self.config = create_model(  # type: ignore[call-overload]
             f"Config{model.__name__}",
-            __base__=None,
             **{
                 k: (v.annotation | None, config_default(v))  # type:ignore[operator]
                 for k, v in model.model_fields.items()
@@ -70,13 +69,24 @@ class SettingCacheSchema(Generic[V, U, Z]):
             self.config_default | (fetched.model_dump(exclude_defaults=True))
         )
 
+    def strip_defaults(self, fetched: V) -> dict[str, Any]:
+        stripped = fetched.model_dump(exclude_defaults=True)
+        for key in self.config_default:
+            if key in stripped and stripped[key] == self.config_default[key]:
+                del stripped[key]
 
-def run_sync(awaitable):
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        # no event loop running
-        return asyncio.run(awaitable)
+        return stripped
 
-    if loop.is_running():
-        raise RuntimeError("Cannot run inside running loop")
+    def get_schema(self) -> dict[str, Any]:
+        fields: dict[str, FieldInfo] = {}
+        for k, v in self.model.model_fields.items():
+            if k in self.config_default:
+                fields[k] = config_default(v, strip=True)
+                fields[k].annotation = v.annotation | None  # type:ignore[assignment, operator]
+            else:
+                fields[k] = v._copy()
+        schema_model: BaseModel = create_model(  # type: ignore[call-overload]
+            f"{self.model.__name__}Schema",
+            **{k: (v.annotation, v) for k, v in fields.items()},
+        )
+        return schema_model.model_json_schema()

@@ -3,13 +3,34 @@ from collections.abc import Sequence
 from importlib import import_module
 from itertools import chain
 from types import ModuleType
+from typing import TYPE_CHECKING
 
-from beanie import Document, UnionDoc, View, init_beanie
-from pymongo import AsyncMongoClient
+if TYPE_CHECKING:
+    from beanie import Document, UnionDoc, View
+else:
+    try:
+        from beanie import Document, UnionDoc, View
+    except ImportError:
+        from pydantic import (
+            BaseModel as Document,
+        )
+        from pydantic import (
+            BaseModel as UnionDoc,
+        )
+        from pydantic import (
+            BaseModel as View,
+        )
 
 
-async def get_mongo_client(mongo_uri: str) -> AsyncMongoClient:
-    return AsyncMongoClient(mongo_uri, tz_aware=True)
+async def get_mongo_client(mongo_uri: str):
+    from pymongo import AsyncMongoClient
+
+    return AsyncMongoClient(
+        mongo_uri,
+        tz_aware=True,
+        connectTimeoutMS=1000,
+        serverSelectionTimeoutMS=5000,
+    )
 
 
 def get_models(
@@ -40,9 +61,11 @@ async def init_db(
     models: Sequence[type[Document] | type[UnionDoc] | type[View] | str],
     mongo_uri: str,
 ):
-    client: AsyncMongoClient = await get_mongo_client(mongo_uri)
+    from beanie import init_beanie
+
+    client = await get_mongo_client(mongo_uri)
     db = client[database_name]
-    await init_beanie(db, document_models=models)
+    await init_beanie(db, document_models=models, recreate_views=True)
 
 
 async def destroy_db(
@@ -51,7 +74,7 @@ async def destroy_db(
     mongo_uri: str,
     drop_database: bool = False,
 ):
-    client: AsyncMongoClient = await get_mongo_client(mongo_uri)
+    client = await get_mongo_client(mongo_uri)
     db = client[database_name]
     if not drop_database:
         for model in models[1:]:  # Skip pre-populated Province collection

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from logging import Logger
 
 import uvicorn
+from aredis_om import Migrator
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
@@ -17,7 +18,7 @@ from core_bluprint.launcher.utils import (
 )
 from core_bluprint.monitoring import InitMonitoring, Instruments
 from core_bluprint.observability.settings import ObservabilitySettings
-from core_bluprint.settings.base import BaseGeneralSettings, FastAPISettings
+from core_bluprint.settings.base import FastAPISettings
 from core_bluprint.signals.depends import RabbitSubscriber, RabbitSubscriptable
 from core_bluprint.signals.settings import RabbitmqSettings
 from core_bluprint.tenant.settings import ConfigAlias as Configs
@@ -29,6 +30,7 @@ logger: Logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     service_app = get_app()
     await service_app.load(app)
+    await Migrator().run()
     async with service_app.lifespan_fn(app):
         yield
 
@@ -46,10 +48,6 @@ def initial_app():
         logging.warning("Settings Does Not Inherit from RabbitmqSettings")
     # ^IMPORTANT:rabbit has to init first
     service_app = get_app()
-    if (PN := service_app.project_name) is not None and Configs[
-        BaseGeneralSettings
-    ].general._is_derived:
-        Configs[BaseGeneralSettings].general.PROJECT_NAME = PN
     instruments = [Instruments.HTTPX, Instruments.REDIS]
     if isinstance(Configs.general, RabbitmqSettings):
         instruments.append(Instruments.RABBIT)
