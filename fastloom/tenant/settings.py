@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from fastloom.db.schemas import BaseTenantSettingsDocument
 else:
     try:
-        from core_bluprint.db.schemas import BaseTenantSettingsDocument
+        from fastloom.db.schemas import BaseTenantSettingsDocument
     except ImportError:
         from pydantic import BaseModel as BaseTenantSettingsDocument
 

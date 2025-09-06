@@ -82,7 +82,8 @@ def initial_app():
         service_app.root_router,
         prefix=Configs[FastAPISettings].general.API_PREFIX,
     )
-    app.include_router(RabbitSubscriber.router)
+    if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
+        app.include_router(RabbitSubscriber.router)
     return app
 
 
@@ -91,7 +92,7 @@ app = initial_app()
 
 def main():
     uvicorn.run(
-        app="core_bluprint.launcher.main:app",
+        app=f"{__name__}:app",
         host="0.0.0.0",
         port=Configs[LauncherSettings].general.APP_PORT,
         reload=Configs[LauncherSettings].general.DEBUG,

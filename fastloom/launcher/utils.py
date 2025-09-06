@@ -48,7 +48,11 @@ def get_settings_cls() -> SettingsCls:
 
 
 def get_tenant_cls() -> SettingsCls:
-    return _get_settings_module().TenantSettings
+    try:
+        return _get_settings_module().TenantSettings
+    except AttributeError:
+        logging.debug("No TenantSettings Found In settings.py")
+        return BaseModel
 
 
 class EndpointFilter(logging.Filter):

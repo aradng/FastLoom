@@ -1,6 +1,6 @@
 [project]
 name = "fastloom"
-version = "0.3.3"
+version = "0.3.4"
 description = "Core package"
 authors = []
 readme = "README.md"
