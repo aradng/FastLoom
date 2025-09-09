@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from logging import Logger
 
 import uvicorn
-from aredis_om import Migrator
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
@@ -30,7 +29,10 @@ logger: Logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     service_app = get_app()
     await service_app.load(app)
-    await Migrator().run()
+    if Configs.cache_enabled:
+        from aredis_om import Migrator
+
+        await Migrator().run()
     async with service_app.lifespan_fn(app):
         yield
 
