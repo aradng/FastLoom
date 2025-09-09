@@ -5,11 +5,6 @@ description = "Core package"
 authors = []
 readme = "README.md"
 
-[[tool.poetry.source]]
-name = "nexus-registry"
-url = "https://nexus.bluprint.ir/repository/group-package-registry/simple/"
-priority = "primary"
-
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
@@ -40,7 +35,7 @@ faststream = { version = "^0.5.28", extras = [
 celery = { version = "^5.5.3", optional = true }
 httpx = { version = "^0.28.0", optional = true }
 requests = { version = "^2.32.0", optional = true }
-redis-om = {git = "https://github.com/redis/redis-om-python", rev = "main", optional = true}
+redis-om = {version="^1.0", optional = true}
 openai = { version = "^1", optional = true }
 logfire = { version = "^4.0.0", extras = ["system-metrics", "asgi", "fastapi", "celery", "httpx", "requests", "redis", "pymongo", "openai"] }
 sentry-sdk = { extras = ["fastapi"], version = "^2.0.0" }
