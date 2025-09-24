@@ -25,4 +25,4 @@ class RedisHandler(SelfSustaining):
         self.redis = get_redis_connection(url=str(settings.redis_url))
         self.sync_redis = Redis.from_url(url=str(settings.redis_url))
         with suppress(ConnectionError):
-            self.enabled = self.sync_redis
+            self.enabled = self.sync_redis.ping()
