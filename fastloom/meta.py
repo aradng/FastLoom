@@ -1,4 +1,7 @@
-from typing import Self, cast
+from typing import Any, Self, cast
+
+from pydantic import BaseModel, create_model
+from pydantic.fields import FieldInfo
 
 
 class SelfSustainingMeta(type):
@@ -27,3 +30,28 @@ class SelfSustaining(metaclass=SelfSustainingMeta):
 
     def __init__(self, *args, **kwargs):
         type(self).self = self  # store the singleton
+
+
+def optional_fieldinfo(
+    field: FieldInfo, strip: bool = False
+) -> tuple[Any, FieldInfo]:
+    field = field._copy()
+    if field.is_required() or strip:
+        field.default = None
+        field.default_factory = None
+        field.validate_default = False
+        if field.annotation is not None:
+            field.annotation = cast(type[Any], field.annotation | None)
+    return field.annotation, field
+
+
+def create_optional_model(
+    model: type[BaseModel], strip: bool = False, name: str | None = None
+) -> type[BaseModel]:
+    return create_model(
+        f"Optional{model.__name__}" if name is None else name,
+        **{
+            k: cast(Any, optional_fieldinfo(v, strip=strip))
+            for k, v in model.model_fields.items()
+        },
+    )

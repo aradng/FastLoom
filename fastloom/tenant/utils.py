@@ -3,19 +3,11 @@ from typing import Any, Generic, TypeVar
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 
+from fastloom.meta import create_optional_model, optional_fieldinfo
+
 V = TypeVar("V", bound=BaseModel)
 U = TypeVar("U", bound=BaseModel)
 Z = TypeVar("Z", bound=BaseModel)
-
-
-def config_default(field: FieldInfo, strip: bool = False) -> FieldInfo:
-    field = field._copy()
-    if field.is_required() or strip:
-        field.default = None
-        field.default_factory = None
-        field.validate_default = False
-        # field.annotation = field.annotation | None
-    return field
 
 
 # [settings class , document class, cache class]
@@ -31,22 +23,11 @@ class SettingCacheSchema(Generic[V, U, Z]):
         self, model: type[V], document_cls: type[U], cache_class: type[Z]
     ):
         self.model = model
-        self.optional = create_model(  # type: ignore[assignment, call-overload]
-            f"Optional{model.__name__}",
-            **{
-                k: (
-                    v.annotation | None,  # type:ignore[operator]
-                    config_default(v, strip=True),
-                )
-                for k, v in model.model_fields.items()
-            },
+        self.optional = create_optional_model(
+            model, name=f"Optional{model.__name__}", strip=True
         )
-        self.config = create_model(  # type: ignore[call-overload]
-            f"Config{model.__name__}",
-            **{
-                k: (v.annotation | None, config_default(v))  # type:ignore[operator]
-                for k, v in model.model_fields.items()
-            },
+        self.config = create_optional_model(
+            model, name=f"OptionalConfig{model.__name__}"
         )
         self.document = create_model(
             f"{model.__name__}Document",
@@ -78,13 +59,12 @@ class SettingCacheSchema(Generic[V, U, Z]):
         return stripped
 
     def get_schema(self) -> dict[str, Any]:
-        fields: dict[str, FieldInfo] = {}
-        for k, v in self.model.model_fields.items():
-            if k in self.config_default:
-                fields[k] = config_default(v, strip=True)
-                fields[k].annotation = v.annotation | None  # type:ignore[assignment, operator]
-            else:
-                fields[k] = v._copy()
+        fields: dict[str, FieldInfo] = {
+            k: optional_fieldinfo(v, strip=True)[1]
+            if k in self.config_default
+            else v._copy()
+            for k, v in self.model.model_fields.items()
+        }
         schema_model: BaseModel = create_model(  # type: ignore[call-overload]
             f"{self.model.__name__}Schema",
             **{k: (v.annotation, v) for k, v in fields.items()},
