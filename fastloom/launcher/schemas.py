@@ -90,7 +90,7 @@ class App(BaseModel):
             _router.include_router(router, prefix=prefix, tags=[name])
         return _router
 
-    async def load(self, app: FastAPI):
+    async def load(self):
         await self.load_db()
         self.load_signals()
 

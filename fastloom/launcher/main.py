@@ -28,7 +28,7 @@ logger: Logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     service_app = get_app()
-    await service_app.load(app)
+    await service_app.load()
     if Configs.cache_enabled:
         from aredis_om import Migrator
 
