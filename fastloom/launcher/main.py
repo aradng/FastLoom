@@ -58,7 +58,8 @@ def initial_app():
     if Configs[ObservabilitySettings].general.METRICS:
         instruments.append(Instruments.METRICS)
     with InitMonitoring(
-        Configs[ObservabilitySettings].general, instruments=instruments
+        Configs[ObservabilitySettings].general,
+        instruments=instruments + service_app.additional_instruments,
     ) as monitor:
         app = FastAPI(
             lifespan=lifespan,

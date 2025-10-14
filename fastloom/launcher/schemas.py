@@ -69,6 +69,7 @@ class App(BaseModel):
     signals_module: ModuleType | None = None
     models_module: ModuleType | None = None
     healthchecks: list[Healthcheck] = Field(default_factory=list)
+    additional_instruments: list[Callable] = Field(default_factory=list)
     routes: list[Route] = Field(default_factory=list)
     models: list[type[Document] | type[UnionDoc] | type[View]] = Field(
         default_factory=list
