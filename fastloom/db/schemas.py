@@ -1,9 +1,10 @@
 from datetime import datetime
-from typing import Self
+from typing import Annotated, Self
 
 import bson
 from beanie import (
     Document,
+    Indexed,
     Insert,
     PydanticObjectId,
     Replace,
@@ -85,7 +86,7 @@ class PaginatedResponse[T](BaseModel):
 
 
 class BaseTenantSettingsDocument(Document, CreatedUpdatedAtSchema):
-    id: str  # type: ignore[assignment]
+    id: Annotated[str, Indexed()]  # type: ignore[assignment]
 
     class Settings:
         name = "settings"
