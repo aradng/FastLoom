@@ -84,12 +84,13 @@ class App(BaseModel):
     def project_name(self) -> str | None:
         return self.models[0].__module__.split(".")[0] if self.models else None
 
-    @property
-    def root_router(self) -> APIRouter:
-        _router = APIRouter()
+    def load_routes(self, app: FastAPI):
         for router, prefix, name in self.routes:
-            _router.include_router(router, prefix=prefix, tags=[name])
-        return _router
+            app.include_router(
+                router,
+                prefix=Configs[FastAPISettings].general.API_PREFIX + prefix,  # type: ignore[misc]
+                tags=[name],
+            )
 
     async def load(self):
         await self.load_db()

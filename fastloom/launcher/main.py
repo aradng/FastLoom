@@ -81,10 +81,7 @@ def initial_app():
     service_app.load_healthchecks(app)
     service_app.load_system_endpoints(app)
 
-    app.include_router(
-        service_app.root_router,
-        prefix=Configs[FastAPISettings].general.API_PREFIX,
-    )
+    service_app.load_routes(app)
     if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
         app.include_router(RabbitSubscriber.router)
     return app
