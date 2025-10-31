@@ -246,6 +246,7 @@ def instrument_otel(
     logfire.configure(
         send_to_logfire="if-token-present",
         service_name=settings.PROJECT_NAME,
+        environment=settings.ENVIRONMENT,
         console=False,
         metrics=logfire.MetricsOptions(
             additional_readers=[get_metrics_reader()]

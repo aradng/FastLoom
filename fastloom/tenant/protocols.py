@@ -13,3 +13,4 @@ class TenantHostSchema(TenantNameSchema, Protocol):
 
 class TenantMonitoringSchema(Protocol):
     PROJECT_NAME: str
+    ENVIRONMENT: str
