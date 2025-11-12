@@ -1,5 +1,5 @@
 # system
-FROM hub.bluprint.ir/python:3.12-slim AS base
+FROM python:3.13-slim AS base
 
 ENV TZ=UTC \
     PYTHONUNBUFFERED=1 \
@@ -8,7 +8,7 @@ ENV TZ=UTC \
     PIP_NO_CACHE_DIR=1 \
     POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_VERSION=2.1.1
+    POETRY_VERSION=2.1.3
 
 RUN apt-get update && apt-get install -y \
     git jq curl\

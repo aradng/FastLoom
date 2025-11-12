@@ -3,7 +3,7 @@ description: "Sets up Python, caches venv/.local, installs deps"
 inputs:
   python-version:
     description: "Python version to use"
-    default: "3.12"
+    default: "3.13"
 runs:
   using: "composite"
   steps:

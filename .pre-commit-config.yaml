@@ -1,3 +1,5 @@
+default_language_version:
+    python: python3.13
 repos:
     - repo: https://github.com/pre-commit/pre-commit-hooks
       rev: v5.0.0
@@ -7,17 +9,17 @@ repos:
           - id: check-yaml
           - id: check-added-large-files
     - repo: https://github.com/pre-commit/mirrors-mypy
-      rev: v1.17.1
+      rev: v1.18.2
       hooks:
       -   id: mypy
           additional_dependencies:
             - mypy-extensions==1.0.0
-            - "typing-extensions==4.12.2"
-            - "pydantic==2.11.7"
-            - "returns==0.22.0"
+            - "typing-extensions==4.15.0"
+            - "pydantic==2.12.4"
+            - "returns"
             - "types-pyyaml"
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.12.4
+      rev: v0.12.12
       hooks:
         - id: ruff
           args: [ --fix ]
