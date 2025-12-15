@@ -1,7 +1,7 @@
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 
@@ -14,8 +14,12 @@ def init_healthcheck(
 
     @router.get(f"{prefix}/healthcheck")
     async def healthcheck_endpoint() -> JSONResponse:
-        for handler in healthcheck_handlers:
-            await handler()
+        try:
+            for handler in healthcheck_handlers:
+                await handler()
+
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
 
         return JSONResponse(content={"status": "ok"})
 

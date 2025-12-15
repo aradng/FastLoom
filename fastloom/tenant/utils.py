@@ -1,26 +1,33 @@
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 
+from fastloom.cache.base import BaseTenantSettingCache
+
+if TYPE_CHECKING:
+    from fastloom.db.schemas import BaseTenantSettingsDocument
+else:
+    try:
+        from fastloom.db.schemas import BaseTenantSettingsDocument
+    except ImportError:
+        from pydantic import BaseModel as BaseTenantSettingsDocument
+
+
 from fastloom.meta import create_optional_model, optional_fieldinfo
 
-V = TypeVar("V", bound=BaseModel)
-U = TypeVar("U", bound=BaseModel)
-Z = TypeVar("Z", bound=BaseModel)
 
-
-# [settings class , document class, cache class]
-class SettingCacheSchema(Generic[V, U, Z]):
+class SettingCacheSchema[V: BaseModel]:
     model: type[V]
-    config: type[BaseModel]
-    optional: type[BaseModel]
-    document: type[U]
-    cache: type[Z]
+    config: type[V]
+    optional: type[V]
+    document: type[BaseTenantSettingsDocument]
+    cache: type[BaseTenantSettingCache]
     config_default: dict[str, Any] = {}
 
     def __init__(
-        self, model: type[V], document_cls: type[U], cache_class: type[Z]
+        self,
+        model: type[V],
     ):
         self.model = model
         self.optional = create_optional_model(
@@ -33,14 +40,14 @@ class SettingCacheSchema(Generic[V, U, Z]):
             f"{model.__name__}Document",
             __base__=(  # type: ignore[arg-type]
                 self.optional,
-                document_cls,
+                BaseTenantSettingsDocument,
             ),
         )
         self.cache = create_model(
             f"{model.__name__}Cache",
             __base__=(  # type: ignore[arg-type]
                 self.optional,
-                cache_class,
+                BaseTenantSettingCache,
             ),
             __cls_kwargs__={"index": True},
         )

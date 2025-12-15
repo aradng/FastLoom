@@ -1,4 +1,3 @@
-import importlib
 import importlib.util
 import logging
 import os
@@ -88,3 +87,7 @@ def reload_app():
     ).touch()
     if not Configs[LauncherSettings].general.DEBUG:
         os.kill(os.getppid(), signal.SIGHUP)
+
+
+def is_installed(module: str) -> bool:
+    return importlib.util.find_spec(module) is not None

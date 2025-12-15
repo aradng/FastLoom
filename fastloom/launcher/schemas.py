@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Self
 
+from fastloom.cache.settings import RedisSettings
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.tenant.handler import init_settings_endpoints
 
@@ -35,6 +36,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Lifespan
 
+from fastloom.cache.healthcheck import get_healthcheck as cache_hc
 from fastloom.db.healthcheck import get_healthcheck as db_hc
 from fastloom.db.lifehooks import get_models, init_db
 from fastloom.db.settings import MongoSettings
@@ -48,12 +50,13 @@ from fastloom.signals.healthcheck import (
 )
 from fastloom.tenant.settings import ConfigAlias as Configs
 
-E = TypeVar("E", bound=Exception)
 Route = tuple[APIRouter, str, str]
 SettingsCls = type[BaseModel]
 Healthcheck = Callable[[], Coroutine[Any, Any, None]]
-ExceptionHandler = Callable[[Request, E], Response | Awaitable[Response]]
-ExceptionHandlerRegister = tuple[int | type[E], ExceptionHandler]
+ExceptionHandler = Callable[
+    [Request, Exception], Response | Awaitable[Response]
+]
+ExceptionHandlerRegister = tuple[int | type[Exception], ExceptionHandler]
 
 
 def default_lifespan():
@@ -78,6 +81,7 @@ class App(BaseModel):
     exception_handlers: list[ExceptionHandlerRegister] = Field(
         default_factory=list
     )
+    cache_healthcheck: bool = False
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -123,7 +127,10 @@ class App(BaseModel):
         handlers: list[Healthcheck] = [
             *self.healthchecks,
         ]
-
+        if self.cache_healthcheck:
+            handlers.append(
+                cache_hc(Configs[RedisSettings].general.REDIS_URL)  # type: ignore[misc]
+            )
         if self.models:
             handlers.append(db_hc(Configs[MongoSettings].general.MONGO_URI))  # type: ignore[misc]
         if self.signals_module:

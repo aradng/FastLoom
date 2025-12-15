@@ -1,6 +1,6 @@
 [project]
 name = "fastloom"
-version = "0.3.17"
+version = "0.4.0"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -8,7 +8,7 @@ readme = "README.md"
 [tool.mypy]
 plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
-module = "aredis_om"
+module = "aredis_om.*"
 ignore_missing_imports = true
 
 [tool.pydantic-mypy]
@@ -35,9 +35,19 @@ faststream = { version = "^0.5.28", extras = [
 celery = { version = "^5.5.3", optional = true }
 httpx = { version = "^0.28.0", optional = true }
 requests = { version = "^2.32.0", optional = true }
-redis-om = {version="^1.0", optional = true}
+redis-om = { version = "^1.0", optional = true }
 openai = { version = "^1", optional = true }
-logfire = { version = "^4.0.0", extras = ["system-metrics", "asgi", "fastapi", "celery", "httpx", "requests", "redis", "pymongo", "openai"] }
+logfire = { version = "^4.0.0", extras = [
+    "system-metrics",
+    "asgi",
+    "fastapi",
+    "celery",
+    "httpx",
+    "requests",
+    "redis",
+    "pymongo",
+    "openai",
+] }
 sentry-sdk = { extras = ["fastapi"], version = "^2.0.0" }
 opentelemetry-distro = "*"
 opentelemetry-exporter-otlp = "*"
@@ -52,11 +62,7 @@ mypy = { version = "^1.17.0", optional = true }
 ipykernel = { version = "^6.30.0", optional = true }
 
 [tool.poetry.extras]
-FastAPI = [
-    "fastapi",
-    "python-multipart",
-    "uvicorn",
-]
+FastAPI = ["fastapi", "python-multipart", "uvicorn"]
 Rabbit = [
     "fastapi",
     "uvicorn",

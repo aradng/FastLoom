@@ -1,13 +1,13 @@
-from pathlib import Path
-
 from pydantic import (
-    AnyHttpUrl,
     BaseModel,
     Field,
+    HttpUrl,
     computed_field,
 )
 
+from fastloom.auth.schemas import OAuth2MergedScheme, OIDCCScheme
 from fastloom.settings.utils import get_env_or_err
+from fastloom.types import Str
 
 
 class ProjectSettings(BaseModel):
@@ -25,11 +25,10 @@ class FastAPISettings(ProjectSettings):
         return f"/api/{self.PROJECT_NAME}"
 
 
-class IAMSettings(BaseModel):
-    IAM_SIDECAR_URL: AnyHttpUrl = Field(
-        AnyHttpUrl("http://iam:8000/api/iam/sidecar")
-    )
-    IAM_TOKEN_URL: AnyHttpUrl | Path = Path("/api/iam/auth/login/basic")
+class IAMSettings(OAuth2MergedScheme, OIDCCScheme):
+    INTROSPECT: bool = False
+    ACL: bool = False
+    IAM_SIDECAR_URL: Str[HttpUrl] | None = Field(None, validate_default=True)
 
 
 class MonitoringSettings(ProjectSettings):

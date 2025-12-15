@@ -2,29 +2,27 @@ from collections.abc import MutableMapping
 from contextlib import suppress
 from pathlib import Path
 from types import new_class
-from typing import TYPE_CHECKING, Annotated, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar
 
 import yaml
 from pydantic import BaseModel, RootModel, StringConstraints
 
-from fastloom.auth.introspect.depends import (
-    OptionalVerifiedAuth,
-    VerifiedAuth,
+from fastloom.auth.depends import (
+    JWTAuth,
+    OptionalJWTAuth,
 )
-from fastloom.cache.base import BaseTenantSettingCache
+from fastloom.cache.base import BaseCache, BaseTenantSettingCache
 from fastloom.cache.lifehooks import RedisHandler
 
 if TYPE_CHECKING:
-    from aredis_om.model.model import (  # type: ignore[import-untyped]
-        NotFoundError,
-    )
+    from aredis_om.model.model import NotFoundError
 
     from fastloom.db.schemas import BaseTenantSettingsDocument
 else:
     try:
         from fastloom.db.schemas import BaseTenantSettingsDocument
     except ImportError:
-        from pydantic import BaseModel as BaseTenantSettingsDocument
+        BaseTenantSettingsDocument = BaseModel
 
     try:
         from aredis_om.model.model import NotFoundError
@@ -50,16 +48,12 @@ from fastloom.tenant.utils import SettingCacheSchema
 
 DEFAULT_CONFIG_KEY: str = "default"
 
-
-T = TypeVar("T", bound=BaseModel)
-V = TypeVar("V", bound=BaseModel)
-
 TenantName = Annotated[str, StringConstraints(strip_whitespace=True)]
 TenantMapping = MutableMapping[TenantName, TenantNameSchema]
 TenantMappingWithHosts = MutableMapping[TenantName, TenantHostSchema]
 
 
-def load_settings(
+def load_settings[T: BaseModel](
     settings_cls: type[T],
     config_yml_file: Path | None = None,
     defaults_only=False,
@@ -93,19 +87,18 @@ class GetSettingsFrom[V](BaseGetFrom):
         return await Configs[BaseModel, V].self.get(tenant)  # type: ignore[type-var, misc]
 
 
-class Configs(Generic[T, V], SelfSustaining):
+class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
     settings: MutableMapping[str, T]
     general: T
     from_: TenantDependancySelector[T]
     settings_from: GetSettingsFrom[V]
-    auth: VerifiedAuth
-    optional_auth: OptionalVerifiedAuth
+    auth: JWTAuth
+    optional_auth: OptionalJWTAuth
     documents_enabled: bool = False
     cache_enabled: bool = False
+    tenant_cls: type[V]
     # cache
-    tenant_schema: SettingCacheSchema[
-        V, BaseTenantSettingsDocument, BaseTenantSettingCache
-    ]
+    tenant_schema: SettingCacheSchema[V]
 
     def __init__(
         self,
@@ -115,11 +108,12 @@ class Configs(Generic[T, V], SelfSustaining):
         if self.self is not None:
             return
         super().__init__()
-        BaseTenantSettingCache.Meta.database = RedisHandler().redis
-        self.tenant_schema = SettingCacheSchema(
-            tenant_cls, BaseTenantSettingsDocument, BaseTenantSettingCache
-        )
-        self._load_yaml(service_cls)
+        self.tenant_cls = tenant_cls
+        self._load_settings_yaml(service_cls, tenant_cls)
+        BaseCache.Meta.database = RedisHandler(self.general).redis
+        BaseTenantSettingCache.Meta.database = RedisHandler(self.general).redis
+        self.tenant_schema = SettingCacheSchema(tenant_cls)
+        self._load_tenant_yaml()
         self.from_ = self._from_()
         self.settings_from = GetSettingsFrom[V](self.from_)
         self.auth = self._auth()
@@ -134,20 +128,25 @@ class Configs(Generic[T, V], SelfSustaining):
                 f"{narrowed_general.PROJECT_NAME}"
             )
 
-    def _load_yaml(
+    def _load_settings_yaml(
         self,
         service_cls: type[T],
+        tenant_cls: type[V],
     ):
         self.settings = load_settings(
             new_class(
                 "_SettingsWithTenants",
-                (service_cls, self.tenant_schema.model),
+                (service_cls, tenant_cls),
             ),
         )
         # ^backward compatibility
         self.general = load_settings(service_cls, defaults_only=True)[
             DEFAULT_CONFIG_KEY
         ]
+
+    def _load_tenant_yaml(
+        self,
+    ):
         self.tenant_schema.config_default = load_settings(
             settings_cls=self.tenant_schema.config,
             defaults_only=True,
@@ -167,11 +166,11 @@ class Configs(Generic[T, V], SelfSustaining):
             ),
         )
 
-    def _auth(self) -> VerifiedAuth:
-        return VerifiedAuth(self.general)  # type: ignore[arg-type]
+    def _auth(self) -> JWTAuth:
+        return JWTAuth(self.general)  # type: ignore[arg-type]
 
-    def _optional_auth(self) -> OptionalVerifiedAuth:
-        return OptionalVerifiedAuth(self.general)  # type: ignore[arg-type]
+    def _optional_auth(self) -> OptionalJWTAuth:
+        return OptionalJWTAuth(self.general)  # type: ignore[arg-type]
 
     def __getitem__(self, tenant: str):  # farming keks
         return self.get(tenant)
@@ -209,4 +208,5 @@ class Configs(Generic[T, V], SelfSustaining):
             await self.tenant_schema.document.model_validate(stripped).save()
 
 
+T = TypeVar("T", bound=BaseModel)
 ConfigAlias = Configs[T, BaseModel]

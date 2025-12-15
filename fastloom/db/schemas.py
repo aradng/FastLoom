@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Annotated, Self
 
-import bson
 from beanie import (
     Document,
     Indexed,
@@ -40,8 +39,6 @@ class CreatedUpdatedAtSchema(CreatedAtSchema):
 
 
 class BaseDocument(Document):
-    id: PydanticObjectId = Field(default_factory=bson.ObjectId, alias="_id")  # type: ignore[assignment] # noqa
-
     @classmethod
     async def get_or_404(cls, id: PydanticObjectId) -> Self:
         obj: Self | None = await cls.get(id)
@@ -72,7 +69,7 @@ class BasePaginationQuery(BaseModel):
     def convert_zero_limit(cls, v: int | None) -> int | None:
         return v or None
 
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def skip(self) -> int | None:
         if self.limit and self.offset is not None:

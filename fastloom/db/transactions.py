@@ -1,14 +1,10 @@
 import functools
 from collections.abc import Awaitable, Callable
-from typing import ParamSpec, TypeVar
 
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.client_session import AsyncClientSession
 
 from fastloom.db.lifehooks import get_mongo_client
-
-T = TypeVar("T")
-P = ParamSpec("P")
 
 
 class MongoTransactionManager:
@@ -35,7 +31,7 @@ class MongoTransactionManager:
         await self.client.close()
 
 
-def with_transaction(
+def with_transaction[T, **P](
     mongo_uri: str,
 ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     def transaction_wrapper(

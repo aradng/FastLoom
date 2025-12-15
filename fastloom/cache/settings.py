@@ -4,6 +4,10 @@ from pydantic import (
     RedisDsn,
 )
 
+from fastloom.types import Str
+
 
 class RedisSettings(BaseModel):
-    redis_url: RedisDsn = Field(RedisDsn("redis://localhost:6379/0"))
+    REDIS_URL: Str[RedisDsn] = Field(
+        "redis://localhost:6379/0", validate_default=True
+    )

@@ -1,14 +1,18 @@
-from aredis_om import Field, JsonModel
+from typing import TYPE_CHECKING
 
-from fastloom.cache.lifehooks import RedisHandler
-
-RedisHandler()
+if TYPE_CHECKING:
+    from aredis_om import Field, JsonModel
+else:
+    try:
+        from aredis_om import Field, JsonModel
+    except ImportError:
+        from pydantic import BaseModel as JsonModel
+        from pydantic import Field
 
 
 class BaseCache(JsonModel):
     class Meta:
         global_key_prefix = "cache"
-        database = RedisHandler.redis
         model_key_prefix = "base"
         # ^should be overriden in sub
 

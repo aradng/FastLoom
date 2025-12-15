@@ -1,7 +1,8 @@
 import re
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, Field, GetCoreSchemaHandler, TypeAdapter
+from pydantic_core import core_schema
 
 PHONE_REGEX = r"^(\+|00)\d{1,2}\s?((\(\d{3}\))|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}$"
 EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -55,3 +56,33 @@ NationalID = Annotated[str, AfterValidator(_national_id_validator)]
 UserId = str
 
 NoneField = Annotated[None, Field(None)]
+
+
+class Str[T](str):
+    __validator__: Any = None
+
+    @classmethod
+    def __class_getitem__(cls, item: Any):
+        return type(
+            f"Str[{getattr(item, '__name__', repr(item))}]",
+            (cls,),
+            {"__validator__": item},
+        )
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source: Any, handler: GetCoreSchemaHandler
+    ):
+        adapter = TypeAdapter(cls.__validator__)
+
+        def validate(v: str) -> "Str[T]":
+            validated = adapter.validate_python(v)
+            return cls(str(validated))
+
+        return core_schema.no_info_after_validator_function(
+            validate,
+            core_schema.str_schema(),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                str, return_schema=core_schema.str_schema()
+            ),
+        )

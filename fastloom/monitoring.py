@@ -227,6 +227,10 @@ def instrument_openai(client: Any | None = None):
     logfire.instrument_openai(client)
 
 
+def instrument_pydantic_ai():
+    logfire.instrument_pydantic_ai()
+
+
 class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
@@ -236,6 +240,7 @@ class Instruments(Enum):
     METRICS = instrument_metrics
     MONGODB = instrument_mongodb
     OPENAI = instrument_openai
+    PYDANTIC_AI = instrument_pydantic_ai
 
 
 def instrument_otel(

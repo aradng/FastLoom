@@ -45,9 +45,9 @@ def optional_fieldinfo(
     return field.annotation, field
 
 
-def create_optional_model(
-    model: type[BaseModel], strip: bool = False, name: str | None = None
-) -> type[BaseModel]:
+def create_optional_model[T: BaseModel](
+    model: type[T], strip: bool = False, name: str | None = None
+) -> type[T]:
     return create_model(
         f"Optional{model.__name__}" if name is None else name,
         **{

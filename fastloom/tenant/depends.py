@@ -2,7 +2,7 @@ from abc import abstractmethod
 from collections.abc import Callable, MutableMapping
 from itertools import chain
 from json import JSONDecodeError
-from typing import Annotated, Generic, TypeAliasType, TypeVar
+from typing import Annotated
 
 from aredis_om.model.model import NotFoundError  # type: ignore[import-untyped]
 from fastapi import Depends, Header, HTTPException, Path, Request
@@ -18,13 +18,8 @@ from fastloom.tenant.protocols import TenantHostSchema, TenantNameSchema
 TenantName = Annotated[str, StringConstraints(strip_whitespace=True)]
 TenantMapping = MutableMapping[TenantName, TenantNameSchema]
 TenantMappingWithHosts = MutableMapping[TenantName, TenantHostSchema]
-K = TypeVar("K")
-SettingsMapping = TypeAliasType(
-    "SettingsMapping", MutableMapping[TenantName, K], type_params=(K,)
-)
-SettingsMappingGetter = TypeAliasType(
-    "SettingsMappingGetter", Callable[[], SettingsMapping[K]], type_params=(K,)
-)
+type SettingsMapping[K] = MutableMapping[TenantName, K]
+type SettingsMappingGetter[K] = Callable[[], SettingsMapping[K]]
 
 
 class TenantNotFound(Exception):
@@ -35,7 +30,7 @@ class TenantNotFound(Exception):
         return f"Tenant {self.tenant} not found in settings"
 
 
-class BaseTenantSource(Generic[K]):
+class BaseTenantSource[K]:
     settings: MutableMapping[TenantName, K]
     general: K
 
@@ -176,7 +171,7 @@ except ImportError:
     pass
 
 
-class TenantDependancySelector(Generic[K]):
+class TenantDependancySelector[K]:
     settings: MutableMapping[TenantName, K]
     general: K
     source_clses: tuple[type[BaseTenantSource], ...]

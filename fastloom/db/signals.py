@@ -1,7 +1,7 @@
 import logging
 import os
 from enum import Enum
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Literal
 from uuid import UUID
 
 from beanie import Insert, Replace, SaveChanges, Update, after_event
@@ -18,10 +18,7 @@ class Operations(str, Enum):
     SAVE = "save"
 
 
-T = TypeVar("T", bound=BaseDocument)
-
-
-class SignalMessage(BaseModel, Generic[T]):
+class SignalMessage[T: BaseDocument](BaseModel):
     instance: T
     changes: dict[str, Any]
     operation: Operations
