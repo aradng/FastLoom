@@ -1,19 +1,17 @@
 import logging
-from typing import Annotated, Any
+from typing import Any
 
-from aio_pika import IncomingMessage, Message
-from faststream import Context, ExceptionMiddleware
-from faststream.broker.message import StreamMessage
+from aio_pika import Message
+from faststream import ExceptionMiddleware
 from faststream.rabbit import (
     ExchangeType,
-    RabbitBroker,
     RabbitExchange,
+    RabbitMessage,
     RabbitQueue,
 )
 from faststream.rabbit.fastapi import RabbitRouter
-from faststream.rabbit.publisher.asyncapi import AsyncAPIPublisher
+from faststream.rabbit.publisher.usecase import RabbitPublisher
 from faststream.rabbit.schemas.queue import ClassicQueueArgs
-from faststream.rabbit.subscriber.asyncapi import AsyncAPISubscriber
 from opentelemetry import trace
 
 from fastloom.meta import SelfSustaining
@@ -24,21 +22,9 @@ from fastloom.signals.settings import RabbitmqSettings
 logger = logging.getLogger(__name__)
 
 
-def get_rabbit_broker(settings: RabbitmqSettings) -> RabbitBroker:
-    broker = RabbitBroker(
-        str(settings.RABBIT_URI),
-        middlewares=(
-            RabbitPayloadTelemetryMiddleware(
-                tracer_provider=trace.get_tracer_provider()
-            ),
-        ),
-    )
-    return broker
-
-
 def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
     return RabbitRouter(
-        str(settings.RABBIT_URI),
+        settings.RABBIT_URI,
         schema_url=f"/{name}/asyncapi",
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
@@ -110,13 +96,34 @@ class RabbitSubscriber(SelfSustaining):
         )
 
     @classmethod
+    def _get_queue_name(cls, name: str) -> str:
+        return f"{cls._queue_prefix}.{name}"
+
+    @classmethod
+    def _dlx_suffix(
+        cls,
+    ) -> str:
+        return f".{cls._settings.PROJECT_NAME}"
+
+    @classmethod
+    def _get_dlx_name(
+        cls,
+        routing_key: str,
+    ) -> str:
+        return f"{cls._get_queue_name(routing_key)}{cls._dlx_suffix()}"
+
+    @classmethod
+    def _sanitize_routing_key(cls, routing_key: str) -> str:
+        return routing_key.replace("*", "__all__")
+
+    @classmethod
     def _get_queue(cls, name: str) -> RabbitQueue:
         """
         :param name: name of the queue
         :return: RabbitQueue
         """
         return RabbitQueue(
-            name=f"{cls._queue_prefix}_{name}",
+            name=cls._get_queue_name(cls._sanitize_routing_key(name)),
             routing_key=name,
             durable=True,
         )
@@ -135,18 +142,17 @@ class RabbitSubscriber(SelfSustaining):
         creates a dead letter queue with specified delay
         and binds it to the exchange
         """
-        dlx = await cls.router.broker.declare_exchange(cls.exchange)
 
         queue = RabbitQueue(
-            name=f"{cls._queue_prefix}_{routing_key}."
-            f"{cls._settings.PROJECT_NAME}.{delay}",
-            routing_key=f"{routing_key}.{cls._settings.PROJECT_NAME}.{delay}",
+            name=f"{cls._get_dlx_name(cls._sanitize_routing_key(routing_key))}.{delay}",
+            routing_key=f"{routing_key}{cls._dlx_suffix()}.{delay}",
             durable=True,
             arguments=ClassicQueueArgs(
                 {
                     "x-dead-letter-exchange": cls.exchange.name,
-                    "x-dead-letter-routing-key": f"{routing_key}."
-                    f"{cls._settings.PROJECT_NAME}",
+                    "x-dead-letter-routing-key": (
+                        f"{routing_key}{cls._dlx_suffix()}"
+                    ),
                     "x-message-ttl": delay * 1000,
                     # "x-expires": delay * 2000,
                 }
@@ -156,10 +162,10 @@ class RabbitSubscriber(SelfSustaining):
         robust_queue = await cls.router.broker.declare_queue(
             queue=queue,
         )
-
+        dlx = await cls.router.broker.declare_exchange(cls.exchange)
         await robust_queue.bind(
             dlx,
-            routing_key=f"{routing_key}.{cls._settings.PROJECT_NAME}.{delay}",
+            routing_key=f"{routing_key}{cls._dlx_suffix()}.{delay}",
         )
 
         return queue
@@ -168,17 +174,18 @@ class RabbitSubscriber(SelfSustaining):
     async def _exc_handler(
         cls,
         exc: Exception,
-        message: Annotated[StreamMessage[IncomingMessage], Context()],
+        message: RabbitMessage,
     ):
         message.headers["x-delivery-count"] = (
             message.headers.get("x-delivery-count", 0) + 1
         )
-
-        assert isinstance(message.raw_message.routing_key, str)
+        if message.raw_message.routing_key is None:
+            raise exc
         if (routing_key := message.raw_message.routing_key).endswith(
-            f".{cls._settings.PROJECT_NAME}"
+            cls._dlx_suffix()
         ) and message.headers["x-delivery-count"] > 1:
-            routing_key = routing_key[: -len(f".{cls._settings.PROJECT_NAME}")]
+            routing_key = routing_key[: -len(cls._dlx_suffix())]
+
         queue = await cls._get_dlx_queue(
             routing_key,
             min(
@@ -198,7 +205,7 @@ class RabbitSubscriber(SelfSustaining):
         raise exc
 
     @classmethod
-    def _get_subscriber(cls, routing_key: str, **kwargs) -> AsyncAPISubscriber:
+    def _get_subscriber(cls, routing_key: str, **kwargs):
         return cls.router.subscriber(
             queue=cls._get_queue(routing_key),
             exchange=cls.exchange,
@@ -224,7 +231,7 @@ class RabbitSubscriber(SelfSustaining):
             if retry_backoff:
                 decorators.append(
                     cls._get_subscriber(
-                        f"{routing_key}.{cls._settings.PROJECT_NAME}",
+                        f"{routing_key}{cls._dlx_suffix()}",
                         **kwargs,
                     )
                 )
@@ -286,7 +293,7 @@ class RabbitSubscriber(SelfSustaining):
         routing_keys: dict[str, str],
         schema: type | None = None,
         **kwargs,
-    ) -> dict[str, AsyncAPIPublisher]:
+    ) -> dict[str, RabbitPublisher]:
         """
         :param routing_keys: list of routing keys for the publishers
         :param schema: publish schema for the publishers

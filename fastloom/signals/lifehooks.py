@@ -1,17 +1,30 @@
 import pkgutil
 from importlib import import_module
 from types import ModuleType
+from typing import TYPE_CHECKING
 
-from beanie import Document
+if TYPE_CHECKING:
+    from beanie import Document
 
-from fastloom.db.signals import (
-    Operations,
-    SignalsSave,
-    SignalsUpdate,
-)
+    from fastloom.db.signals import (
+        Operations,
+        SignalsSave,
+        SignalsUpdate,
+    )
+else:
+    try:
+        from fastloom.db.signals import (
+            Operations,
+            SignalsSave,
+            SignalsUpdate,
+        )
+    except ImportError:
+        from types import NoneType as Operations
+        from types import NoneType as SignalsSave
+        from types import NoneType as SignalsUpdate
 
 
-async def init_signals(module: ModuleType):
+def init_signals(module: ModuleType):
     if (
         module.__spec__ is None
         or not module.__spec__.submodule_search_locations
@@ -21,11 +34,11 @@ async def init_signals(module: ModuleType):
         tmp = import_module(f"{module.__name__}.{i.name}")
         if not i.ispkg:
             continue
-        await init_signals(tmp)
+        init_signals(tmp)
 
 
-async def init_streams(
-    models: list[type[Document]],
+def init_streams(
+    models: list[type["Document"]],
 ):
     for model_cls in models:
         if issubclass(model_cls, SignalsSave):

@@ -1,13 +1,12 @@
-import pkgutil
 from collections.abc import Awaitable, Callable, Coroutine
 from contextlib import asynccontextmanager
-from importlib import import_module
-from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Self
 
 from fastloom.cache.settings import RedisSettings
 from fastloom.launcher.settings import LauncherSettings
+from fastloom.signals.lifehooks import init_signals
+from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.handler import init_settings_endpoints
 
 if TYPE_CHECKING:
@@ -29,6 +28,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationError,
     computed_field,
     model_validator,
 )
@@ -98,7 +98,7 @@ class App(BaseModel):
 
     async def load(self):
         await self.load_db()
-        self.load_signals()
+        init_signals(self.signals_module)
 
     async def load_db(self):
         if not self.models:
@@ -108,20 +108,6 @@ class App(BaseModel):
             models=self.models + [Configs.tenant_schema.document],
             mongo_uri=Configs[MongoSettings].general.MONGO_URI,
         )
-
-    def load_signals(self):
-        if not self.signals_module:
-            return
-        if not hasattr(self.signals_module, "__path__"):
-            return import_module(self.signals_module.__name__)
-        for i in pkgutil.iter_modules(self.signals_module.__path__):
-            target = f"{self.signals_module.__name__}.{i.name}"
-            if i.ispkg:
-                target_path = Path(self.signals_module.__path__[0]) / i.name
-                for j in pkgutil.iter_modules([target_path]):
-                    import_module(f"{target}.{j.name}")
-            else:
-                import_module(target)
 
     def load_healthchecks(self, app: FastAPI):
         handlers: list[Healthcheck] = [
@@ -164,4 +150,15 @@ class App(BaseModel):
     def module_to_models(self) -> Self:
         if self.models_module is not None and not self.models:
             self.models = get_models(self.models_module)
+        return self
+
+    @model_validator(mode="after")
+    def validate_signals(self) -> Self:
+        if self.signals_module is not None and not isinstance(
+            Configs[RabbitmqSettings].general,  # type: ignore[misc]
+            RabbitmqSettings,
+        ):
+            raise ValidationError(
+                "Settings does not inherit from RabbitmqSettings"
+            )
         return self
