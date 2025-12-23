@@ -9,5 +9,6 @@ class LauncherSettings(BaseModel):
     WORKERS: int = 4
     SETTINGS_PUBLIC: bool = False
     LOGGING_EXCLUDED_ENDPOINTS: tuple[Pattern | str, ...] = (
-        r"/api/\w+/healthcheck",
+        r"/api/\w+/healthcheck$",
+        r"/healthcheck$",
     )
