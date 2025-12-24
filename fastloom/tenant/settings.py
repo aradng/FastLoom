@@ -29,6 +29,7 @@ else:
     except ImportError:
         NotFoundError = Exception
 
+from fastloom.cache.settings import RedisSettings
 from fastloom.db.settings import MongoSettings
 from fastloom.meta import SelfSustaining
 from fastloom.settings.base import MonitoringSettings
@@ -110,8 +111,11 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         super().__init__()
         self.tenant_cls = tenant_cls
         self._load_settings_yaml(service_cls, tenant_cls)
-        BaseCache.Meta.database = RedisHandler(self.general).redis
-        BaseTenantSettingCache.Meta.database = RedisHandler(self.general).redis
+        if issubclass(service_cls, RedisSettings):
+            BaseCache.Meta.database = RedisHandler(self.general).redis
+            BaseTenantSettingCache.Meta.database = RedisHandler(
+                self.general
+            ).redis
         self.tenant_schema = SettingCacheSchema(tenant_cls)
         self._load_tenant_yaml()
         self.from_ = self._from_()
