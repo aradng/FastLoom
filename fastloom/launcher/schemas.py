@@ -98,7 +98,8 @@ class App(BaseModel):
 
     async def load(self):
         await self.load_db()
-        init_signals(self.signals_module)
+        if self.signals_module is not None:
+            init_signals(self.signals_module)
 
     async def load_db(self):
         if not self.models:
