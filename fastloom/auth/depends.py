@@ -120,8 +120,8 @@ class OptionalJWTAuth:
 class JWTAuth(OptionalJWTAuth):
     def __init__(self, settings: IAMSettings):
         super().__init__(settings)
-        assert self._security_scheme is not None
-        self._security_scheme.auto_error = True
+        if self._security_scheme is not None:
+            self._security_scheme.auto_error = True
 
     @property
     def get_claims(self) -> Callable[..., Coroutine[Any, Any, UserClaims]]:
