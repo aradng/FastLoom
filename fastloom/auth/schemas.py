@@ -1,5 +1,13 @@
+from typing import Annotated
+
 from fastapi.openapi.models import OAuthFlow, OAuthFlows
-from pydantic import BaseModel, Field, HttpUrl, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    Field,
+    HttpUrl,
+    computed_field,
+)
 
 from fastloom.types import Str
 
@@ -49,21 +57,24 @@ class Role(BaseModel):
 
 
 class UserClaims(BaseModel):
-    tenant: str = Field(alias="owner")
-    id: str
-    username: str = Field(..., validation_alias="name")
-    email: str | None = None
-    phone: str | None = None
-    roles: list[Role] = Field(default_factory=list)
+    iss: HttpUrl
+    id: str = Field(alias="sub")
+    session_id: str = Field(alias="sid")
+    username: str = Field(alias="preferred_username")
+    name: str
+    given_name: str
+    family_name: str
+    roles: list[str]
+    email: str
+    email_verified: bool
+    scope: Annotated[
+        set[str],
+        BeforeValidator(lambda v: v.split(" ") if isinstance(v, str) else v),
+    ]
+    groups: set[str]
 
-    @field_validator("roles", mode="before")
-    @classmethod
-    def validate_roles(cls, v: list[Role] | None) -> list[Role]:
-        if not v:
-            return []
-        return v
-
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
-    def is_admin(self) -> bool:
-        return any(role.name == ADMIN_ROLE for role in self.roles or [])
+    def tenant(self) -> str:
+        assert self.iss.path is not None
+        return self.iss.path.split("/")[-1]
