@@ -87,7 +87,7 @@ class PaginatedResponse[T](BaseModel):
     count: int = Field(default=0, ge=0)
 
 
-class BaseTenantSettingsDocument(Document, CreatedUpdatedAtSchema):
+class BaseTenantSettingsDocument(CreatedUpdatedAtSchema, Document):
     id: Annotated[str, Indexed()]  # type: ignore[assignment]
 
     class Settings:
