@@ -4,10 +4,9 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
-from beanie import Insert, Replace, SaveChanges, Update, after_event
+from beanie import Document, Insert, Replace, SaveChanges, Update, after_event
 from pydantic import BaseModel, PrivateAttr, create_model, model_validator
 
-from fastloom.db.schemas import BaseDocument
 from fastloom.signals.depends import RabbitSubscriber
 
 logger = logging.getLogger(__name__)
@@ -18,13 +17,13 @@ class Operations(str, Enum):
     SAVE = "save"
 
 
-class SignalMessage[T: BaseDocument](BaseModel):
+class SignalMessage[T: Document](BaseModel):
     instance: T
     changes: dict[str, Any]
     operation: Operations
 
 
-class BaseDocumentSignal(BaseDocument):
+class BaseDocumentSignal(Document):
     """
     Assumes that this mixin is used with `BaseDocument` subclasses and
     `BaseDocument` has full state management

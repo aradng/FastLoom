@@ -1,17 +1,44 @@
 from datetime import datetime
-from typing import Annotated, Self
+from typing import TYPE_CHECKING, Annotated
 
-from beanie import (
-    Document,
-    Indexed,
-    Insert,
-    PydanticObjectId,
-    Replace,
-    SaveChanges,
-    Update,
-    before_event,
-)
-from fastapi import HTTPException, status
+if TYPE_CHECKING:
+    from beanie import (
+        Document,
+        Indexed,
+        Insert,
+        Replace,
+        SaveChanges,
+        Update,
+        before_event,
+    )
+else:
+    try:
+        from beanie import (
+            Document,
+            Indexed,
+            Insert,
+            Replace,
+            SaveChanges,
+            Update,
+            before_event,
+        )
+    except ImportError:
+        from pydantic import BaseModel as Document
+        from pydantic import BaseModel as Insert
+        from pydantic import BaseModel as Replace
+        from pydantic import BaseModel as SaveChanges
+        from pydantic import BaseModel as Update
+
+        def Indexed() -> type:
+            return str
+
+        def before_event(*args, **kwargs):
+            def decorator(func):
+                return func
+
+            return decorator
+
+
 from pydantic import BaseModel, Field, computed_field, field_validator
 
 from fastloom.date import utcnow
@@ -36,28 +63,6 @@ class CreatedUpdatedAtSchema(CreatedAtSchema):
     @before_event(Insert, Replace, SaveChanges, Update)
     async def update_updated_at(self):
         self.updated_at = utcnow()
-
-
-class BaseDocument(Document):
-    @classmethod
-    async def get_or_404(cls, id: PydanticObjectId) -> Self:
-        obj: Self | None = await cls.get(id)
-        if obj is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{cls.__name__} not found",
-            )
-        return obj
-
-    @classmethod
-    async def find_one_or_404(cls, *args, **kwargs) -> Self:
-        obj: Self | None = await cls.find_one(*args, **kwargs)
-        if obj is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"{cls.__name__} not found",
-            )
-        return obj
 
 
 class BasePaginationQuery(BaseModel):
