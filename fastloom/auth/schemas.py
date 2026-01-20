@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi.openapi.models import OAuthFlow, OAuthFlows
 from pydantic import (
@@ -6,7 +6,9 @@ from pydantic import (
     BeforeValidator,
     Field,
     HttpUrl,
+    ValidationError,
     computed_field,
+    model_validator,
 )
 
 from fastloom.types import Str
@@ -86,3 +88,11 @@ class UserClaims(BaseModel):
         if self.organizations:
             return self.organizations[0]
         return None
+
+    @model_validator(mode="before")
+    @classmethod
+    def realm_roles(cls, v: dict[str, Any]):
+        if "realm_access" not in v or "roles" not in v["realm_access"]:
+            raise ValidationError("realm_access.roles is required")
+        v["roles"] = v["realm_access"]["roles"]
+        return v
