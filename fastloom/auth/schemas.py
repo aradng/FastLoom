@@ -72,9 +72,17 @@ class UserClaims(BaseModel):
         BeforeValidator(lambda v: v.split(" ") if isinstance(v, str) else v),
     ]
     groups: set[str]
+    organizations: list[str]
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def tenant(self) -> str:
         assert self.iss.path is not None
         return self.iss.path.split("/")[-1]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def organization(self) -> str | None:
+        if self.organizations:
+            return self.organizations[0]
+        return None
