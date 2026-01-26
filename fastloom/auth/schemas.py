@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi.openapi.models import OAuthFlow, OAuthFlows
 from pydantic import (
@@ -56,6 +57,14 @@ class Role(BaseModel):
     users: list[str] | None = None
 
 
+class OrganizationAttributes(BaseModel):
+    id: UUID
+
+
+class Organization(OrganizationAttributes):
+    name: str
+
+
 class UserClaims(BaseModel):
     iss: HttpUrl
     id: str = Field(alias="sub")
@@ -72,7 +81,9 @@ class UserClaims(BaseModel):
         BeforeValidator(lambda v: v.split(" ") if isinstance(v, str) else v),
     ]
     groups: set[str]
-    organizations: list[str] = Field(default_factory=list)
+    organizations: dict[str, OrganizationAttributes] = Field(
+        default_factory=dict
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -82,9 +93,15 @@ class UserClaims(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def organization(self) -> str | None:
+    def organization(self) -> Organization | None:
         if self.organizations:
-            return self.organizations[0]
+            org_name = next(iter(self.organizations.keys()))
+            return Organization.model_validate(
+                {
+                    "name": org_name,
+                    **self.organizations[org_name].model_dump(),
+                }
+            )
         return None
 
     @computed_field  # type: ignore[prop-decorator]
