@@ -80,7 +80,7 @@ class UserClaims(BaseModel):
         set[str],
         BeforeValidator(lambda v: v.split(" ") if isinstance(v, str) else v),
     ]
-    groups: set[str]
+    groups: set[str] = Field(default_factory=set)
     organizations: dict[str, OrganizationAttributes] = Field(
         default_factory=dict
     )
