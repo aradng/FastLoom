@@ -21,7 +21,6 @@ from sentry_sdk import init as sentry_init
 
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
-from fastloom.utils import ColoredFormatter
 
 if TYPE_CHECKING:
     with contextlib.suppress(ImportError):
@@ -130,15 +129,9 @@ def instrument_logging(settings):
             return super().fill_attributes(record)
 
     logger = logging.getLogger()
-
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(ColoredFormatter())
-    logger.addHandler(stream_handler)
-
     logfire_handler = AttributedLogfireLoggingHandler()
     logfire_handler.setFormatter(formatter)
     logger.addHandler(logfire_handler)

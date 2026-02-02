@@ -2,6 +2,10 @@ import logging
 
 import click
 
+from fastloom.logging.settings import LoggingSettings
+from fastloom.settings.base import ProjectSettings
+from fastloom.tenant.settings import ConfigAlias as Configs
+
 
 class ColoredFormatter(logging.Formatter):
     @staticmethod
@@ -25,3 +29,21 @@ class ColoredFormatter(logging.Formatter):
 
         colorized_message = f"{levelname}: \t  {name} {message}"
         return colorized_message
+
+
+def setup_logging():
+    logger = logging.getLogger()
+    handlers = list(
+        filter(lambda h: isinstance(h, logging.StreamHandler), logger.handlers)
+    )
+    if not handlers:
+        stream_handler = logging.StreamHandler()
+        logger.addHandler(stream_handler)
+        handlers.append(stream_handler)
+    for handler in handlers:
+        handler.setFormatter(ColoredFormatter())
+
+    app_logger = logging.getLogger(
+        Configs[ProjectSettings].general.PROJECT_NAME
+    )
+    app_logger.setLevel(Configs[LoggingSettings].general.LOG_LEVEL)

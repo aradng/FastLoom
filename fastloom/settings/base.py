@@ -6,6 +6,7 @@ from pydantic import (
 )
 
 from fastloom.auth.schemas import OAuth2MergedScheme, OIDCCScheme
+from fastloom.logging.settings import LoggingSettings
 from fastloom.settings.utils import get_env_or_err
 from fastloom.types import Str
 
@@ -35,4 +36,6 @@ class MonitoringSettings(ProjectSettings):
     ENVIRONMENT: str
 
 
-class BaseGeneralSettings(IAMSettings, MonitoringSettings): ...
+class BaseGeneralSettings(
+    IAMSettings, MonitoringSettings, LoggingSettings
+): ...

@@ -18,6 +18,7 @@ from fastloom.launcher.utils import (
     get_tenant_cls,
     is_installed,
 )
+from fastloom.logging.lifehooks import setup_logging
 from fastloom.monitoring import InitMonitoring, Instruments
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
@@ -48,6 +49,7 @@ def app():
             Configs[LauncherSettings].general.LOGGING_EXCLUDED_ENDPOINTS
         )
     )
+    setup_logging()
     if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
         RabbitSubscriber(Configs[RabbitSubscriptable].general)
     elif is_installed("aio-pika"):
