@@ -68,7 +68,7 @@ class Organization(OrganizationAttributes):
 class UserClaims(BaseModel):
     iss: HttpUrl
     id: UUID = Field(alias="sub")
-    session_id: UUID = Field(alias="sid")
+    sid: str = Field(alias="sid")
     username: str = Field(alias="preferred_username")
     name: str
     given_name: str
