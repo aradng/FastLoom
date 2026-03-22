@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from os import getenv
-from typing import Callable
 
 
 def get_env_or_err(field_name: str) -> Callable[[], str]:

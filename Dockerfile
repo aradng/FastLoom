@@ -8,7 +8,7 @@ ENV TZ=UTC \
     PIP_NO_CACHE_DIR=1 \
     POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_VERSION=2.1.3
+    POETRY_VERSION=2.3.2
 
 RUN apt-get update && apt-get install -y \
     git jq curl\

@@ -30,7 +30,7 @@ runs:
     - name: Install Python poetry
       uses: snok/install-poetry@v1
       with:
-        version: 2.1.3
+        version: 2.3.2
         virtualenvs-create: true
         virtualenvs-in-project: true
         installer-parallel: true

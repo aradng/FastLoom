@@ -7,14 +7,11 @@ from pydantic import (
 
 from fastloom.auth.schemas import OAuth2MergedScheme, OIDCCScheme
 from fastloom.logging.settings import LoggingSettings
-from fastloom.settings.utils import get_env_or_err
 from fastloom.types import Str
 
 
 class ProjectSettings(BaseModel):
-    PROJECT_NAME: str = Field(
-        default_factory=get_env_or_err("PROJECT_NAME"),
-    )
+    PROJECT_NAME: str
 
 
 class FastAPISettings(ProjectSettings):

@@ -1,5 +1,4 @@
 import logging
-import os
 from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
@@ -32,6 +31,7 @@ class BaseDocumentSignal(Document):
     _sent_events: set[tuple[UUID, Operations]] = PrivateAttr(
         default_factory=set
     )
+    _PROJECT_NAME: str = ""
 
     @model_validator(mode="after")
     def validate_state_management(self):
@@ -54,10 +54,7 @@ class BaseDocumentSignal(Document):
 
     @classmethod
     def get_subscription_topic(cls, operation: Operations):
-        project_name = os.getenv("PROJECT_NAME")
-        if not project_name:
-            raise ValueError("PROJECT_NAME environment variable is not set")
-        return f"{project_name}.{cls.get_collection_name()}.{operation.value}"  # type: ignore[attr-defined]  # noqa
+        return f"{cls._PROJECT_NAME}.{cls.get_collection_name()}.{operation.value}"  # type: ignore[attr-defined]  # noqa
 
     @classmethod
     def check_state_management(cls):

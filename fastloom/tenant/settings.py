@@ -13,6 +13,7 @@ from fastloom.auth.depends import (
 )
 from fastloom.cache.base import BaseCache, BaseTenantSettingCache
 from fastloom.cache.lifehooks import RedisHandler
+from fastloom.db.signals import BaseDocumentSignal
 
 if TYPE_CHECKING:
     from aredis_om.model.model import NotFoundError
@@ -97,6 +98,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
     optional_auth: OptionalJWTAuth
     documents_enabled: bool = False
     cache_enabled: bool = False
+    service_cls: type[T]
     tenant_cls: type[V]
     # cache
     tenant_schema: SettingCacheSchema[V]
@@ -110,41 +112,51 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
             return
         super().__init__()
         self.tenant_cls = tenant_cls
+        self.service_cls = service_cls
         self._load_settings_yaml(service_cls, tenant_cls)
-        if issubclass(service_cls, RedisSettings):
-            BaseCache.Meta.database = RedisHandler(self.general).redis
-            BaseTenantSettingCache.Meta.database = RedisHandler(
-                self.general
-            ).redis
-        self.tenant_schema = SettingCacheSchema(tenant_cls)
         self._load_tenant_yaml()
         self.from_ = self._from_()
         self.settings_from = GetSettingsFrom[V](self.from_)
         self.auth = self._auth()
         self.optional_auth = self._optional_auth()
         # cache
-        if issubclass(service_cls, MongoSettings):
-            self.documents_enabled = True
+        self._setup_mongo()
+        self._setup_redis()
+
+    def _setup_mongo(self):
+        if not issubclass(self.service_cls, MongoSettings):
+            return
+
+        self.documents_enabled = True
+
+        if isinstance(self.general, MonitoringSettings):
+            BaseDocumentSignal._PROJECT_NAME = self.general.PROJECT_NAME
+
+    def _setup_redis(self):
+        if not issubclass(self.service_cls, RedisSettings):
+            return
+
         self.cache_enabled = RedisHandler.enabled
+
+        BaseCache.Meta.database = RedisHandler(self.general).redis
+        BaseTenantSettingCache.Meta.database = RedisHandler(self.general).redis
+        self.tenant_schema = SettingCacheSchema(self.tenant_cls)
+
         if isinstance(self.general, MonitoringSettings):
             narrowed_general = self.general
             self.tenant_schema.cache.Meta.model_key_prefix = (
                 f"{narrowed_general.PROJECT_NAME}"
             )
 
-    def _load_settings_yaml(
-        self,
-        service_cls: type[T],
-        tenant_cls: type[V],
-    ):
+    def _load_settings_yaml(self):
         self.settings = load_settings(
             new_class(
                 "_SettingsWithTenants",
-                (service_cls, tenant_cls),
+                (self.service_cls, self.tenant_cls),
             ),
         )
         # ^backward compatibility
-        self.general = load_settings(service_cls, defaults_only=True)[
+        self.general = load_settings(self.service_cls, defaults_only=True)[
             DEFAULT_CONFIG_KEY
         ]
 

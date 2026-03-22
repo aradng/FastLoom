@@ -1,7 +1,6 @@
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from os import getpid
-from typing import Callable
 
 from fastloom.cache.lifehooks import RedisHandler
 from fastloom.settings.base import ProjectSettings
