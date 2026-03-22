@@ -113,13 +113,12 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         super().__init__()
         self.tenant_cls = tenant_cls
         self.service_cls = service_cls
-        self._load_settings_yaml(service_cls, tenant_cls)
+        self._load_settings_yaml()
         self._load_tenant_yaml()
         self.from_ = self._from_()
         self.settings_from = GetSettingsFrom[V](self.from_)
         self.auth = self._auth()
         self.optional_auth = self._optional_auth()
-        # cache
         self._setup_mongo()
         self._setup_redis()
 
