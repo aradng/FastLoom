@@ -1,9 +1,40 @@
 import logging
 from enum import Enum
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID
 
-from beanie import Document, Insert, Replace, SaveChanges, Update, after_event
+if TYPE_CHECKING:
+    from beanie import (
+        Document,
+        Insert,
+        Replace,
+        SaveChanges,
+        Update,
+        after_event,
+    )
+else:
+    try:
+        from beanie import (
+            Document,
+            Insert,
+            Replace,
+            SaveChanges,
+            Update,
+        )
+    except ImportError:
+        from pydantic import BaseModel as Document
+        from pydantic import BaseModel as Insert
+        from pydantic import BaseModel as Replace
+        from pydantic import BaseModel as SaveChanges
+        from pydantic import BaseModel as Update
+
+        def after_event(*args, **kwargs):
+            def decorator(func):
+                return func
+
+            return decorator
+
+
 from pydantic import BaseModel, PrivateAttr, create_model, model_validator
 
 from fastloom.signals.depends import RabbitSubscriber
