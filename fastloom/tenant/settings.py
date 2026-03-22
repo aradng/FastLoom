@@ -113,6 +113,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         super().__init__()
         self.tenant_cls = tenant_cls
         self.service_cls = service_cls
+        self.tenant_schema = SettingCacheSchema(self.tenant_cls)
         self._load_settings_yaml()
         self._load_tenant_yaml()
         self.from_ = self._from_()
@@ -137,9 +138,10 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
 
         self.cache_enabled = RedisHandler.enabled
 
-        BaseCache.Meta.database = RedisHandler(self.general).redis
-        BaseTenantSettingCache.Meta.database = RedisHandler(self.general).redis
-        self.tenant_schema = SettingCacheSchema(self.tenant_cls)
+        redis = RedisHandler(self.general).redis
+        BaseCache.Meta.database = redis
+        BaseTenantSettingCache.Meta.database = redis
+        self.tenant_schema.cache.Meta.database = redis
 
         if isinstance(self.general, MonitoringSettings):
             narrowed_general = self.general
