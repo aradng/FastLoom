@@ -1,5 +1,8 @@
+import inspect
+from pathlib import Path
 from typing import Any, Self, cast
 
+import tomllib
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 
@@ -55,3 +58,33 @@ def create_optional_model[T: BaseModel](
             for k, v in model.model_fields.items()
         },
     )
+
+
+def infer_project_name():
+    file = (
+        Path(
+            next(
+                filter(
+                    lambda x: (
+                        __name__.split(".")[0] not in x.filename
+                        and ".venv" not in x.filename
+                        and "site-packages" not in x.filename
+                    ),
+                    inspect.stack(),
+                ),
+            ).filename
+        ).parent
+        / "pyproject.toml"
+    )
+    if not file.exists():
+        raise FileNotFoundError(
+            "Could not find pyproject.toml to infer project name"
+        )
+    data = tomllib.loads(file.read_text())
+    project_name = (
+        data.get("project", {}).get("name")  # PEP 621
+        or data.get("tool", {}).get("poetry", {}).get("name")  # Poetry
+    )
+    if not isinstance(project_name, str):
+        raise ValueError("Could not infer project name in pyproject.toml")
+    return project_name

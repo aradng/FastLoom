@@ -4,6 +4,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, Self
 
 from fastloom.cache.settings import RedisSettings
+from fastloom.db.signals import BaseDocumentSignal
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.signals.lifehooks import init_signals
 from fastloom.signals.settings import RabbitmqSettings
@@ -29,7 +30,6 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
-    computed_field,
     model_validator,
 )
 from starlette.requests import Request
@@ -82,11 +82,6 @@ class App(BaseModel):
         default_factory=list
     )
     cache_healthcheck: bool = False
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def project_name(self) -> str | None:
-        return self.models[0].__module__.split(".")[0] if self.models else None
 
     def load_routes(self, app: FastAPI):
         for router, prefix, name in self.routes:
@@ -163,3 +158,11 @@ class App(BaseModel):
                 "Settings does not inherit from RabbitmqSettings"
             )
         return self
+
+    @property
+    def stream_models(self) -> list[type[BaseDocumentSignal]]:
+        return [
+            model
+            for model in self.models
+            if issubclass(model, BaseDocumentSignal)
+        ]

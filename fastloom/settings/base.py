@@ -7,11 +7,12 @@ from pydantic import (
 
 from fastloom.auth.schemas import OAuth2MergedScheme, OIDCCScheme
 from fastloom.logging.settings import LoggingSettings
+from fastloom.meta import infer_project_name
 from fastloom.types import Str
 
 
 class ProjectSettings(BaseModel):
-    PROJECT_NAME: str
+    PROJECT_NAME: str = Field(default_factory=infer_project_name)
 
 
 class FastAPISettings(ProjectSettings):

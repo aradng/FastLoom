@@ -1,27 +1,14 @@
 import pkgutil
 from importlib import import_module
 from types import ModuleType
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from beanie import Document
-
-    from fastloom.db.signals import (
-        Operations,
-        SignalsSave,
-        SignalsUpdate,
-    )
-else:
-    try:
-        from fastloom.db.signals import (
-            Operations,
-            SignalsSave,
-            SignalsUpdate,
-        )
-    except ImportError:
-        from types import NoneType as Operations
-        from types import NoneType as SignalsSave
-        from types import NoneType as SignalsUpdate
+from fastloom.db.signals import (
+    BaseDocumentSignal,
+    Operations,
+    SignalsDelete,
+    SignalsInsert,
+    SignalsUpdate,
+)
 
 
 def init_signals(module: ModuleType):
@@ -38,10 +25,19 @@ def init_signals(module: ModuleType):
 
 
 def init_streams(
-    models: list[type["Document"]],
+    models: list[type[BaseDocumentSignal]],
 ):
     for model_cls in models:
-        if issubclass(model_cls, SignalsSave):
-            model_cls.get_publisher(Operations.SAVE)
+        if (
+            model_cls is BaseDocumentSignal
+            or model_cls is SignalsInsert
+            or model_cls is SignalsUpdate
+            or model_cls is SignalsDelete
+        ):
+            continue
+        if issubclass(model_cls, SignalsInsert):
+            model_cls.get_publisher(Operations.CREATE)
         if issubclass(model_cls, SignalsUpdate):
             model_cls.get_publisher(Operations.UPDATE)
+        if issubclass(model_cls, SignalsDelete):
+            model_cls.get_publisher(Operations.DELETE)

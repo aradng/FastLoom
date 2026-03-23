@@ -23,6 +23,7 @@ from fastloom.monitoring import InitMonitoring, Instruments
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
+from fastloom.signals.lifehooks import init_streams
 from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.settings import ConfigAlias as Configs
 
@@ -33,10 +34,13 @@ logger: Logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     service_app = get_app()
     await service_app.load()
+    init_streams(service_app.stream_models)
+
     if Configs.cache_enabled:
         from aredis_om import Migrator
 
         await Migrator().run()
+
     async with service_app.lifespan_fn(app):
         yield
 
@@ -77,6 +81,10 @@ def app():
             docs_url=f"{Configs[FastAPISettings].general.API_PREFIX}/docs",
             redoc_url=f"{Configs[FastAPISettings].general.API_PREFIX}/redoc",
             openapi_url=f"{Configs[FastAPISettings].general.API_PREFIX}/openapi.json",
+            swagger_ui_oauth2_redirect_url=f"{Configs[FastAPISettings].general.API_PREFIX}/docs/oauth2-redirect",
+            swagger_ui_init_oauth={
+                "additionalQueryStringParams": {"browser": "false"},
+            },
         )
         monitor.instrument(app)
 
