@@ -1,39 +1,24 @@
 from pydantic import (
     BaseModel,
     Field,
-    HttpUrl,
     computed_field,
 )
 
-from fastloom.auth.schemas import OAuth2MergedScheme, OIDCCScheme
-from fastloom.logging.settings import LoggingSettings
 from fastloom.meta import infer_project_name
-from fastloom.types import Str
 
 
 class ProjectSettings(BaseModel):
     PROJECT_NAME: str = Field(default_factory=infer_project_name)
 
-
-class FastAPISettings(ProjectSettings):
-    DEBUG: bool = True
-
-    @computed_field  # type: ignore[misc]
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def API_PREFIX(self) -> str:
         return f"/api/{self.PROJECT_NAME}"
 
 
-class IAMSettings(OAuth2MergedScheme, OIDCCScheme):
-    INTROSPECT: bool = False
-    ACL: bool = False
-    IAM_SIDECAR_URL: Str[HttpUrl] | None = Field(None, validate_default=True)
+class FastAPISettings(ProjectSettings):
+    DEBUG: bool = True
 
 
 class MonitoringSettings(ProjectSettings):
     ENVIRONMENT: str
-
-
-class BaseGeneralSettings(
-    IAMSettings, MonitoringSettings, LoggingSettings
-): ...

@@ -7,11 +7,8 @@ from fastapi.security import OAuth2, OpenIdConnect
 from jose.jwt import get_unverified_claims
 
 from fastloom.auth import Claims
-from fastloom.auth.schemas import (
-    IntrospectionResponse,
-    UserClaims,
-)
-from fastloom.settings.base import IAMSettings
+from fastloom.auth.schemas import UserClaims
+from fastloom.auth.settings import IAMSettings, IntrospectionResponse
 
 
 class OptionalJWTAuth:

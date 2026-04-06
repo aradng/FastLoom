@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
     return RabbitRouter(
         settings.RABBIT_URI,
-        schema_url=f"/{name}/asyncapi",
+        schema_url=f"{name}/asyncapi",
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()
@@ -34,7 +34,7 @@ def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
     )
 
 
-class RabbitSubscriptable(RabbitmqSettings, MonitoringSettings): ...
+class RabbitSubscriptable(MonitoringSettings, RabbitmqSettings): ...
 
 
 class RabbitSubscriber(SelfSustaining):
@@ -77,10 +77,7 @@ class RabbitSubscriber(SelfSustaining):
         if exceptions is None:
             exceptions = [Exception]
         self.router = get_rabbit_router(
-            f"api/{self._settings.PROJECT_NAME}",
-            RabbitmqSettings.model_validate(
-                self._settings, from_attributes=True
-            ),
+            self._settings.API_PREFIX, self._settings
         )
         self.exchange = RabbitExchange(
             name="amq.topic", type=ExchangeType.TOPIC, durable=True

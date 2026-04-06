@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Self
 
+from starlette.types import ASGIApp
+
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.signals import BaseDocumentSignal
 from fastloom.launcher.settings import LauncherSettings
@@ -74,6 +76,9 @@ class App(BaseModel):
     healthchecks: list[Healthcheck] = Field(default_factory=list)
     additional_instruments: list[Callable] = Field(default_factory=list)
     routes: list[Route] = Field(default_factory=list)
+    mounts: list[tuple[str, ASGIApp] | tuple[str, ASGIApp, str]] = Field(
+        default_factory=list
+    )
     models: list[type[Document] | type[UnionDoc] | type[View]] = Field(
         default_factory=list
     )
@@ -90,6 +95,10 @@ class App(BaseModel):
                 prefix=Configs[FastAPISettings].general.API_PREFIX + prefix,  # type: ignore[misc]
                 tags=[name],
             )
+
+    def load_mounts(self, app: FastAPI):
+        for mount in self.mounts:
+            app.mount(*mount)
 
     async def load(self):
         await self.load_db()

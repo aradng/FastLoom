@@ -16,10 +16,14 @@ from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
 )
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.trace import Span
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, BaseModel
 from sentry_sdk import init as sentry_init
 
+from fastloom.cache.settings import RedisSettings
+from fastloom.db.settings import MongoSettings
+from fastloom.launcher.utils import is_installed
 from fastloom.observability.settings import ObservabilitySettings
+from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
 
 if TYPE_CHECKING:
@@ -269,6 +273,23 @@ def instrument_otel(
         func(*args) if args is not None else func()
 
 
+def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
+    instruments = []
+    if is_installed("httpx"):
+        instruments.append(Instruments.HTTPX)
+    if isinstance(settings, RedisSettings):
+        instruments.append(Instruments.REDIS)
+    if isinstance(settings, RabbitmqSettings):
+        instruments.append(Instruments.RABBIT)
+    if isinstance(settings, MongoSettings):
+        instruments.append(Instruments.MONGODB)
+    if isinstance(settings, ObservabilitySettings) and settings.METRICS:
+        instruments.append(Instruments.METRICS)
+    if is_installed("pydantic_ai"):
+        instruments.append(Instruments.PYDANTIC_AI)
+    return instruments
+
+
 class InitMonitoring:
     def __init__(
         self,
@@ -283,7 +304,10 @@ class InitMonitoring:
             init_sentry(self.settings.SENTRY_DSN, self.settings.ENVIRONMENT)
 
         if int(self.settings.OTEL_ENABLED):
-            instrument_otel(self.settings, only=self.instruments)
+            instrument_otel(
+                self.settings,
+                only=self.instruments + infer_instruments(self.settings),
+            )
 
         return self
 

@@ -1,12 +1,10 @@
 import importlib.util
 import logging
 import os
-import re
 import signal
 import sys
 from functools import lru_cache
 from pathlib import Path
-from re import Pattern
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
@@ -52,22 +50,6 @@ def get_tenant_cls() -> SettingsCls:
     except AttributeError:
         logging.debug("No TenantSettings Found In settings.py")
         return BaseModel
-
-
-class EndpointFilter(logging.Filter):
-    def __init__(
-        self, excluded_endpoints: tuple[Pattern | str, ...] = ()
-    ) -> None:
-        super().__init__()
-        self.excluded_endpoints = excluded_endpoints
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if not record.args or len(record.args) < 3:
-            return True
-        endpoint: str = record.args[2]  # type: ignore[assignment, index]
-        return not any(
-            re.match(exp, endpoint) for exp in self.excluded_endpoints
-        )
 
 
 def reload_app():
