@@ -1,8 +1,8 @@
 import inspect
+import tomllib
 from pathlib import Path
 from typing import Any, Self, cast
 
-import tomllib
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 

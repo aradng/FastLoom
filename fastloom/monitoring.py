@@ -7,7 +7,6 @@ from os import getenv
 from typing import TYPE_CHECKING, Any
 
 import logfire
-import orjson
 from jose.exceptions import JWTError
 from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
@@ -176,7 +175,7 @@ def instrument_confluent_kafka():
     )
 
 
-def instrument_rabbit():  # TODO: check if logfire picks this up
+def instrument_rabbit():
     from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 
     AioPikaInstrumentor().instrument(
@@ -185,33 +184,12 @@ def instrument_rabbit():  # TODO: check if logfire picks this up
 
 
 def instrument_mongodb():
-    from bson import DBRef, Decimal128, ObjectId
-    from pymongo import monitoring
-
-    def parse_mongo_types(obj: object):
-        if isinstance(obj, Decimal128):
-            return str(obj.to_decimal())
-        if ObjectId.is_valid(obj):
-            return str(obj)
-        if isinstance(obj, DBRef):
-            return str(obj)
-        raise TypeError()
-
-    def _response_hook(span: Span, event: monitoring.CommandSucceededEvent):
-        if span and span.is_recording():
-            span.set_attribute(
-                "db.mongodb.server_reply",
-                orjson.dumps(
-                    event.reply,
-                    default=parse_mongo_types,
-                    option=orjson.OPT_NAIVE_UTC,
-                ),
-            )
+    from fastloom.db.monitoring import response_hook
 
     logfire.instrument_pymongo(
         tracer_provider=trace.get_tracer_provider(),
         capture_statement=True,
-        response_hook=_response_hook,
+        response_hook=response_hook,
     )
 
 
@@ -222,6 +200,10 @@ def instrument_openai(client: Any | None = None):
         raise ValueError("client must be an instance of OpenAI or AsyncOpenAI")
 
     logfire.instrument_openai(client)
+
+
+def instrument_pydantic():
+    logfire.instrument_pydantic()
 
 
 def instrument_pydantic_ai():
@@ -236,8 +218,9 @@ class Instruments(Enum):
     REQUESTS = instrument_requests
     METRICS = instrument_metrics
     MONGODB = instrument_mongodb
-    OPENAI = instrument_openai
+    PYDANTIC = instrument_pydantic
     PYDANTIC_AI = instrument_pydantic_ai
+    OPENAI = instrument_openai
 
 
 def instrument_otel(
@@ -274,7 +257,7 @@ def instrument_otel(
 
 
 def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
-    instruments = []
+    instruments: list[Instruments] = []
     if is_installed("httpx"):
         instruments.append(Instruments.HTTPX)
     if isinstance(settings, RedisSettings):

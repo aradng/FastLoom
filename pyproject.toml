@@ -1,99 +1,86 @@
 [project]
 name = "fastloom"
-version = "0.4.26"
+version = "0.4.27"
 description = "Core package"
 authors = []
 readme = "README.md"
+classifiers = ["Programming Language :: Python :: 3.13", "Typing :: Typed"]
+urls = { "Repository" = "https://github.com/aradng/FastLoom" }
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "jdatetime>=4.1.1,<5.0.0",
+    "python-jose>=3.5.0,<4.0.0",
+    "pydantic[email]>=2.12,<3.0.0",
+    "uvicorn>=0.35.0,<0.36.0",
+    "orjson==3.10.14",
+    "pyyaml>=6.0.2,<7.0.0",
+    "logfire[system-metrics,asgi,fastapi,celery,httpx,requests,redis,pymongo,openai]>=4.0.0,<5.0.0",
+    "sentry-sdk[fastapi]>=2.0.0,<3.0.0",
+    "opentelemetry-distro",
+    "opentelemetry-exporter-otlp",
+    "babel>=2.17.0,<3.0.0",
+    "jinja2>=3.1.6,<4.0.0",
+]
+
+[project.optional-dependencies]
+rabbit = [
+    "uvicorn",
+    "faststream[otel,rabbit]",
+    "opentelemetry-instrumentation-aio-pika",
+]
+kafka = [
+    "uvicorn",
+    "faststream[otel,confluent]",
+    "opentelemetry-instrumentation-confluent-kafka",
+]
+redis = ["faststream[redis]", "redis-om>=1.0,<2.0"]
+fastapi = ["fastapi>=0,<1", "uvicorn", "python-multipart"]
+
+mongo = ["beanie>=2.0.0,<3.0.0"]
+celery = ["celery>=5.5.3,<6.0.0"]
+httpx = ["httpx>=0.28.0,<0.29.0"]
+requests = ["requests>=2.32.0,<3.0.0"]
+openai = ["openai>=1,<2"]
+dev = [
+    "pre-commit>=4.5,<5.0.0",
+    "ruff>=0.15,<0.16.0",
+    "mypy>=1.19,<2.0.0",
+    "ipykernel>=6.30.0,<7.0.0",
+]
 
 [tool.mypy]
-plugins = ["pydantic.mypy"]
-[[tool.mypy.overrides]]
-module = "aredis_om.*"
-ignore_missing_imports = true
+plugins = ["pydantic.mypy", "returns.contrib.mypy.returns_plugin"]
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
 
-[tool.poetry.dependencies]
-python = ">=3.12,<3.14"
-jdatetime = "^4.1.1"
-beanie = "^2.0.0"
-python-jose = "^3.5.0"
-pydantic = { version = "^2.12", extras = ["email"] }
-uvicorn = "^0.35.0"
-orjson = "3.10.14"
-pyyaml = "^6.0.2"
-
-fastapi = { version = "^0", optional = true }
-python-multipart = { version = "*", optional = true }
-faststream = { version = "^0.6.0", extras = [
-    "rabbit",
-    "otel",
-], optional = true }
-celery = { version = "^5.5.3", optional = true }
-httpx = { version = "^0.28.0", optional = true }
-requests = { version = "^2.32.0", optional = true }
-redis-om = { version = "^1.0", optional = true }
-openai = { version = "^1", optional = true }
-logfire = { version = "^4.0.0", extras = [
-    "system-metrics",
-    "asgi",
-    "fastapi",
-    "celery",
-    "httpx",
-    "requests",
-    "redis",
-    "pymongo",
-    "openai",
-] }
-sentry-sdk = { extras = ["fastapi"], version = "^2.0.0" }
-opentelemetry-distro = "*"
-opentelemetry-exporter-otlp = "*"
-opentelemetry-instrumentation-aio-pika = { version = "*", optional = true }
-babel = "^2.17.0"
-jinja2 = "^3.1.6"
-
-# dev
-pre-commit = { version = "^4.5", optional = true }
-ruff = { version = "^0.15", optional = true }
-mypy = { version = "^1.19", optional = true }
-ipykernel = { version = "^6.30.0", optional = true }
-
-[tool.poetry.extras]
-FastAPI = ["fastapi", "python-multipart", "uvicorn"]
-Rabbit = [
-    "fastapi",
-    "uvicorn",
-    "faststream",
-    "opentelemetry-instrumentation-aio-pika",
+[dependency-groups]
+test = [
+    "pytest-asyncio>=0.21.1,<0.22.0",
+    "deepdiff>=6.7.0,<7.0.0",
+    "pytest>=7.4.3,<8.0.0",
+    "pytest-mock>=3.12.0,<4.0.0",
+    "freezegun>=1.2.2,<2.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-xdist>=3.5.0,<4.0.0",
 ]
-Celery = ["celery"]
-HTTPx = ["httpx"]
-Requests = ["requests"]
-Redis = ["redis-om"]
-Mongodb = ["beanie"]
-OpenAI = ["openai"]
-Dev = ["pre-commit", "ruff", "mypy", "ipykernel"]
 
-[tool.poetry.group.test.dependencies]
-pytest-asyncio = "^0.21.1"
-deepdiff = "^6.7.0"
-pytest = "^7.4.3"
-pytest-mock = "^3.12.0"
-freezegun = "^1.2.2"
-pytest-cov = "^4.1.0"
-pytest-xdist = "^3.5.0"
+
+dev = [
+    { include-group = "test" },
+    "types-pyyaml",
+    "types-requests",
+    "types-redis",
+    "types-python-jose",
+]
 
 [tool.poetry.group.dev]
 optional = true
 
-[tool.poetry.group.dev.dependencies]
-types-pyyaml = "*"
-types-requests = "*"
-types-redis = "*"
-types-python-jose = "*"
+[tool.poetry.group.test]
+optional = true
 
 [project.scripts]
 launch = "fastloom.launcher.main:main"

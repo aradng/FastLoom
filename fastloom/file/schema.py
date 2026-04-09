@@ -2,7 +2,7 @@ import json
 from collections.abc import Generator
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeAlias
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -109,4 +109,4 @@ FileField = Annotated[
 
 OptionalFileField = Annotated[FileField | None, Field(None)]
 
-FileFind: TypeAlias = Generator[FileField, Any, None]
+FileFind = Generator[FileField, Any, None]
