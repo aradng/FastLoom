@@ -1,6 +1,6 @@
 [project]
 name = "fastloom"
-version = "0.4.27"
+version = "0.4.28"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -47,6 +47,17 @@ dev = [
     "mypy>=1.19,<2.0.0",
     "ipykernel>=6.30.0,<7.0.0",
 ]
+test = [
+    "pytest (>=9.0.3,<10.0.0)",
+    "pytest-mock (>=3.15.1,<4.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)",
+    "pytest-xdist (>=3.8.0,<4.0.0)",
+    "pytest-asyncio (>=1.3.0,<2.0.0)",
+    "testcontainers (>=4.14.2,<5.0.0)",
+    "deepdiff (>=9.0.0,<10.0.0)",
+    "freezegun (>=1.5.5,<2.0.0)",
+    "pytest-lazy-fixtures (>=1.4.0,<2.0.0)",
+]
 
 [tool.mypy]
 plugins = ["pydantic.mypy", "returns.contrib.mypy.returns_plugin"]
@@ -58,13 +69,13 @@ warn_required_dynamic_aliases = true
 
 [dependency-groups]
 test = [
-    "pytest-asyncio>=0.21.1,<0.22.0",
-    "deepdiff>=6.7.0,<7.0.0",
-    "pytest>=7.4.3,<8.0.0",
-    "pytest-mock>=3.12.0,<4.0.0",
-    "freezegun>=1.2.2,<2.0.0",
-    "pytest-cov>=4.1.0,<5.0.0",
-    "pytest-xdist>=3.5.0,<4.0.0",
+    "pytest-asyncio",
+    "deepdiff",
+    "pytest",
+    "pytest-mock",
+    "freezegun",
+    "pytest-cov",
+    "pytest-xdist",
 ]
 
 

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import (
@@ -7,6 +7,7 @@ from pydantic import (
     Field,
     HttpUrl,
     computed_field,
+    model_serializer,
 )
 
 ADMIN_ROLE = "ADMIN"
@@ -68,3 +69,11 @@ class UserClaims(BaseModel):
     @property
     def is_admin(self) -> bool:
         return ADMIN_ROLE in self.roles
+
+    @model_serializer(when_used="json")
+    def serialize(self) -> dict[str, Any]:
+        data = self.model_dump(
+            by_alias=True, exclude={"tenant", "organization", "is_admin"}
+        )
+        data["scope"] = " ".join(self.scope)
+        return data

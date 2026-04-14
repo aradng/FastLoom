@@ -1,11 +1,9 @@
 from collections.abc import MutableMapping
 from contextlib import suppress
-from pathlib import Path
 from types import new_class
-from typing import TYPE_CHECKING, Annotated, Any, TypeVar
+from typing import TYPE_CHECKING, Annotated, TypeVar
 
-import yaml
-from pydantic import BaseModel, RootModel, StringConstraints
+from pydantic import BaseModel, StringConstraints
 
 from fastloom.auth.depends import (
     JWTAuth,
@@ -46,42 +44,15 @@ from fastloom.tenant.depends import (
     TokenHeaderSource,
 )
 from fastloom.tenant.protocols import TenantHostSchema, TenantNameSchema
-from fastloom.tenant.utils import SettingCacheSchema
-
-DEFAULT_CONFIG_KEY: str = "default"
+from fastloom.tenant.utils import (
+    DEFAULT_CONFIG_KEY,
+    SettingCacheSchema,
+    load_settings,
+)
 
 TenantName = Annotated[str, StringConstraints(strip_whitespace=True)]
 TenantMapping = MutableMapping[TenantName, TenantNameSchema]
 TenantMappingWithHosts = MutableMapping[TenantName, TenantHostSchema]
-
-
-def load_settings[T: BaseModel](
-    settings_cls: type[T],
-    config_yml_file: Path | None = None,
-    defaults_only=False,
-) -> MutableMapping[str, T]:
-    config_yml_file = config_yml_file or Path.cwd() / "tenants.yaml"
-    _loaded_configs: dict[str, Any]
-    with config_yml_file.open() as f:
-        _loaded_configs = yaml.safe_load(f)
-
-    _default_config: dict[str, Any] = _loaded_configs.pop(
-        DEFAULT_CONFIG_KEY, {}
-    )
-    if defaults_only:
-        return {
-            DEFAULT_CONFIG_KEY: settings_cls.model_validate(_default_config)
-        }  # type: ignore[valid-type]
-    return (
-        RootModel[dict[str, settings_cls]]  # type: ignore[valid-type]
-        .model_validate(
-            {
-                tenant: _default_config | (config or {})
-                for tenant, config in _loaded_configs.items()
-            }
-        )
-        .root
-    )
 
 
 class GetSettingsFrom[V](BaseGetFrom):
@@ -157,9 +128,13 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
             ),
         )
         # ^backward compatibility
-        self.general = load_settings(self.service_cls, defaults_only=True)[
-            DEFAULT_CONFIG_KEY
-        ]
+        self.general = self.service_cls.model_validate(
+            load_settings(self.service_cls, defaults_only=True)[
+                DEFAULT_CONFIG_KEY
+            ],
+            from_attributes=True,
+            extra="ignore",
+        )
 
     def _load_tenant_yaml(
         self,
