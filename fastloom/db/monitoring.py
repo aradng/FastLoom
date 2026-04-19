@@ -10,6 +10,7 @@ from bson.binary import (
     Binary,
     BinaryVector,
 )
+from bson.timestamp import Timestamp
 from opentelemetry.trace import Span
 from pymongo import monitoring
 
@@ -17,10 +18,14 @@ from pymongo import monitoring
 def _parse_mongo_types(obj):
     if isinstance(obj, Decimal128):
         return str(obj.to_decimal())
-    if ObjectId.is_valid(obj):
+    if isinstance(obj, ObjectId):
         return str(obj)
     if isinstance(obj, DBRef):
-        return str(obj)
+        return {
+            "$ref": obj.collection,
+            "$id": str(obj.id),
+            "$db": obj.database,
+        }
     if isinstance(obj, Binary) and obj.subtype in ALL_UUID_SUBTYPES:
         return obj.as_uuid()
     if isinstance(obj, Binary) and obj.subtype == VECTOR_SUBTYPE:
@@ -29,6 +34,12 @@ def _parse_mongo_types(obj):
         return repr(obj)
     if isinstance(obj, Binary):
         return obj.hex()
+    if isinstance(obj, Timestamp):
+        return {
+            "timestamp": obj.time,
+            "increment": obj.inc,
+            "datetime": obj.as_datetime(),
+        }
     raise TypeError(obj)
 
 
@@ -40,5 +51,5 @@ def response_hook(span: Span, event: monitoring.CommandSucceededEvent):
                 event.reply,
                 default=_parse_mongo_types,
                 option=orjson.OPT_NAIVE_UTC,
-            ),
+            ).decode(),
         )
