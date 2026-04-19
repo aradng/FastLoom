@@ -32,7 +32,7 @@ def _parse_mongo_types(obj):
         return repr(obj.as_vector())
     if isinstance(obj, BinaryVector):
         return repr(obj)
-    if isinstance(obj, Binary):
+    if isinstance(obj, Binary | bytes):
         return obj.hex()
     if isinstance(obj, Timestamp):
         return {
