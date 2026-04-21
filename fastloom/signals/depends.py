@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 from aio_pika import Message
+from aiormq import ChannelClosed, ChannelInvalidStateError
 from faststream import ExceptionMiddleware
 from faststream.rabbit import (
     ExchangeType,
@@ -11,7 +12,11 @@ from faststream.rabbit import (
 )
 from faststream.rabbit.fastapi import RabbitRouter
 from faststream.rabbit.publisher.usecase import RabbitPublisher
-from faststream.rabbit.schemas.queue import ClassicQueueArgs
+from faststream.rabbit.schemas.queue import (
+    ClassicQueueArgs,
+    QuorumQueueArgs,
+    StreamQueueArgs,
+)
 from opentelemetry import trace
 
 from fastloom.meta import SelfSustaining
@@ -114,15 +119,28 @@ class RabbitSubscriber(SelfSustaining):
         return routing_key.replace("*", "__all__")
 
     @classmethod
-    def _get_queue(cls, name: str) -> RabbitQueue:
+    def _get_queue(
+        cls,
+        name: str,
+        durable: bool,
+        auto_delete: bool,
+        queue_arguments: QuorumQueueArgs
+        | ClassicQueueArgs
+        | StreamQueueArgs
+        | None = None,
+    ) -> RabbitQueue:
         """
         :param name: name of the queue
+        :param durable: whether the queue is durable
+        :param auto_delete: whether the queue is auto-deleted
         :return: RabbitQueue
         """
         return RabbitQueue(
             name=cls._get_queue_name(cls._sanitize_routing_key(name)),
             routing_key=name,
-            durable=True,
+            durable=durable,
+            auto_delete=auto_delete,
+            arguments=queue_arguments,
         )
 
     @classmethod
@@ -130,19 +148,26 @@ class RabbitSubscriber(SelfSustaining):
         cls,
         routing_key: str,
         delay: int,
+        fallback: bool = False,
     ) -> RabbitQueue:
         """
         :param routing_key: routing key for the queue
         :param delay: delay in seconds
+        :param fallback: whether this is a fallback queue
         :return: RabbitQueue
 
         creates a dead letter queue with specified delay
         and binds it to the exchange
         """
-
+        suffix = ".fallback" if fallback else ""
+        queue_name = (
+            f"{cls._get_dlx_name(cls._sanitize_routing_key(routing_key))}"
+            f".{delay}{suffix}"
+        )
+        dlx_routing_key = f"{routing_key}{cls._dlx_suffix()}.{delay}{suffix}"
         queue = RabbitQueue(
-            name=f"{cls._get_dlx_name(cls._sanitize_routing_key(routing_key))}.{delay}",
-            routing_key=f"{routing_key}{cls._dlx_suffix()}.{delay}",
+            name=queue_name,
+            routing_key=dlx_routing_key,
             durable=True,
             arguments=ClassicQueueArgs(
                 {
@@ -151,7 +176,7 @@ class RabbitSubscriber(SelfSustaining):
                         f"{routing_key}{cls._dlx_suffix()}"
                     ),
                     "x-message-ttl": delay * 1000,
-                    # "x-expires": delay * 2000,
+                    "x-expires": delay * 2000,
                 }
             ),
         )
@@ -159,13 +184,24 @@ class RabbitSubscriber(SelfSustaining):
         robust_queue = await cls.router.broker.declare_queue(
             queue=queue,
         )
-        dlx = await cls.router.broker.declare_exchange(cls.exchange)
+        dlx_exchange = await cls.router.broker.declare_exchange(cls.exchange)
         await robust_queue.bind(
-            dlx,
-            routing_key=f"{routing_key}{cls._dlx_suffix()}.{delay}",
+            dlx_exchange,
+            routing_key=dlx_routing_key,
         )
 
         return queue
+
+    @classmethod
+    async def _get_ensured_dlx_queue(
+        cls, routing_key: str, delay: int
+    ) -> RabbitQueue:
+        try:
+            return await cls._get_dlx_queue(routing_key, delay)
+        except (ChannelClosed, ChannelInvalidStateError) as exc:
+            if "NOT_FOUND - no queue" not in str(exc):
+                raise
+            return await cls._get_dlx_queue(routing_key, delay, fallback=True)
 
     @classmethod
     async def _exc_handler(
@@ -183,7 +219,7 @@ class RabbitSubscriber(SelfSustaining):
         ) and message.headers["x-delivery-count"] > 1:
             routing_key = routing_key[: -len(cls._dlx_suffix())]
 
-        queue = await cls._get_dlx_queue(
+        queue = await cls._get_ensured_dlx_queue(
             routing_key,
             min(
                 cls._base_delay
@@ -202,9 +238,24 @@ class RabbitSubscriber(SelfSustaining):
         raise exc
 
     @classmethod
-    def _get_subscriber(cls, routing_key: str, **kwargs):
+    def _get_subscriber(
+        cls,
+        routing_key: str,
+        durable: bool,
+        auto_delete: bool,
+        queue_arguments: QuorumQueueArgs
+        | ClassicQueueArgs
+        | StreamQueueArgs
+        | None = None,
+        **kwargs,
+    ):
         return cls.router.subscriber(
-            queue=cls._get_queue(routing_key),
+            queue=cls._get_queue(
+                routing_key,
+                durable=durable,
+                auto_delete=auto_delete,
+                queue_arguments=queue_arguments,
+            ),
             exchange=cls.exchange,
             **kwargs,
         )
@@ -214,6 +265,12 @@ class RabbitSubscriber(SelfSustaining):
         cls,
         routing_key: str,
         retry_backoff: bool = False,
+        durable: bool = True,
+        auto_delete: bool = False,
+        queue_arguments: QuorumQueueArgs
+        | ClassicQueueArgs
+        | StreamQueueArgs
+        | None = None,
         **kwargs,
     ):
         """
@@ -222,13 +279,27 @@ class RabbitSubscriber(SelfSustaining):
         :param kwargs: additional faststream subscriber arguments
         :return: custom decorator for the subscriber
         """
+        if retry_backoff and (auto_delete or not durable):
+            raise ValueError(
+                "retry_backoff requires durable queues and auto_delete=False"
+            )
 
         def _inner(func):
-            decorators = [cls._get_subscriber(routing_key, **kwargs)]
+            decorators = [
+                cls._get_subscriber(
+                    routing_key,
+                    durable=durable,
+                    auto_delete=auto_delete,
+                    queue_arguments=queue_arguments,
+                    **kwargs,
+                )
+            ]
             if retry_backoff:
                 decorators.append(
                     cls._get_subscriber(
                         f"{routing_key}{cls._dlx_suffix()}",
+                        durable=durable,
+                        auto_delete=auto_delete,
                         **kwargs,
                     )
                 )
@@ -243,6 +314,7 @@ class RabbitSubscriber(SelfSustaining):
     def publisher(
         cls,
         routing_key: str,
+        persist: bool = True,
         schema: Any | None = None,
         **kwargs,
     ):
@@ -256,7 +328,7 @@ class RabbitSubscriber(SelfSustaining):
             routing_key=routing_key,
             exchange=cls.exchange,
             schema=schema,
-            persist=True,
+            persist=persist,
             **kwargs,
         )
 
@@ -265,6 +337,8 @@ class RabbitSubscriber(SelfSustaining):
         cls,
         routing_keys: list[str],
         retry_backoff: bool = False,
+        durable: bool = True,
+        auto_delete: bool = False,
         **kwargs,
     ):
         """
@@ -278,6 +352,8 @@ class RabbitSubscriber(SelfSustaining):
                 func = cls.subscriber(
                     routing_key,
                     retry_backoff=retry_backoff,
+                    durable=durable,
+                    auto_delete=auto_delete,
                     **kwargs,
                 )(func)
             return func
@@ -288,6 +364,7 @@ class RabbitSubscriber(SelfSustaining):
     def multi_publisher(
         cls,
         routing_keys: dict[str, str],
+        persist: bool = True,
         schema: type | None = None,
         **kwargs,
     ) -> dict[str, RabbitPublisher]:
@@ -300,8 +377,8 @@ class RabbitSubscriber(SelfSustaining):
             key: cls.router.publisher(
                 exchange=cls.exchange,
                 routing_key=routing_key,
+                persist=persist,
                 schema=schema,
-                persist=True,
                 **kwargs,
             )
             for key, routing_key in routing_keys.items()
