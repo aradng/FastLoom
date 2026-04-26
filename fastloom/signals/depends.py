@@ -176,7 +176,7 @@ class RabbitSubscriber(SelfSustaining):
                         f"{routing_key}{cls._dlx_suffix()}"
                     ),
                     "x-message-ttl": delay * 1000,
-                    "x-expires": delay * 2000,
+                    # "x-expires": delay * 2000,
                 }
             ),
         )
