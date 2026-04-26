@@ -141,3 +141,4 @@ media/
 .env
 ./app/utils/Faker.py
 poetry.toml
+sandbox

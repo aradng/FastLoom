@@ -1,8 +1,11 @@
+import asyncio
 import logging
 from typing import Any
 
+import aio_pika
 from aio_pika import Message
-from aiormq import ChannelClosed, ChannelInvalidStateError
+from aio_pika.robust_channel import RobustChannel
+from aio_pika.robust_connection import RobustConnection
 from faststream import ExceptionMiddleware
 from faststream.rabbit import (
     ExchangeType,
@@ -52,6 +55,10 @@ class RabbitSubscriber(SelfSustaining):
     _base_delay: int
     _max_delay: int
     _queue_prefix: str
+
+    _topology_connection: RobustConnection | None = None
+    _topology_channel: RobustChannel | None = None
+    _topology_lock = asyncio.Lock()
 
     def __init__(
         self,
@@ -119,6 +126,38 @@ class RabbitSubscriber(SelfSustaining):
         return routing_key.replace("*", "__all__")
 
     @classmethod
+    async def _get_topology_channel(cls) -> RobustChannel:
+        async with cls._topology_lock:
+            if (
+                cls._topology_connection is None
+                or cls._topology_connection.is_closed
+            ):
+                cls._topology_connection = await aio_pika.connect_robust(
+                    cls._settings.RABBIT_URI, loop=asyncio.get_event_loop()
+                )
+                cls._topology_channel = None
+                logging.warning("new topology connection established")
+
+            if (
+                cls._topology_channel is None
+                or cls._topology_channel.is_closed
+            ):
+                cls._topology_channel = (
+                    await cls._topology_connection.channel()
+                )
+                logging.warning("new topology channel established")
+
+            return cls._topology_channel
+
+    @classmethod
+    async def _reset_topology_channel(cls) -> None:
+        async with cls._topology_lock:
+            if cls._topology_channel and not cls._topology_channel.is_closed:
+                await cls._topology_channel.close()
+
+            cls._topology_channel = None
+
+    @classmethod
     def _get_queue(
         cls,
         name: str,
@@ -176,13 +215,17 @@ class RabbitSubscriber(SelfSustaining):
                         f"{routing_key}{cls._dlx_suffix()}"
                     ),
                     "x-message-ttl": delay * 1000,
-                    # "x-expires": delay * 2000,
+                    "x-expires": delay * 2000,
                 }
             ),
         )
 
-        robust_queue = await cls.router.broker.declare_queue(
-            queue=queue,
+        channel = await cls._get_topology_channel()
+        robust_queue = await channel.declare_queue(
+            queue.name,
+            durable=queue.durable,
+            arguments=queue.arguments,
+            auto_delete=False,
         )
         dlx_exchange = await cls.router.broker.declare_exchange(cls.exchange)
         await robust_queue.bind(
@@ -196,12 +239,7 @@ class RabbitSubscriber(SelfSustaining):
     async def _get_ensured_dlx_queue(
         cls, routing_key: str, delay: int
     ) -> RabbitQueue:
-        try:
-            return await cls._get_dlx_queue(routing_key, delay)
-        except (ChannelClosed, ChannelInvalidStateError) as exc:
-            if "NOT_FOUND - no queue" not in str(exc):
-                raise
-            return await cls._get_dlx_queue(routing_key, delay, fallback=True)
+        return await cls._get_dlx_queue(routing_key, delay)
 
     @classmethod
     async def _exc_handler(
