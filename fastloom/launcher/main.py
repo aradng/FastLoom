@@ -57,6 +57,7 @@ def app():
     with InitMonitoring(
         Configs[ObservabilitySettings].general,
         instruments=service_app.additional_instruments,
+        otel_sampling=service_app.otel_sampling,
     ) as monitor:
         app = FastAPI(
             lifespan=lifespan,

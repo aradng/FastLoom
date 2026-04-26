@@ -46,9 +46,11 @@ def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
         dsn=dsn,
         # Set traces_sample_rate to 1.0 to capture 100%
         # of transactions for performance monitoring.
-        traces_sample_rate=1.0,
         enable_tracing=True,
+        traces_sample_rate=1.0,
         profiles_sample_rate=1.0,
+        profile_session_sample_rate=1.0,
+        profile_lifecycle="trace",
         environment=environment,
         send_default_pii=True,
     )
@@ -227,11 +229,14 @@ def instrument_otel(
     settings: TenantMonitoringSchema,
     app: FastAPI | None = None,
     only: Sequence[Instruments] = (),
+    sampling: logfire.SamplingOptions | None = None,
 ):
     logfire.configure(
         send_to_logfire="if-token-present",
         service_name=settings.PROJECT_NAME,
         environment=settings.ENVIRONMENT,
+        distributed_tracing=True,
+        sampling=sampling,
         console=False,
         metrics=logfire.MetricsOptions(
             additional_readers=[get_metrics_reader()]
@@ -278,9 +283,11 @@ class InitMonitoring:
         self,
         settings: ObservabilitySettings,
         instruments: Sequence[Instruments] = (),
+        otel_sampling: logfire.SamplingOptions | None = None,
     ):
         self.settings = settings
         self.instruments = instruments
+        self.otel_sampling = otel_sampling
 
     def __enter__(self):
         if int(self.settings.SENTRY_ENABLED):
@@ -290,6 +297,7 @@ class InitMonitoring:
             instrument_otel(
                 self.settings,
                 only=self.instruments + infer_instruments(self.settings),
+                sampling=self.otel_sampling,
             )
 
         return self

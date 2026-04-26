@@ -1,5 +1,6 @@
 from typing import Protocol
 
+import logfire
 from pydantic import AnyHttpUrl
 
 
@@ -14,3 +15,4 @@ class TenantHostSchema(TenantNameSchema, Protocol):
 class TenantMonitoringSchema(Protocol):
     PROJECT_NAME: str
     ENVIRONMENT: str
+    OTEL_SAMPLING: logfire.SamplingOptions

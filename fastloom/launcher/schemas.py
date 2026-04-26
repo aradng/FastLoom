@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Self
 
+import logfire
 from starlette.types import ASGIApp
 
 from fastloom.cache.settings import RedisSettings
@@ -86,6 +87,7 @@ class App(BaseModel):
     exception_handlers: list[ExceptionHandlerRegister] = Field(
         default_factory=list
     )
+    otel_sampling: logfire.SamplingOptions | None = None
     cache_healthcheck: bool = False
 
     def load_routes(self, app: FastAPI):
