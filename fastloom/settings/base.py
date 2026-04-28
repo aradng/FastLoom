@@ -1,3 +1,5 @@
+from re import Pattern
+
 from pydantic import (
     BaseModel,
     Field,
@@ -18,6 +20,10 @@ class ProjectSettings(BaseModel):
 
 class FastAPISettings(ProjectSettings):
     DEBUG: bool = True
+    EXCLUDED_ENDPOINTS: tuple[Pattern | str, ...] = (
+        r"/api/\w+/healthcheck",
+        r"/healthcheck",
+    )
 
 
 class MonitoringSettings(ProjectSettings):

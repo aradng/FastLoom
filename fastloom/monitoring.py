@@ -1,6 +1,8 @@
 import contextlib
 import json
 import logging
+import os
+import re
 from collections.abc import Callable, Sequence
 from enum import Enum
 from os import getenv
@@ -10,9 +12,11 @@ import logfire
 from jose.exceptions import JWTError
 from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
+from opentelemetry.context import attach, detach, set_value
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
     OTLPMetricExporter,
 )
+from opentelemetry.instrumentation.utils import _SUPPRESS_INSTRUMENTATION_KEY
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.trace import Span
 from pydantic import AnyHttpUrl, BaseModel
@@ -21,7 +25,8 @@ from sentry_sdk import init as sentry_init
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.settings import MongoSettings
 from fastloom.launcher.utils import is_installed
-from fastloom.observability.settings import ObservabilitySettings
+from fastloom.observability.settings import ObservabilitySettings, OtelConfig
+from fastloom.settings.base import FastAPISettings
 from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
 
@@ -80,7 +85,28 @@ def _set_user_attributes_to_span(span: Span, token: str):
         return
 
 
-def instrument_fastapi(app: FastAPI):
+class SuppressOtelForPathsMiddleware:
+    def __init__(self, app, patterns: tuple[re.Pattern | str, ...]):
+        self.app = app
+        self.patterns = [re.compile(p) for p in patterns]
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        path = scope.get("path", "")
+
+        if not any(pattern.search(path) for pattern in self.patterns):
+            return await self.app(scope, receive, send)
+
+        token = attach(set_value(_SUPPRESS_INSTRUMENTATION_KEY, True))
+        try:
+            return await self.app(scope, receive, send)
+        finally:
+            detach(token)
+
+
+def instrument_fastapi(app: FastAPI, settings: FastAPISettings | None = None):
     from fastapi.responses import PlainTextResponse
     from fastapi.security.utils import get_authorization_scheme_param
     from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -100,11 +126,18 @@ def instrument_fastapi(app: FastAPI):
         if span and span.is_recording():
             ...
 
+    if settings and settings.EXCLUDED_ENDPOINTS:
+        app.add_middleware(
+            SuppressOtelForPathsMiddleware,
+            patterns=settings.EXCLUDED_ENDPOINTS,
+        )
+
     logfire.instrument_fastapi(
         app,
         server_request_hook=_server_request_hook,
         client_response_hook=_client_response_hook,
         meter_provider=metrics.get_meter_provider(),
+        excluded_urls=settings.EXCLUDED_ENDPOINTS if settings else None,
     )
 
     @app.exception_handler(StarletteHTTPException)
@@ -278,6 +311,15 @@ def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
     return instruments
 
 
+def setup_otel_config(settings: ObservabilitySettings):
+    otel_config = OtelConfig.model_validate(
+        settings.model_dump(), extra="ignore"
+    )
+    for field_name, value in otel_config:
+        if value is not None:
+            os.environ[field_name] = str(value)
+
+
 class InitMonitoring:
     def __init__(
         self,
@@ -288,6 +330,7 @@ class InitMonitoring:
         self.settings = settings
         self.instruments = instruments
         self.otel_sampling = otel_sampling
+        setup_otel_config(settings)
 
     def __enter__(self):
         if int(self.settings.SENTRY_ENABLED):
@@ -304,6 +347,8 @@ class InitMonitoring:
 
     def __exit__(self, exc_type, exc_val, exc_tb): ...
 
-    def instrument(self, app: FastAPI):
+    def instrument(
+        self, app: FastAPI, settings: FastAPISettings | None = None
+    ):
         if app is not None and int(self.settings.OTEL_ENABLED):
-            instrument_fastapi(app)
+            instrument_fastapi(app, settings)

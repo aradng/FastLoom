@@ -70,24 +70,24 @@ def app():
                 "additionalQueryStringParams": {"browser": "false"},
             },
         )
-        monitor.instrument(app)
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        service_app.load_exception_handlers(app)
+        service_app.load_healthchecks(app)
+        service_app.load_system_endpoints(app)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    service_app.load_exception_handlers(app)
-    service_app.load_healthchecks(app)
-    service_app.load_system_endpoints(app)
-
-    service_app.load_routes(app)
-    service_app.load_mounts(app)
-    if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
-        app.include_router(RabbitSubscriber.router)
+        service_app.load_routes(app)
+        service_app.load_mounts(app)
+        if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
+            app.include_router(RabbitSubscriber.router)
+        monitor.instrument(app, Configs[FastAPISettings].general)
+        # NOTE: FastAPI instrumentation has to be after
+        # all middlewares and routes are loaded
     return app
 
 

@@ -117,9 +117,7 @@ class App(BaseModel):
         )
 
     def load_healthchecks(self, app: FastAPI):
-        handlers: list[Healthcheck] = [
-            *self.healthchecks,
-        ]
+        handlers: list[Healthcheck] = self.healthchecks
         if self.cache_healthcheck:
             handlers.append(
                 cache_hc(Configs[RedisSettings].general.REDIS_URL)  # type: ignore[misc]
