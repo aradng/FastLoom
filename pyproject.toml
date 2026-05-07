@@ -35,6 +35,7 @@ kafka = [
 ]
 redis = ["faststream[redis]", "redis-om>=1.0,<2.0"]
 fastapi = ["fastapi>=0,<1", "uvicorn", "python-multipart"]
+prometheus = ["prometheus-fastapi-instrumentator>=7.0.0,<8.0.0"]
 
 mongo = ["beanie>=2.0.0,<3.0.0"]
 celery = ["celery>=5.5.3,<6.0.0"]
