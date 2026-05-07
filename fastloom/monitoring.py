@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import shutil
 from collections.abc import Callable, Sequence
 from enum import Enum
 from os import getenv
@@ -25,7 +26,11 @@ from sentry_sdk import init as sentry_init
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.settings import MongoSettings
 from fastloom.launcher.utils import is_installed
-from fastloom.observability.settings import ObservabilitySettings, OtelConfig
+from fastloom.observability.settings import (
+    ObservabilitySettings,
+    OtelConfig,
+    PrometheusConfig,
+)
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
@@ -245,11 +250,36 @@ def instrument_pydantic_ai():
     logfire.instrument_pydantic_ai()
 
 
+def instrument_prometheus(
+    settings: ObservabilitySettings,
+    prefix: str = "",
+    app: FastAPI | None = None,
+):
+    from prometheus_fastapi_instrumentator import Instrumentator
+
+    Instrumentator(
+        should_group_status_codes=settings.PROMETHEUS_GROUP_STATUS_CODES,
+        should_ignore_untemplated=settings.PROMETHEUS_IGNORE_UNTEMPLATED,
+        should_group_untemplated=settings.PROMETHEUS_GROUP_UNTEMPLATED,
+        should_round_latency_decimals=settings.PROMETHEUS_ROUND_LATENCY_DECIMALS,
+        should_instrument_requests_inprogress=settings.PROMETHEUS_INSTRUMENT_REQUESTS_INPROGRESS,
+        round_latency_decimals=settings.PROMETHEUS_LATENCY_DECIMALS,
+        inprogress_name=settings.PROMETHEUS_INPROGRESS_NAME,
+        inprogress_labels=settings.PROMETHEUS_INPROGRESS_LABELS,
+    ).instrument(app).expose(
+        app,
+        endpoint=f"{prefix}{settings.PROMETHEUS_METRICS_ENDPOINT}",
+        include_in_schema=settings.PROMETHEUS_INCLUDE_IN_SCHEMA,
+        should_gzip=settings.PROMETHEUS_SHOULD_GZIP,
+    )
+
+
 class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
     RABBIT = instrument_rabbit
     HTTPX = instrument_httpx
+    PROMETHEUS = instrument_prometheus
     REQUESTS = instrument_requests
     METRICS = instrument_metrics
     MONGODB = instrument_mongodb
@@ -306,6 +336,8 @@ def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
         instruments.append(Instruments.MONGODB)
     if isinstance(settings, ObservabilitySettings) and settings.METRICS:
         instruments.append(Instruments.METRICS)
+    if isinstance(settings, Instruments.PROMETHEUS):
+        instruments.append(Instruments.PROMETHEUS)
     if is_installed("pydantic_ai"):
         instruments.append(Instruments.PYDANTIC_AI)
     return instruments
@@ -320,6 +352,14 @@ def setup_otel_config(settings: ObservabilitySettings):
             os.environ[field_name] = str(value)
 
 
+def setup_prometheus_multiproc(settings: PrometheusConfig) -> None:
+    if not (path := settings.PROMETHEUS_MULTIPROC_DIR):
+        return
+    shutil.rmtree(path, ignore_errors=True)
+    os.makedirs(path)
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = path
+
+
 class InitMonitoring:
     def __init__(
         self,
@@ -331,6 +371,7 @@ class InitMonitoring:
         self.instruments = instruments
         self.otel_sampling = otel_sampling
         setup_otel_config(settings)
+        setup_prometheus_multiproc(settings)
 
     def __enter__(self):
         if int(self.settings.SENTRY_ENABLED):
@@ -350,5 +391,13 @@ class InitMonitoring:
     def instrument(
         self, app: FastAPI, settings: FastAPISettings | None = None
     ):
-        if app is not None and int(self.settings.OTEL_ENABLED):
+        if app is None:
+            return
+        if int(self.settings.OTEL_ENABLED):
             instrument_fastapi(app, settings)
+        if int(self.settings.PROMETHEUS_ENABLED):
+            instrument_prometheus(
+                self.settings,
+                prefix=self.settings.API_PREFIX,
+                app=app,
+            )

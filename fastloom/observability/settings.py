@@ -37,8 +37,28 @@ class OtelConfig(BaseModel):
     ] = EnvDefault(".*")
 
 
-class ObservabilitySettings(MonitoringSettings, OtelConfig):
+class PrometheusConfig(BaseModel):
+    PROMETHEUS_METRICS_ENDPOINT: EnvBackend[str] = EnvDefault("/metrics")
+    PROMETHEUS_INCLUDE_IN_SCHEMA: EnvBackend[bool] = EnvDefault(True)
+    PROMETHEUS_SHOULD_GZIP: EnvBackend[bool] = EnvDefault(False)
+    PROMETHEUS_GROUP_STATUS_CODES: EnvBackend[bool] = EnvDefault(True)
+    PROMETHEUS_IGNORE_UNTEMPLATED: EnvBackend[bool] = EnvDefault(False)
+    PROMETHEUS_GROUP_UNTEMPLATED: EnvBackend[bool] = EnvDefault(True)
+    PROMETHEUS_ROUND_LATENCY_DECIMALS: EnvBackend[bool] = EnvDefault(False)
+    PROMETHEUS_LATENCY_DECIMALS: EnvBackend[int] = EnvDefault(4)
+    PROMETHEUS_INSTRUMENT_REQUESTS_INPROGRESS: EnvBackend[bool] = EnvDefault(
+        False
+    )
+    PROMETHEUS_INPROGRESS_NAME: EnvBackend[str] = EnvDefault(
+        "http_requests_inprogress"
+    )
+    PROMETHEUS_INPROGRESS_LABELS: EnvBackend[bool] = EnvDefault(False)
+    PROMETHEUS_MULTIPROC_DIR: EnvBackend[str] = EnvDefault("")
+
+
+class ObservabilitySettings(MonitoringSettings, OtelConfig, PrometheusConfig):
     SENTRY_ENABLED: int = 0
     OTEL_ENABLED: int = 0
+    PROMETHEUS_ENABLED: int = 0
     SENTRY_DSN: AnyHttpUrl | None = None
     METRICS: bool = False
