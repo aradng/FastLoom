@@ -5,11 +5,10 @@ from fastapi import FastAPI
 
 
 class ForwardBearerAuth(httpx.Auth):
-    from fastmcp.server.dependencies import get_http_headers
-
     def auth_flow(self, request: httpx.Request):
+        from fastmcp.server.dependencies import get_http_headers
 
-        forwarded = self.get_http_headers(include_all=True)
+        forwarded = get_http_headers(include={"Authorization"})
         for k, v in forwarded.items():
             request.headers[k] = v
         yield request
