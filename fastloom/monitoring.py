@@ -42,6 +42,16 @@ if not TYPE_CHECKING:
 
 
 def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
+    integrations = []
+    if is_installed("pydantic_ai"):
+        from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
+
+        integrations.append(PydanticAIIntegration())
+
+    if is_installed("fastmcp"):
+        from sentry_sdk.integrations.mcp import MCPIntegration
+
+        integrations.append(MCPIntegration())
     if dsn is None:
         return
     if isinstance(dsn, AnyHttpUrl):
@@ -58,6 +68,7 @@ def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
         profile_lifecycle="trace",
         environment=environment,
         send_default_pii=True,
+        integrations=integrations,
     )
 
 

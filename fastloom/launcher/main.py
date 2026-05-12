@@ -10,6 +10,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.launcher.utils import (
+    combine_lifespans,
     get_app,
     get_settings_cls,
     get_tenant_cls,
@@ -17,6 +18,8 @@ from fastloom.launcher.utils import (
 )
 from fastloom.logging.lifehooks import setup_logging
 from fastloom.logging.settings import LoggingSettings
+from fastloom.mcp.lifehooks import get_mcp_asgi, mcp_lifespan
+from fastloom.mcp.settings import MCPSettings
 from fastloom.monitoring import InitMonitoring
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
@@ -39,8 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         await Migrator().run()
 
-    async with service_app.lifespan_fn(app):
-        yield
+    yield
 
 
 @lru_cache
@@ -54,13 +56,18 @@ def app():
         logging.warning("Settings Does Not Inherit from RabbitmqSettings")
     # ^IMPORTANT:rabbit has to init first
     service_app = get_app()
+    lifespans = [lifespan]
+    if isinstance(Configs[MCPSettings].general, MCPSettings):
+        lifespans.append(mcp_lifespan)
     with InitMonitoring(
         Configs[ObservabilitySettings].general,
         instruments=service_app.additional_instruments,
         otel_sampling=service_app.otel_sampling,
     ) as monitor:
         app = FastAPI(
-            lifespan=lifespan,
+            lifespan=combine_lifespans(
+                *(lifespans + [service_app.lifespan_fn])
+            ),
             title=Configs[FastAPISettings].general.PROJECT_NAME,
             docs_url=f"{Configs[FastAPISettings].general.API_PREFIX}/docs",
             redoc_url=f"{Configs[FastAPISettings].general.API_PREFIX}/redoc",
@@ -83,6 +90,13 @@ def app():
 
         service_app.load_routes(app)
         service_app.load_mounts(app)
+        if (
+            isinstance(Configs[MCPSettings].general, MCPSettings)
+            and Configs[MCPSettings].general.MCP_ENABLED
+        ):
+            app.mount(
+                Configs[FastAPISettings].general.API_PREFIX, get_mcp_asgi()
+            )
         if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
             app.include_router(RabbitSubscriber.router)
         monitor.instrument(app, Configs[FastAPISettings].general)

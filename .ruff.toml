@@ -25,7 +25,7 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
-    "hooks"
+    "hooks",
 ]
 
 line-length = 79
