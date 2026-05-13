@@ -29,3 +29,11 @@ repos:
       hooks:
         - id: poetry-check
         - id: poetry-lock
+    - repo: local
+      hooks:
+        - id: plugin-version-sync
+          name: plugin-version-sync
+          language: system
+          entry: python3 scripts/check_plugin_version.py
+          files: ^(pyproject\.toml|plugins/fastloom-sdk/\.claude-plugin/plugin\.json)$
+          pass_filenames: false

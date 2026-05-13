@@ -1,0 +1,14 @@
+{
+    "name": "fastloom",
+    "owner": {
+        "name": "aradng",
+        "email": "arad@qubitorbit.com"
+    },
+    "plugins": [
+        {
+            "name": "fastloom-sdk",
+            "source": "./plugins/fastloom-sdk",
+            "description": "Scaffolding and review skills for services built on the fastloom library: bootstrap a new service, add routes / RabbitMQ subscribers, and audit settings against fastloom conventions."
+        }
+    ]
+}
