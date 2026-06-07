@@ -68,7 +68,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
     auth: JWTAuth
     optional_auth: OptionalJWTAuth
     documents_enabled: bool = False
-    cache_enabled: bool = False
+    cache_enabled: bool
     service_cls: type[T]
     tenant_cls: type[V]
     # cache
@@ -82,6 +82,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         if self.self is not None:
             return
         super().__init__()
+        self.cache_enabled = False
         self.tenant_cls = tenant_cls
         self.service_cls = service_cls
         self.tenant_schema = SettingCacheSchema(self.tenant_cls)
@@ -107,9 +108,10 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         if not issubclass(self.service_cls, RedisSettings):
             return
 
-        self.cache_enabled = RedisHandler.enabled
+        handler = RedisHandler(self.general)
+        self.cache_enabled = handler.enabled
 
-        redis = RedisHandler(self.general).redis
+        redis = handler.redis
         BaseCache.Meta.database = redis
         BaseTenantSettingCache.Meta.database = redis
         self.tenant_schema.cache.Meta.database = redis
