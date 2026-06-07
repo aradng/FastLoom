@@ -9,7 +9,11 @@ from fastloom.auth.depends import (
     JWTAuth,
     OptionalJWTAuth,
 )
-from fastloom.cache.base import BaseCache, BaseTenantSettingCache
+from fastloom.cache.base import (
+    BaseCache,
+    BaseTenantSettingCache,
+    HostTenantMapping,
+)
 from fastloom.cache.lifehooks import RedisHandler
 from fastloom.db.signals import BaseDocumentSignal
 
@@ -114,6 +118,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         redis = handler.redis
         BaseCache.Meta.database = redis
         BaseTenantSettingCache.Meta.database = redis
+        HostTenantMapping.Meta.database = redis
         self.tenant_schema.cache.Meta.database = redis
 
         if isinstance(self.general, MonitoringSettings):
