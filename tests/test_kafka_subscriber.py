@@ -7,8 +7,12 @@ from fastloom.signals.kafka_healthcheck import (
 
 
 async def test_kafka_healthcheck_ok(kafka_subscriber):
-    healthcheck = get_healthcheck(kafka_subscriber.router)
-    await healthcheck()
+    router = kafka_subscriber.router
+    await router.broker.start()
+    try:
+        await get_healthcheck(router)()
+    finally:
+        await router.broker.stop()
 
 
 async def test_kafka_healthcheck_fails_against_dead_broker():
