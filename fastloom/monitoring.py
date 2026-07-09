@@ -27,7 +27,8 @@ from fastloom.db.settings import MongoSettings
 from fastloom.launcher.utils import is_installed
 from fastloom.observability.settings import ObservabilitySettings, OtelConfig
 from fastloom.settings.base import FastAPISettings
-from fastloom.signals.settings import KafkaSettings, RabbitmqSettings
+from fastloom.signals.kafka.settings import KafkaSettings
+from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
 
 if TYPE_CHECKING:

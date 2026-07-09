@@ -9,8 +9,9 @@ from starlette.types import ASGIApp
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.signals import BaseDocumentSignal
 from fastloom.launcher.settings import LauncherSettings
+from fastloom.signals.kafka.settings import KafkaSettings
 from fastloom.signals.lifehooks import init_signals
-from fastloom.signals.settings import KafkaSettings, RabbitmqSettings
+from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.handler import init_settings_endpoints
 
 if TYPE_CHECKING:
@@ -133,8 +134,9 @@ class App(BaseModel):
             Configs[KafkaSettings].general,  # type: ignore[misc]
             KafkaSettings,
         ):
-            from fastloom.signals.kafka_depends import KafkaSubscriber
-            from fastloom.signals.kafka_healthcheck import (
+            # NOTE: same import-order reason as launcher/main.py.
+            from fastloom.signals.kafka.depends import KafkaSubscriber
+            from fastloom.signals.kafka.healthcheck import (
                 get_healthcheck as kafka_signal_hc,
             )
 
@@ -172,21 +174,24 @@ class App(BaseModel):
 
     @model_validator(mode="after")
     def validate_signals(self) -> Self:
-        if self.signals_module is not None and not (
-            isinstance(
-                Configs[RabbitmqSettings].general,  # type: ignore[misc]
-                RabbitmqSettings,
-            )
-            or isinstance(
-                Configs[KafkaSettings].general,  # type: ignore[misc]
-                KafkaSettings,
-            )
-        ):
-            raise ValidationError(
-                "Settings does not inherit from "
-                "RabbitmqSettings or KafkaSettings"
-            )
-        return self
+        if self.signals_module is None:
+            return self  # scenario 1: no signals_module — nothing to check
+
+        has_rabbit = isinstance(
+            Configs[RabbitmqSettings].general,  # type: ignore[misc]
+            RabbitmqSettings,
+        )
+        has_kafka = isinstance(
+            Configs[KafkaSettings].general,  # type: ignore[misc]
+            KafkaSettings,
+        )
+        if has_rabbit or has_kafka:
+            return self  # scenario 2: at least one broker configured
+
+        # scenario 3: signals_module set but neither broker is configured
+        raise ValidationError(
+            "Settings does not inherit from RabbitmqSettings or KafkaSettings"
+        )
 
     @property
     def stream_models(self) -> list[type[BaseDocumentSignal]]:

@@ -1,7 +1,7 @@
 from faststream.confluent.fastapi import KafkaRouter
 
 from fastloom.meta import SelfSustaining
-from fastloom.signals.settings import KafkaSettings, KafkaSubscriptable
+from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 
 
 def get_kafka_router(name: str, settings: KafkaSettings) -> KafkaRouter:

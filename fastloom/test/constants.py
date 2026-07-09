@@ -1,7 +1,7 @@
 MONGO_PORT = 27017
 MONGO_IMAGE = "mongo:latest"
 
-KAFKA_IMAGE = "confluentinc/cp-kafka:8.2.0"
+KAFKA_IMAGE = "confluentinc/cp-kafka:latest"
 
 TIMEOUT = 10
 

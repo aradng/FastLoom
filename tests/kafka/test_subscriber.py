@@ -1,6 +1,6 @@
 import pytest
 
-from fastloom.signals.kafka_healthcheck import (
+from fastloom.signals.kafka.healthcheck import (
     KafkaConnectionError,
     get_healthcheck,
 )
@@ -16,8 +16,8 @@ async def test_kafka_healthcheck_ok(kafka_subscriber):
 
 
 async def test_kafka_healthcheck_fails_against_dead_broker():
-    from fastloom.signals.kafka_depends import get_kafka_router
-    from fastloom.signals.settings import KafkaSubscriptable
+    from fastloom.signals.kafka.depends import get_kafka_router
+    from fastloom.signals.kafka.settings import KafkaSubscriptable
 
     settings = KafkaSubscriptable(
         ENVIRONMENT="test",
@@ -26,9 +26,7 @@ async def test_kafka_healthcheck_fails_against_dead_broker():
     )
     router = get_kafka_router(settings.API_PREFIX, settings)
     try:
-        # start() must run first: an unstarted router's ping() short-circuits
-        # via "if not producer: return False" before ever touching the
-        # network, which would pass this test for the wrong reason.
+        # ping() on an unstarted router short-circuits to False
         await router.broker.start()
         with pytest.raises(KafkaConnectionError):
             await get_healthcheck(router)()

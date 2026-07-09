@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from fastloom.monitoring import Instruments, infer_instruments
-from fastloom.signals.settings import KafkaSettings
+from fastloom.signals.kafka.settings import KafkaSettings
 
 
 @pytest.mark.parametrize(
@@ -18,7 +18,8 @@ from fastloom.signals.settings import KafkaSettings
     ],
 )
 def test_kafka_bootstrap_accepts(raw: str, expected: str) -> None:
-    assert expected == KafkaSettings(KAFKA_URI=raw).KAFKA_URI
+    settings = KafkaSettings.model_validate({"KAFKA_URI": raw})
+    assert expected == settings.KAFKA_URI
 
 
 @pytest.mark.parametrize(
@@ -36,9 +37,9 @@ def test_kafka_bootstrap_accepts(raw: str, expected: str) -> None:
 )
 def test_kafka_bootstrap_rejects_malformed(raw: str) -> None:
     with pytest.raises(ValidationError):
-        KafkaSettings(KAFKA_URI=raw)
+        KafkaSettings.model_validate({"KAFKA_URI": raw})
 
 
 def test_kafka_settings_are_auto_instrumented() -> None:
-    settings = KafkaSettings(KAFKA_URI="broker:9092")
+    settings = KafkaSettings.model_validate({"KAFKA_URI": "broker:9092"})
     assert Instruments.KAFKA in infer_instruments(settings)

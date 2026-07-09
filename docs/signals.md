@@ -13,10 +13,11 @@ A separate, thinner singleton (`KafkaSubscriber`) wraps FastStream's confluent-k
 - `fastloom.signals.healthcheck.get_healthcheck`, `check_rabbit_connection`.
 - `fastloom.signals.middlewares.RabbitPayloadTelemetryMiddleware` — OTel span enrichment.
 - `fastloom.signals.lifehooks.init_signals`, `init_streams`.
-- `fastloom.signals.kafka_depends.KafkaSubscriber` — singleton; owns `router: KafkaRouter` only.
-- `fastloom.signals.kafka_depends.get_kafka_router` — bare router factory used internally.
-- `fastloom.signals.settings.KafkaSettings`, `KafkaSubscriptable` — `KAFKA_URI` (bootstrap-server string).
-- `fastloom.signals.kafka_healthcheck.get_healthcheck`, `check_kafka_connection`.
+- `fastloom.signals.kafka.depends.KafkaSubscriber` — singleton; owns `router: KafkaRouter` only.
+- `fastloom.signals.kafka.depends.get_kafka_router` — bare router factory used internally.
+- `fastloom.signals.kafka.settings.KafkaSettings`, `KafkaSubscriptable` — `KAFKA_URI`.
+- `fastloom.signals.kafka.schemas.KafkaBootstrapServers` — the `KAFKA_URI` type; `.servers` gives the parsed `list[str]`.
+- `fastloom.signals.kafka.healthcheck.get_healthcheck`, `check_kafka_connection`.
 
 ## Wiring
 
@@ -140,7 +141,7 @@ Unlike `RabbitSubscriber`, `KafkaSubscriber` is a **thin** wrapper — it only o
 
 ```python
 # signals/consumer/order.py
-from fastloom.signals.kafka_depends import KafkaSubscriber
+from fastloom.signals.kafka.depends import KafkaSubscriber
 
 
 @KafkaSubscriber.router.subscriber(
@@ -161,7 +162,7 @@ The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI do
 
 ### Ordering is reversed from Rabbit
 
-`RabbitSubscriber` is constructed **before** `InitMonitoring` (so `AioPikaInstrumentor` attaches before the connection opens). `KafkaSubscriber` is constructed **after** `InitMonitoring` enters — the opposite order. `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` at the class level, and FastStream's confluent client does `from confluent_kafka import Producer` at *import* time; importing `fastloom.signals.kafka_depends` before instrumentation runs would bind the unpatched classes permanently for the process. This is handled for you inside the launcher — just know that if you ever import `kafka_depends` yourself outside the launcher (e.g. a standalone script), instrument first.
+`RabbitSubscriber` is constructed **before** `InitMonitoring` (so `AioPikaInstrumentor` attaches before the connection opens). `KafkaSubscriber` is constructed **after** `InitMonitoring` enters — the opposite order. `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` at the class level, and FastStream's confluent client does `from confluent_kafka import Producer` at *import* time; importing `fastloom.signals.kafka.depends` before instrumentation runs would bind the unpatched classes permanently for the process. This is handled for you inside the launcher — just know that if you ever import `fastloom.signals.kafka.depends` yourself outside the launcher (e.g. a standalone script), instrument first.
 
 ### Telemetry caveat
 

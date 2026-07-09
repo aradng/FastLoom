@@ -1,0 +1,54 @@
+from typing import Annotated, Any
+
+from pydantic import (
+    AfterValidator,
+    GetCoreSchemaHandler,
+    KafkaDsn,
+    StringConstraints,
+    TypeAdapter,
+)
+from pydantic_core import core_schema
+
+
+def _check_port_range(v: str) -> str:
+    if int(v.rpartition(":")[2]) > 65535:
+        raise ValueError(f"port out of range: {v!r}")
+    return v
+
+
+KafkaBootstrapServer = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Za-z0-9.-]+:\d{1,5}$"),
+    AfterValidator(_check_port_range),
+]
+
+
+class KafkaBootstrapServers(str):
+    """KAFKA_URI: bare `host:port[,host:port]`, or a single `kafka://` DSN.
+    Always stores/serializes as the bare form librdkafka wants."""
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source: Any, handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        def validate(v: str) -> "KafkaBootstrapServers":
+            if "," not in v and v.startswith("kafka://"):
+                dsn = TypeAdapter(KafkaDsn).validate_python(v)
+                return cls(f"{dsn.host}:{dsn.port}")
+            v = v.removeprefix("kafka://")
+            servers = TypeAdapter(list[KafkaBootstrapServer]).validate_python(
+                v.split(",")
+            )
+            return cls(",".join(servers))
+
+        return core_schema.no_info_after_validator_function(
+            validate,
+            core_schema.str_schema(),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                str, return_schema=core_schema.str_schema()
+            ),
+        )
+
+    @property
+    def servers(self) -> list[str]:
+        return self.split(",")

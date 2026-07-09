@@ -24,5 +24,9 @@ def mongo_container() -> ContainerDataFixture:
 
 @pytest.fixture(scope="session")
 def kafka_container() -> Generator[KafkaContainer]:
-    with KafkaContainer(image=KAFKA_IMAGE).with_kraft() as container:
+    container = KafkaContainer(image=KAFKA_IMAGE)
+    # with_kraft() parses the tag as a semver to gate on MIN_KRAFT_TAG,
+    # which chokes on "latest" — set the flag it would set directly.
+    container.kraft_enabled = True
+    with container:
         yield container

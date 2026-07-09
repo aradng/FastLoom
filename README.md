@@ -160,6 +160,7 @@ Dive deeper in the docs below.
 - I18N → [docs/i18n.md](docs/i18n.md)
 - MCP → [docs/mcp.md](docs/mcp.md)
 - Testing → [docs/test.md](docs/test.md)
+- Internal testing (fastloom's own suite) → [docs/internal-testing.md](docs/internal-testing.md)
 
 ---
 

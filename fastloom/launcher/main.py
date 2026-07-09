@@ -24,12 +24,9 @@ from fastloom.monitoring import InitMonitoring
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
+from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 from fastloom.signals.lifehooks import init_streams
-from fastloom.signals.settings import (
-    KafkaSettings,
-    KafkaSubscriptable,
-    RabbitmqSettings,
-)
+from fastloom.signals.settings import RabbitmqSettings
 from fastloom.tenant.settings import ConfigAlias as Configs
 
 logger: Logger = logging.getLogger(__name__)
@@ -69,14 +66,11 @@ def app():
         instruments=service_app.additional_instruments,
         otel_sampling=service_app.otel_sampling,
     ) as monitor:
-        # ^IMPORTANT:kafka has to init after InitMonitoring instead —
-        # ConfluentKafkaInstrumentor patches confluent_kafka.Producer/
-        # Consumer, and FastStream's confluent client does
-        # `from confluent_kafka import Producer` at import time, so
-        # importing fastloom.signals.kafka_depends before this point
-        # would bind the unpatched classes.
+        # NOTE: kafka inits after InitMonitoring, opposite of rabbit —
+        # ConfluentKafkaInstrumentor patches confluent_kafka classes, and
+        # importing kafka.depends any earlier binds the unpatched ones.
         if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
-            from fastloom.signals.kafka_depends import KafkaSubscriber
+            from fastloom.signals.kafka.depends import KafkaSubscriber
 
             KafkaSubscriber(Configs[KafkaSubscriptable].general)
         elif is_installed("confluent_kafka"):
@@ -117,7 +111,7 @@ def app():
         if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
             app.include_router(RabbitSubscriber.router)
         if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
-            from fastloom.signals.kafka_depends import KafkaSubscriber
+            from fastloom.signals.kafka.depends import KafkaSubscriber
 
             app.include_router(KafkaSubscriber.router)
         monitor.instrument(app, Configs[FastAPISettings].general)
