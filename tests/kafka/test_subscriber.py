@@ -1,9 +1,11 @@
 import pytest
 
+from fastloom.signals.kafka.depends import get_kafka_router
 from fastloom.signals.kafka.healthcheck import (
     KafkaConnectionError,
     get_healthcheck,
 )
+from fastloom.signals.kafka.settings import KafkaSubscriptable
 
 
 async def test_kafka_healthcheck_ok(kafka_subscriber):
@@ -16,9 +18,6 @@ async def test_kafka_healthcheck_ok(kafka_subscriber):
 
 
 async def test_kafka_healthcheck_fails_against_dead_broker():
-    from fastloom.signals.kafka.depends import get_kafka_router
-    from fastloom.signals.kafka.settings import KafkaSubscriptable
-
     settings = KafkaSubscriptable(
         ENVIRONMENT="test",
         PROJECT_NAME="fastloom_test",

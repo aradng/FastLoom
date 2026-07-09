@@ -9,6 +9,10 @@ from starlette.types import ASGIApp
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.signals import BaseDocumentSignal
 from fastloom.launcher.settings import LauncherSettings
+from fastloom.signals.kafka.depends import KafkaSubscriber
+from fastloom.signals.kafka.healthcheck import (
+    get_healthcheck as kafka_signal_hc,
+)
 from fastloom.signals.kafka.settings import KafkaSettings
 from fastloom.signals.lifehooks import init_signals
 from fastloom.signals.settings import RabbitmqSettings
@@ -134,12 +138,6 @@ class App(BaseModel):
             Configs[KafkaSettings].general,  # type: ignore[misc]
             KafkaSettings,
         ):
-            # NOTE: same import-order reason as launcher/main.py.
-            from fastloom.signals.kafka.depends import KafkaSubscriber
-            from fastloom.signals.kafka.healthcheck import (
-                get_healthcheck as kafka_signal_hc,
-            )
-
             handlers.append(kafka_signal_hc(KafkaSubscriber.router))
 
         init_healthcheck(app=app, healthcheck_handlers=handlers)
@@ -175,7 +173,7 @@ class App(BaseModel):
     @model_validator(mode="after")
     def validate_signals(self) -> Self:
         if self.signals_module is None:
-            return self  # scenario 1: no signals_module — nothing to check
+            return self
 
         has_rabbit = isinstance(
             Configs[RabbitmqSettings].general,  # type: ignore[misc]
@@ -186,9 +184,8 @@ class App(BaseModel):
             KafkaSettings,
         )
         if has_rabbit or has_kafka:
-            return self  # scenario 2: at least one broker configured
+            return self
 
-        # scenario 3: signals_module set but neither broker is configured
         raise ValidationError(
             "Settings does not inherit from RabbitmqSettings or KafkaSettings"
         )

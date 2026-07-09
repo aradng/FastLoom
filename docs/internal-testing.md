@@ -17,16 +17,17 @@ time**, before any fixture or test body runs:
 ConfluentKafkaInstrumentor().instrument(tracer_provider=_provider)
 ```
 
-This has to happen before the first import of `fastloom.signals.kafka` (or
-`faststream.confluent`) anywhere in the process. `ConfluentKafkaInstrumentor`
-patches `confluent_kafka.Producer`/`Consumer` at the class level, and
-FastStream's confluent client does `from confluent_kafka import Producer` at
-*import* time — so an earlier import binds the unpatched classes, and
-instrumenting after that point is a permanent no-op for the rest of the
-process (see [signals.md](signals.md#ordering-is-reversed-from-rabbit) for
-the same constraint in the launcher).
+This has to happen before the first *construction* of a `KafkaSubscriber` (or
+call to `get_kafka_router()`) anywhere in the process — not before importing
+`fastloom.signals.kafka` itself, which is import-order-safe (see
+[signals.md](signals.md#ordering-is-reversed-from-rabbit)). `KafkaSubscriber`
+construction is what triggers `faststream.confluent`'s internal
+`from confluent_kafka import Producer` — `ConfluentKafkaInstrumentor` patches
+those classes at the class level, so a construction that happens before
+instrumentation binds the unpatched ones, and instrumenting after that point
+is a permanent no-op for the rest of the process.
 
-Every `fastloom.signals.kafka` import in `tests/kafka/` is deferred into a
-fixture or test body for exactly this reason — conftest's module-level
+Every `KafkaSubscriber(...)` construction in `tests/kafka/` is deferred into
+a fixture or test body for exactly this reason — conftest's module-level
 instrumentation always runs first in pytest's collection order, regardless
 of which test file happens to execute first.

@@ -1,7 +1,8 @@
 from typing import Annotated, Any
 
 from pydantic import (
-    AfterValidator,
+    BaseModel,
+    Field,
     GetCoreSchemaHandler,
     KafkaDsn,
     StringConstraints,
@@ -10,17 +11,17 @@ from pydantic import (
 from pydantic_core import core_schema
 
 
-def _check_port_range(v: str) -> str:
-    if int(v.rpartition(":")[2]) > 65535:
-        raise ValueError(f"port out of range: {v!r}")
-    return v
+class _HostPort(BaseModel):
+    host: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9.-]+$")]
+    port: Annotated[int, Field(ge=1, le=65535)]
 
+    @classmethod
+    def parse(cls, v: str) -> "_HostPort":
+        host, _, port = v.rpartition(":")
+        return cls.model_validate({"host": host, "port": port})
 
-KafkaBootstrapServer = Annotated[
-    str,
-    StringConstraints(pattern=r"^[A-Za-z0-9.-]+:\d{1,5}$"),
-    AfterValidator(_check_port_range),
-]
+    def __str__(self) -> str:
+        return f"{self.host}:{self.port}"
 
 
 class KafkaBootstrapServers(str):
@@ -36,9 +37,7 @@ class KafkaBootstrapServers(str):
                 dsn = TypeAdapter(KafkaDsn).validate_python(v)
                 return cls(f"{dsn.host}:{dsn.port}")
             v = v.removeprefix("kafka://")
-            servers = TypeAdapter(list[KafkaBootstrapServer]).validate_python(
-                v.split(",")
-            )
+            servers = [str(_HostPort.parse(s)) for s in v.split(",")]
             return cls(",".join(servers))
 
         return core_schema.no_info_after_validator_function(

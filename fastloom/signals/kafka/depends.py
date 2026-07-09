@@ -1,10 +1,18 @@
-from faststream.confluent.fastapi import KafkaRouter
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from fastloom.meta import SelfSustaining
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 
+if TYPE_CHECKING:
+    from faststream.confluent.fastapi import KafkaRouter
+
 
 def get_kafka_router(name: str, settings: KafkaSettings) -> KafkaRouter:
+    # deferred: see docs/signals.md#ordering-is-reversed-from-rabbit
+    from faststream.confluent.fastapi import KafkaRouter
+
     return KafkaRouter(
         settings.KAFKA_URI,
         schema_url=f"{name}/asyncapi",

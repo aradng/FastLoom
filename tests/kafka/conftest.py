@@ -8,6 +8,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
     InMemorySpanExporter,
 )
 
+from fastloom.signals.kafka.depends import KafkaSubscriber
 from fastloom.signals.kafka.settings import KafkaSubscriptable
 
 # see docs/internal-testing.md#kafka for why this runs at module scope
@@ -19,8 +20,6 @@ ConfluentKafkaInstrumentor().instrument(tracer_provider=_provider)
 
 @pytest.fixture
 async def kafka_subscriber(kafka_container):
-    from fastloom.signals.kafka.depends import KafkaSubscriber
-
     settings = KafkaSubscriptable(
         ENVIRONMENT="test",
         PROJECT_NAME="fastloom_test",

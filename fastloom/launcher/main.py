@@ -24,6 +24,7 @@ from fastloom.monitoring import InitMonitoring
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
+from fastloom.signals.kafka.depends import KafkaSubscriber
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 from fastloom.signals.lifehooks import init_streams
 from fastloom.signals.settings import RabbitmqSettings
@@ -66,12 +67,9 @@ def app():
         instruments=service_app.additional_instruments,
         otel_sampling=service_app.otel_sampling,
     ) as monitor:
-        # NOTE: kafka inits after InitMonitoring, opposite of rabbit —
-        # ConfluentKafkaInstrumentor patches confluent_kafka classes, and
-        # importing kafka.depends any earlier binds the unpatched ones.
+        # NOTE: kafka constructs after InitMonitoring, opposite of rabbit —
+        # see docs/signals.md#ordering-is-reversed-from-rabbit.
         if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
-            from fastloom.signals.kafka.depends import KafkaSubscriber
-
             KafkaSubscriber(Configs[KafkaSubscriptable].general)
         elif is_installed("confluent_kafka"):
             logging.warning("Settings Does Not Inherit from KafkaSettings")
@@ -111,8 +109,6 @@ def app():
         if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
             app.include_router(RabbitSubscriber.router)
         if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
-            from fastloom.signals.kafka.depends import KafkaSubscriber
-
             app.include_router(KafkaSubscriber.router)
         monitor.instrument(app, Configs[FastAPISettings].general)
         # NOTE: FastAPI instrumentation has to be after

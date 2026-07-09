@@ -162,7 +162,9 @@ The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI do
 
 ### Ordering is reversed from Rabbit
 
-`RabbitSubscriber` is constructed **before** `InitMonitoring` (so `AioPikaInstrumentor` attaches before the connection opens). `KafkaSubscriber` is constructed **after** `InitMonitoring` enters — the opposite order. `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` at the class level, and FastStream's confluent client does `from confluent_kafka import Producer` at *import* time; importing `fastloom.signals.kafka.depends` before instrumentation runs would bind the unpatched classes permanently for the process. This is handled for you inside the launcher — just know that if you ever import `fastloom.signals.kafka.depends` yourself outside the launcher (e.g. a standalone script), instrument first.
+`RabbitSubscriber` is constructed **before** `InitMonitoring` (so `AioPikaInstrumentor` attaches before the connection opens). `KafkaSubscriber` is constructed **after** `InitMonitoring` enters — the opposite order. `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` at the class level, and FastStream's confluent client does `from confluent_kafka import Producer` at *import* time; constructing a `KafkaSubscriber` (which triggers that import internally) before instrumentation runs would bind the unpatched classes permanently for the process.
+
+Note this is about **construction**, not the top-level `import fastloom.signals.kafka.depends` statement — `kafka.depends` defers its own `faststream.confluent` import into `get_kafka_router()`'s body specifically so the module itself can be imported eagerly (same as `RabbitSubscriber`) without tripping the ordering constraint. This is handled for you inside the launcher — just know that if you construct `KafkaSubscriber` yourself outside the launcher (e.g. a standalone script), instrument first.
 
 ### Telemetry caveat
 

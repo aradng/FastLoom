@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from collections.abc import Callable, Coroutine
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from faststream.confluent.fastapi import KafkaRouter
+if TYPE_CHECKING:
+    from faststream.confluent.fastapi import KafkaRouter
 
 
 class KafkaConnectionError(Exception): ...

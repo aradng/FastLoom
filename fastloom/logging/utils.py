@@ -45,25 +45,23 @@ class EndpointFilter(logging.Filter):
         )
 
 
-class QueueFilter(logging.Filter):
-    def __init__(self, excluded_queues: tuple[Pattern | str, ...] = ()):
+class _AttrFilter(logging.Filter):
+    attr: str
+
+    def __init__(self, excluded: tuple[Pattern | str, ...] = ()):
         super().__init__()
-        self.excluded_queues = excluded_queues
+        self.excluded = excluded
 
     def filter(self, record: logging.LogRecord) -> bool:
-        queue: str = getattr(record, "queue", "")
+        value: str = getattr(record, self.attr, "")
         if record.levelno >= logging.ERROR:
             return True
-        return not any(re.match(exp, queue) for exp in self.excluded_queues)
+        return not any(re.match(exp, value) for exp in self.excluded)
 
 
-class TopicFilter(logging.Filter):
-    def __init__(self, excluded_topics: tuple[Pattern | str, ...] = ()):
-        super().__init__()
-        self.excluded_topics = excluded_topics
+class QueueFilter(_AttrFilter):
+    attr = "queue"
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        topic: str = getattr(record, "topic", "")
-        if record.levelno >= logging.ERROR:
-            return True
-        return not any(re.match(exp, topic) for exp in self.excluded_topics)
+
+class TopicFilter(_AttrFilter):
+    attr = "topic"
