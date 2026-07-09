@@ -130,6 +130,7 @@ default:
     MONGO_URI: mongodb://mongo:27017
     MONGO_DATABASE: my_service
     RABBIT_URI: amqp://guest:guest@rabbitmq:5672/
+    KAFKA_URI: kafka:9092
     REDIS_URL: redis://redis:6379/0
 
     OTEL_ENABLED: 0

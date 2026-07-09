@@ -1,7 +1,15 @@
 import re
 from typing import Annotated, Any
 
-from pydantic import AfterValidator, Field, GetCoreSchemaHandler, TypeAdapter
+from pydantic import (
+    AfterValidator,
+    Field,
+    GetCoreSchemaHandler,
+    RootModel,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 from pydantic_core import core_schema
 
 PHONE_REGEX = r"^(\+|00)\d{1,2}\s?((\(\d{3}\))|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}$"
@@ -86,3 +94,23 @@ class Str[T](str):
                 str, return_schema=core_schema.str_schema()
             ),
         )
+
+
+Host = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9.-]+$")]
+Port = Annotated[int, Field(ge=1, le=65535)]
+
+
+class HostPort(RootModel[tuple[Host, Port]]):
+    """A validated `host:port` pair. Construct from a `"host:port"` string
+    or a `(host, port)` tuple; `str()` gives back `"host:port"`."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            host, _, port = v.rpartition(":")
+            return host, port
+        return v
+
+    def __str__(self) -> str:
+        return f"{self.root[0]}:{self.root[1]}"

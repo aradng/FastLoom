@@ -20,10 +20,11 @@ Ground rules so CI passes on the first try.
 ## mypy
 
 - Plugins: `pydantic.mypy`, `returns.contrib.mypy.returns_plugin`.
-- Pydantic config (strict):
+- Pydantic config:
   - `init_forbid_extra = true` — extra kwargs to model `__init__` are an error.
-  - `init_typed = true` — `__init__` signature mirrors field types (not `Any`).
+  - `init_typed = false` — `__init__`'s synthesized signature doesn't require the field's exact declared type. Turned off because custom validator types (`Str[T]`, `HostPort`, `KafkaBootstrapServers`) accept a wider *input* type (e.g. plain `str`) than their declared field type, and `init_typed = true` doesn't distinguish that from a real mismatch.
   - `warn_required_dynamic_aliases = true`.
+  - `RootModel` subclasses aren't fully covered by this setting either way — construct via `.model_validate(v)` instead of `Cls(v)` when `v` isn't already the declared root shape (see `fastloom.types.HostPort`).
 - Run: `poetry run mypy fastloom`.
 
 ## Pre-commit

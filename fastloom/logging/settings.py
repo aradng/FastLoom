@@ -13,3 +13,4 @@ class LoggingSettings(MonitoringSettings):
         r"/healthcheck$",
     )
     LOGGING_EXCLUDED_QUEUES: tuple[Pattern | str, ...] = ()
+    LOGGING_EXCLUDED_TOPICS: tuple[Pattern | str, ...] = ()

@@ -5,6 +5,7 @@ from fastloom.logging.utils import (
     ColoredFormatter,
     EndpointFilter,
     QueueFilter,
+    TopicFilter,
 )
 
 
@@ -28,4 +29,7 @@ def setup_logging(settings: LoggingSettings):
     )
     logging.getLogger("faststream.access.rabbit").addFilter(
         QueueFilter(settings.LOGGING_EXCLUDED_QUEUES)
+    )
+    logging.getLogger("faststream.access.confluent").addFilter(
+        TopicFilter(settings.LOGGING_EXCLUDED_TOPICS)
     )
