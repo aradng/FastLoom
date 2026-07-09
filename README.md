@@ -122,8 +122,9 @@ See [docs/quickstart.md](docs/quickstart.md) for a fuller walkthrough.
 - Database layer (MongoDB via Beanie)
     - Created/updated mixins, pagination utilities, typed helpers
     - Auto model discovery for DB init via `App.models_module`
-- Signals / Messaging (Rabbit via FastStream)
-    - Event-driven publish/subscribe with retries and DLX-based backoff
+- Signals / Messaging (Rabbit + Kafka via FastStream)
+    - Rabbit: event-driven publish/subscribe with retries and DLX-based backoff
+    - Kafka: subscriber/publisher wiring for consuming topics (e.g. Debezium CDC)
     - Subscriber wiring and healthchecks
     - Auto-streamed `BaseDocumentSignal` Beanie models
 - Observability
@@ -151,7 +152,7 @@ Dive deeper in the docs below.
 - Tenant → [docs/tenant.md](docs/tenant.md)
 - Auth → [docs/auth.md](docs/auth.md)
 - DB (Mongo/Beanie) → [docs/db.md](docs/db.md)
-- Signals (Rabbit) → [docs/signals.md](docs/signals.md)
+- Signals (Rabbit / Kafka) → [docs/signals.md](docs/signals.md)
 - Cache (Redis) → [docs/cache.md](docs/cache.md)
 - Healthchecks → [docs/healthcheck.md](docs/healthcheck.md)
 - Observability → [docs/observability.md](docs/observability.md)

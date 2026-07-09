@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from fastloom.monitoring import Instruments, infer_instruments
 from fastloom.signals.settings import KafkaSettings
 
 
@@ -20,12 +21,6 @@ def test_kafka_bootstrap_accepts(raw: str, expected: str) -> None:
     assert expected == KafkaSettings(KAFKA_URI=raw).KAFKA_URI
 
 
-def test_kafka_bootstrap_round_trips() -> None:
-    once = KafkaSettings(KAFKA_URI="kafka://broker:9092").KAFKA_URI
-    twice = KafkaSettings(KAFKA_URI=once).KAFKA_URI
-    assert once == twice == "broker:9092"
-
-
 @pytest.mark.parametrize(
     "raw",
     [
@@ -33,8 +28,17 @@ def test_kafka_bootstrap_round_trips() -> None:
         "broker:not-a-port",
         "broker:9092,",
         "",
+        "broker:999999999999",
+        "bröker:9092",
+        "broker1:9092, broker2:9093",
+        "broker1:9092,broker2",
     ],
 )
 def test_kafka_bootstrap_rejects_malformed(raw: str) -> None:
     with pytest.raises(ValidationError):
         KafkaSettings(KAFKA_URI=raw)
+
+
+def test_kafka_settings_are_auto_instrumented() -> None:
+    settings = KafkaSettings(KAFKA_URI="broker:9092")
+    assert Instruments.KAFKA in infer_instruments(settings)

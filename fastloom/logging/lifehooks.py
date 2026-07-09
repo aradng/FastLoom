@@ -30,5 +30,5 @@ def setup_logging(settings: LoggingSettings):
         QueueFilter(settings.LOGGING_EXCLUDED_QUEUES)
     )
     logging.getLogger("faststream.access.confluent").addFilter(
-        QueueFilter(settings.LOGGING_EXCLUDED_QUEUES)
+        QueueFilter(settings.LOGGING_EXCLUDED_QUEUES, attr="topic")
     )

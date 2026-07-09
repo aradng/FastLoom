@@ -68,7 +68,7 @@ Inside the library itself, you'll see the older `Configs[CapabilitySettings].gen
 
 ## `SelfSustaining` — class-level singletons
 
-`fastloom.meta.SelfSustaining` is the metaclass-driven singleton helper used by `Configs`, `RabbitSubscriber`, and `RedisHandler`. It's worth understanding before touching any of the three.
+`fastloom.meta.SelfSustaining` is the metaclass-driven singleton helper used by `Configs`, `RabbitSubscriber`, `KafkaSubscriber`, and `RedisHandler`. It's worth understanding before touching any of them.
 
 ```python
 class SelfSustainingMeta(type):

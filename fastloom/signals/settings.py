@@ -11,20 +11,19 @@ class RabbitmqSettings(BaseModel):
     RABBIT_URI: Str[AmqpDsn]
 
 
-_BOOTSTRAP_SERVER = re.compile(r"^[\w.-]+:\d+$")
+_BOOTSTRAP_SERVER = re.compile(r"^([A-Za-z0-9.-]+):(\d{1,5})$")
 
 
 def _kafka_bootstrap(v: str) -> str:
-    """librdkafka takes `host:port[,host:port]` (no scheme, no
-    multi-host URI syntax). A `kafka://` prefix is stripped if present;
-    each comma-separated server is validated as `host:port`."""
+    """librdkafka wants bare host:port[,host:port]; strips kafka://."""
     v = v.removeprefix("kafka://")
-    servers = v.split(",")
-    if not all(_BOOTSTRAP_SERVER.match(server) for server in servers):
-        raise ValueError(
-            f"invalid Kafka bootstrap servers {v!r}, "
-            "expected host:port[,host:port]"
-        )
+    for server in v.split(","):
+        match = _BOOTSTRAP_SERVER.match(server)
+        if not match or int(match.group(2)) > 65535:
+            raise ValueError(
+                f"invalid Kafka bootstrap servers {v!r}, "
+                "expected host:port[,host:port]"
+            )
     return v
 
 

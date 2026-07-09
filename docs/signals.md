@@ -14,7 +14,7 @@ A separate, thinner singleton (`KafkaSubscriber`) wraps FastStream's confluent-k
 - `fastloom.signals.middlewares.RabbitPayloadTelemetryMiddleware` — OTel span enrichment.
 - `fastloom.signals.lifehooks.init_signals`, `init_streams`.
 - `fastloom.signals.kafka_depends.KafkaSubscriber` — singleton; owns `router: KafkaRouter` only.
-- `fastloom.signals.kafka_depends.get_confluent_router` — bare router factory used internally.
+- `fastloom.signals.kafka_depends.get_kafka_router` — bare router factory used internally.
 - `fastloom.signals.settings.KafkaSettings`, `KafkaSubscriptable` — `KAFKA_URI` (bootstrap-server string).
 - `fastloom.signals.kafka_healthcheck.get_healthcheck`, `check_kafka_connection`.
 
@@ -166,6 +166,8 @@ The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI do
 ### Telemetry caveat
 
 `Instruments.KAFKA` (`instrument_confluent_kafka`) is auto-inferred from `KafkaSettings` like Rabbit's is from `RabbitmqSettings`. It requires `opentelemetry-instrumentation-confluent-kafka>=0.62b1,<0.64b0` (pinned in the `kafka` extra) — below `0.62b1`, the bundled instrumentor doesn't forward the `logger` kwarg FastStream's consumer always passes and **crashes on subscriber startup**; `0.64b0`+ needs a newer `opentelemetry-sdk` than `logfire` currently supports. Don't loosen this pin without re-verifying both failure modes.
+
+There's no Kafka equivalent of `RabbitPayloadTelemetryMiddleware` — Kafka spans get producer/consumer-level tracing from `ConfluentKafkaInstrumentor` (send/recv/process spans), but not the payload-header propagation enrichment Rabbit's middleware adds.
 
 ## Related
 

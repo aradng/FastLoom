@@ -37,6 +37,9 @@ async def kafka_subscriber(kafka_container):
     try:
         yield subscriber
     finally:
+        # safe whether or not the test itself started/stopped the broker —
+        # stop() on an unstarted or already-stopped broker is a no-op.
+        await subscriber.router.broker.stop()
         KafkaSubscriber.self = None
 
 

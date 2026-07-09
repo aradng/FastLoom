@@ -9,11 +9,7 @@ class KafkaConnectionError(Exception): ...
 
 
 async def check_kafka_connection(router: KafkaRouter) -> None:
-    try:
-        reachable = await router.broker.ping(timeout=5)
-    except Exception as er:
-        raise KafkaConnectionError(f"Kafka connection error: {er}") from er
-    if not reachable:
+    if not await router.broker.ping(timeout=5):
         raise KafkaConnectionError("Kafka broker did not respond to ping")
 
 
