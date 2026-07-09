@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
     return RabbitRouter(
         settings.RABBIT_URI,
-        schema_url=f"{name}/asyncapi",
+        schema_url=f"{name}/rabbitapi",
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()

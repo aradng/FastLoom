@@ -15,7 +15,7 @@ def get_kafka_router(name: str, settings: KafkaSettings) -> KafkaRouter:
 
     return KafkaRouter(
         settings.KAFKA_URI,
-        schema_url=f"{name}/asyncapi",
+        schema_url=f"{name}/kafkaapi",
     )
 
 

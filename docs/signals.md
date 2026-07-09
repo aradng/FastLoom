@@ -42,7 +42,7 @@ from fastloom.launcher.schemas import App
 app = App(signals_module=signals, ...)
 ```
 
-`init_signals` recursively imports subpackages so FastStream sees every `@RabbitSubscriber.subscriber(...)` decorator. The launcher then includes `RabbitSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/asyncapi`.
+`init_signals` recursively imports subpackages so FastStream sees every `@RabbitSubscriber.subscriber(...)` decorator. The launcher then includes `RabbitSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/rabbitapi`.
 
 The launcher constructs `RabbitSubscriber(TC.general)` **before** `InitMonitoring`, so aio-pika OTel instrumentation attaches to the broker (`TC.general` satisfies the `RabbitSubscriptable` protocol because your `Settings` inherits both `MonitoringSettings` and `RabbitmqSettings`).
 
@@ -158,7 +158,11 @@ order_publisher = KafkaSubscriber.router.publisher("my_service.order.create")
 
 Everything FastStream's confluent router supports — `batch`, `ack_policy`, multiple topics per subscriber, etc. — is available directly; fastloom doesn't wrap it. There's no DLX-style retry/backoff (Kafka's append-only log with consumer-group offsets doesn't map onto Rabbit's per-message delay-queue model, and no real consumer has needed it — they NACK-and-move-on via FastStream's own `ack_policy`).
 
-The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/asyncapi`, same as Rabbit.
+The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/kafkaapi`.
+
+### Rabbit and Kafka AsyncAPI docs live at different paths
+
+A service using both `RabbitSubscriber` and `KafkaSubscriber` (a hybrid signals setup) gets two independent AsyncAPI documents — Rabbit's at `{API_PREFIX}/rabbitapi`, Kafka's at `{API_PREFIX}/kafkaapi` — never a merged one. FastStream's `AsyncAPI` specification factory (`faststream.specification.asyncapi.factory`) has partial scaffolding for multiple brokers (`add_broker()`, a `self.brokers` list), but `to_specification()` only ever renders `self.brokers[0]`, and the underlying schema generators (`get_broker_server`/`get_broker_channels`) each take a single broker — there's no version of FastStream today that can produce one combined multi-broker document. Each `StreamRouter` (`RabbitRouter`/`KafkaRouter`) mounts its own 3-route docs sub-router (`GET {schema_url}`, `.json`, `.yaml`) onto the parent app at ASGI-lifespan-startup, purely additively, with **no path-collision check** — if both routers ever computed the same `schema_url`, both sets of routes would silently coexist in the route table and Starlette's first-match-wins matching would permanently shadow whichever was included second, with no error or warning anywhere. `get_rabbit_router`/`get_kafka_router` give each broker a distinct path specifically to avoid this.
 
 ### Ordering is reversed from Rabbit
 
