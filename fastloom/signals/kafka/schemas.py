@@ -1,27 +1,9 @@
-from typing import Annotated, Any
+from typing import Any
 
-from pydantic import (
-    BaseModel,
-    Field,
-    GetCoreSchemaHandler,
-    KafkaDsn,
-    StringConstraints,
-    TypeAdapter,
-)
+from pydantic import GetCoreSchemaHandler
 from pydantic_core import core_schema
 
-
-class _HostPort(BaseModel):
-    host: Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9.-]+$")]
-    port: Annotated[int, Field(ge=1, le=65535)]
-
-    @classmethod
-    def parse(cls, v: str) -> "_HostPort":
-        host, _, port = v.rpartition(":")
-        return cls.model_validate({"host": host, "port": port})
-
-    def __str__(self) -> str:
-        return f"{self.host}:{self.port}"
+from fastloom.types import HostPort
 
 
 class KafkaBootstrapServers(str):
@@ -33,11 +15,8 @@ class KafkaBootstrapServers(str):
         cls, source: Any, handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
         def validate(v: str) -> "KafkaBootstrapServers":
-            if "," not in v and v.startswith("kafka://"):
-                dsn = TypeAdapter(KafkaDsn).validate_python(v)
-                return cls(f"{dsn.host}:{dsn.port}")
             v = v.removeprefix("kafka://")
-            servers = [str(_HostPort.parse(s)) for s in v.split(",")]
+            servers = [str(HostPort.model_validate(s)) for s in v.split(",")]
             return cls(",".join(servers))
 
         return core_schema.no_info_after_validator_function(

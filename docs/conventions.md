@@ -196,6 +196,12 @@ When a change touches the **public surface** — new route, new settings field, 
 
 `fastloom.types.Str[HttpUrl]`, `Str[AmqpDsn]`, `Str[RedisDsn]` — string subclass that runs a pydantic adapter on validate and serializes as a plain `str`. Use it whenever you want pydantic to validate a URL/DSN but downstream code needs a plain string (e.g. uvicorn args, env-var exports).
 
+## `HostPort` validated host:port pair
+
+`fastloom.types.HostPort` — a `RootModel[tuple[Host, Port]]` validating a single `"host:port"` string (or a `(host, port)` tuple) via a `model_validator(mode="before")` that splits the string before the tuple's own `Host`/`Port` constraints run (`Host` = ASCII hostname pattern, `Port` = `Field(ge=1, le=65535)`). `str(HostPort(...))` gives back the canonical `"host:port"` form. Used by `fastloom.signals.kafka.schemas.KafkaBootstrapServers` to validate each entry in a comma-separated `KAFKA_URI`.
+
+Note: `RootModel` subclasses aren't fully covered by the `init_typed` pydantic-mypy setting — construct via `HostPort.model_validate(v)` rather than `HostPort(v)` when `v` isn't already the declared tuple shape, or mypy will flag it even though pydantic validates it correctly at runtime.
+
 ## Lint / format
 
 - `ruff` with line length **79**, double-quoted strings, magic trailing commas preserved.

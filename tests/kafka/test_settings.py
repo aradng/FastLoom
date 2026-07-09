@@ -18,8 +18,7 @@ from fastloom.signals.kafka.settings import KafkaSettings
     ],
 )
 def test_kafka_bootstrap_accepts(raw: str, expected: str) -> None:
-    settings = KafkaSettings.model_validate({"KAFKA_URI": raw})
-    assert expected == settings.KAFKA_URI
+    assert expected == KafkaSettings(KAFKA_URI=raw).KAFKA_URI
 
 
 @pytest.mark.parametrize(
@@ -33,13 +32,15 @@ def test_kafka_bootstrap_accepts(raw: str, expected: str) -> None:
         "bröker:9092",
         "broker1:9092, broker2:9093",
         "broker1:9092,broker2",
+        "broker:0",
+        "broker:65536",
     ],
 )
 def test_kafka_bootstrap_rejects_malformed(raw: str) -> None:
     with pytest.raises(ValidationError):
-        KafkaSettings.model_validate({"KAFKA_URI": raw})
+        KafkaSettings(KAFKA_URI=raw)
 
 
 def test_kafka_settings_are_auto_instrumented() -> None:
-    settings = KafkaSettings.model_validate({"KAFKA_URI": "broker:9092"})
+    settings = KafkaSettings(KAFKA_URI="broker:9092")
     assert Instruments.KAFKA in infer_instruments(settings)
