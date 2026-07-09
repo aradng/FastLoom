@@ -41,7 +41,6 @@ Hooks (in `.pre-commit-config.yaml`):
 2. `mypy` — with bundled `mypy-extensions`, `typing-extensions`, `pydantic`, `returns`, `types-pyyaml`.
 3. `ruff` (check, `--fix`) and `ruff-format`.
 4. `poetry-check`, `poetry-lock` — runs on `pyproject.toml` changes.
-5. `pytest` — **`pre-push` stage only**, not on every commit (Docker/testcontainers-backed, ~13s once the Kafka image is cached locally). Run `poetry run pre-commit run --all-files --hook-stage pre-push` to exercise it manually; a plain `pre-commit install` picks up both stages via `default_install_hook_types`.
 
 If a hook fails: fix the underlying issue, re-stage, and create a **new** commit. Don't `--amend` (the failed commit didn't happen; `--amend` would modify the previous one).
 
