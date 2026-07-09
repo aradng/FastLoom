@@ -1,6 +1,8 @@
-# Signals (RabbitMQ)
+# Signals (RabbitMQ / Kafka)
 
 Fastloom wraps FastStream's `RabbitRouter` in a singleton (`RabbitSubscriber`) that registers publishers, subscribers, a dead-letter-exchange-based retry topology, and OpenTelemetry trace propagation. Document-level CRUD events flow through this same broker via `BaseDocumentSignal` — see [db.md](db.md).
+
+A separate, thinner singleton (`KafkaSubscriber`) wraps FastStream's confluent-kafka `KafkaRouter` for services that consume Kafka topics (e.g. Debezium CDC streams, or a third party's own topic) — see [Kafka](#kafka) below.
 
 **Symbols at a glance**
 
@@ -11,6 +13,10 @@ Fastloom wraps FastStream's `RabbitRouter` in a singleton (`RabbitSubscriber`) t
 - `fastloom.signals.healthcheck.get_healthcheck`, `check_rabbit_connection`.
 - `fastloom.signals.middlewares.RabbitPayloadTelemetryMiddleware` — OTel span enrichment.
 - `fastloom.signals.lifehooks.init_signals`, `init_streams`.
+- `fastloom.signals.kafka_depends.KafkaSubscriber` — singleton; owns `router: KafkaRouter` only.
+- `fastloom.signals.kafka_depends.get_confluent_router` — bare router factory used internally.
+- `fastloom.signals.settings.KafkaSettings`, `KafkaSubscriptable` — `KAFKA_URI` (bootstrap-server string).
+- `fastloom.signals.kafka_healthcheck.get_healthcheck`, `check_kafka_connection`.
 
 ## Wiring
 
@@ -119,8 +125,50 @@ The handler's exception is re-raised after the requeue so Sentry / OTel record t
 
 `fastloom.signals.healthcheck.get_healthcheck(router)` returns an async callable that pings the broker (timeout 5s). The launcher registers it automatically when `signals_module` is set; no manual wiring needed.
 
+## Kafka
+
+Add `KafkaSettings` to your `Settings` (it can coexist with `RabbitmqSettings` — `signals_module` accepts either, or both):
+
+```python
+class Settings(KafkaSettings, RabbitmqSettings, ...):
+    ...
+```
+
+`KAFKA_URI` takes librdkafka's bare `host:port[,host:port]` bootstrap-server form. A `kafka://` prefix is accepted and stripped for convenience (`kafka://broker:9092` → `broker:9092`); malformed input raises a validation error rather than silently passing through.
+
+Unlike `RabbitSubscriber`, `KafkaSubscriber` is a **thin** wrapper — it only owns `router: KafkaRouter` construction. There's no exchange/queue-naming indirection to hide (Kafka has topics, not exchanges), so declare subscribers and publishers straight off the router:
+
+```python
+# signals/consumer/order.py
+from fastloom.signals.kafka_depends import KafkaSubscriber
+
+
+@KafkaSubscriber.router.subscriber(
+    "my_service.order.create",
+    group_id="my_service",
+    auto_offset_reset="earliest",
+)
+async def on_order_create(payload: OrderSignal) -> None:
+    ...
+
+
+order_publisher = KafkaSubscriber.router.publisher("my_service.order.create")
+```
+
+Everything FastStream's confluent router supports — `batch`, `ack_policy`, multiple topics per subscriber, etc. — is available directly; fastloom doesn't wrap it. There's no DLX-style retry/backoff (Kafka's append-only log with consumer-group offsets doesn't map onto Rabbit's per-message delay-queue model, and no real consumer has needed it — they NACK-and-move-on via FastStream's own `ack_policy`).
+
+The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/asyncapi`, same as Rabbit.
+
+### Ordering is reversed from Rabbit
+
+`RabbitSubscriber` is constructed **before** `InitMonitoring` (so `AioPikaInstrumentor` attaches before the connection opens). `KafkaSubscriber` is constructed **after** `InitMonitoring` enters — the opposite order. `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` at the class level, and FastStream's confluent client does `from confluent_kafka import Producer` at *import* time; importing `fastloom.signals.kafka_depends` before instrumentation runs would bind the unpatched classes permanently for the process. This is handled for you inside the launcher — just know that if you ever import `kafka_depends` yourself outside the launcher (e.g. a standalone script), instrument first.
+
+### Telemetry caveat
+
+`Instruments.KAFKA` (`instrument_confluent_kafka`) is auto-inferred from `KafkaSettings` like Rabbit's is from `RabbitmqSettings`. It requires `opentelemetry-instrumentation-confluent-kafka>=0.62b1,<0.64b0` (pinned in the `kafka` extra) — below `0.62b1`, the bundled instrumentor doesn't forward the `logger` kwarg FastStream's consumer always passes and **crashes on subscriber startup**; `0.64b0`+ needs a newer `opentelemetry-sdk` than `logfire` currently supports. Don't loosen this pin without re-verifying both failure modes.
+
 ## Related
 
 - [db.md](db.md) — `BaseDocumentSignal` auto-publishes to the same broker.
-- [Observability](observability.md) — Rabbit instrumentation and queue-name filtering.
+- [Observability](observability.md) — Rabbit/Kafka instrumentation and queue-name filtering.
 - [Healthcheck](healthcheck.md) — broker ping registration.

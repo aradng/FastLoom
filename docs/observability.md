@@ -5,7 +5,7 @@ Logfire + OpenTelemetry + Sentry, configured from a single settings mixin. Instr
 **Symbols at a glance**
 
 - `fastloom.monitoring.InitMonitoring` — context manager that configures everything.
-- `fastloom.monitoring.Instruments` — enum of supported integrations (`REDIS`, `CELERY`, `RABBIT`, `HTTPX`, `REQUESTS`, `METRICS`, `MONGODB`, `PYDANTIC`, `PYDANTIC_AI`, `OPENAI`).
+- `fastloom.monitoring.Instruments` — enum of supported integrations (`REDIS`, `CELERY`, `RABBIT`, `KAFKA`, `HTTPX`, `REQUESTS`, `METRICS`, `MONGODB`, `PYDANTIC`, `PYDANTIC_AI`, `OPENAI`).
 - `fastloom.monitoring.infer_instruments` — auto-picks instruments based on `Settings` mixins.
 - `fastloom.monitoring.SuppressOtelForPathsMiddleware` — disables instrumentation on regex-matched paths.
 - `fastloom.monitoring.instrument_*` — per-integration helpers (`instrument_fastapi`, `instrument_httpx`, etc.).
@@ -42,6 +42,7 @@ class ObservabilitySettings(MonitoringSettings, OtelConfig):
 | `httpx` importable | `HTTPX` |
 | `RedisSettings` in mixin chain | `REDIS` |
 | `RabbitmqSettings` in mixin chain | `RABBIT` |
+| `KafkaSettings` in mixin chain | `KAFKA` (requires `opentelemetry-instrumentation-confluent-kafka>=0.62b1,<0.64b0` — see [Signals](signals.md#telemetry-caveat)) |
 | `MongoSettings` in mixin chain | `MONGODB` |
 | `ObservabilitySettings.METRICS=True` | `METRICS` (system metrics: cpu, mem, …) |
 | `pydantic_ai` importable | `PYDANTIC_AI` |

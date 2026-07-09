@@ -8,6 +8,7 @@ Fastloom ships with a batteries-included test helper package: pytest fixtures th
 - `fastloom.test.fixtures.auth.*` — `user_claims`, `admin_claims`, `user_token`, `admin_token`, `admin_token_headers`, etc., plus an `autouse` `mock_authz` that stubs the IAM sidecar.
 - `fastloom.test.fixtures.settings.settings_mock`, `TC` — rebuild the `Configs` singleton from in-test YAML.
 - `fastloom.test.fixtures.docker.mongo_container` — session-scoped Mongo via testcontainers.
+- `fastloom.test.fixtures.docker.kafka_container` — session-scoped Kafka (KRaft mode, no Zookeeper) via testcontainers.
 - `fastloom.test.container.create_container`, `PrivateRegistryDocker` — testcontainers helper with private-registry auth.
 - `fastloom.test.utils.assert_deep_diff`, `status_check`, `assert_success`, `expect_calling`, `to_dict`, `generate_token`, `token_to_header`, `ignore_keys` — assertion + setup helpers.
 - `fastloom.test.constants` — `SECRET_KEY`, image names, port constants.
@@ -187,6 +188,22 @@ def rabbit_container():
 ```
 
 Wire those URIs into `service_settings` and the fastloom fixtures take over from there.
+
+Kafka doesn't fit `create_container`'s single-port model (KRaft/Zookeeper listener config, advertised listeners) — use the fastloom-provided `kafka_container` fixture instead, which wraps `testcontainers.kafka.KafkaContainer` directly:
+
+```python
+from fastloom.test.fixtures.docker import kafka_container  # noqa: F401
+
+
+@pytest.fixture
+def service_settings(kafka_container) -> Settings:
+    return Settings(
+        ENVIRONMENT="test",
+        PROJECT_NAME="my_service",
+        KAFKA_URI=kafka_container.get_bootstrap_server(),
+        # ... other capability fields
+    )
+```
 
 ## Running
 

@@ -29,3 +29,6 @@ def setup_logging(settings: LoggingSettings):
     logging.getLogger("faststream.access.rabbit").addFilter(
         QueueFilter(settings.LOGGING_EXCLUDED_QUEUES)
     )
+    logging.getLogger("faststream.access.confluent").addFilter(
+        QueueFilter(settings.LOGGING_EXCLUDED_QUEUES)
+    )

@@ -25,7 +25,11 @@ from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
 from fastloom.signals.lifehooks import init_streams
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.settings import (
+    KafkaSettings,
+    KafkaSubscriptable,
+    RabbitmqSettings,
+)
 from fastloom.tenant.settings import ConfigAlias as Configs
 
 logger: Logger = logging.getLogger(__name__)
@@ -54,7 +58,8 @@ def app():
         RabbitSubscriber(Configs[RabbitSubscriptable].general)
     elif is_installed("aio-pika"):
         logging.warning("Settings Does Not Inherit from RabbitmqSettings")
-    # ^IMPORTANT:rabbit has to init first
+    # ^IMPORTANT:rabbit has to init first so aio-pika OTel instrumentation
+    # attaches before its connection opens.
     service_app = get_app()
     lifespans = [lifespan]
     if isinstance(Configs[MCPSettings].general, MCPSettings):
@@ -64,6 +69,18 @@ def app():
         instruments=service_app.additional_instruments,
         otel_sampling=service_app.otel_sampling,
     ) as monitor:
+        # ^IMPORTANT:kafka has to init after InitMonitoring instead —
+        # ConfluentKafkaInstrumentor patches confluent_kafka.Producer/
+        # Consumer, and FastStream's confluent client does
+        # `from confluent_kafka import Producer` at import time, so
+        # importing fastloom.signals.kafka_depends before this point
+        # would bind the unpatched classes.
+        if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
+            from fastloom.signals.kafka_depends import KafkaSubscriber
+
+            KafkaSubscriber(Configs[KafkaSubscriptable].general)
+        elif is_installed("confluent_kafka"):
+            logging.warning("Settings Does Not Inherit from KafkaSettings")
         app = FastAPI(
             lifespan=combine_lifespans(
                 *(lifespans + [service_app.lifespan_fn])
@@ -99,6 +116,10 @@ def app():
             )
         if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
             app.include_router(RabbitSubscriber.router)
+        if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
+            from fastloom.signals.kafka_depends import KafkaSubscriber
+
+            app.include_router(KafkaSubscriber.router)
         monitor.instrument(app, Configs[FastAPISettings].general)
         # NOTE: FastAPI instrumentation has to be after
         # all middlewares and routes are loaded

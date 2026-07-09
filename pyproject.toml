@@ -31,7 +31,7 @@ rabbit = [
 kafka = [
     "uvicorn",
     "faststream[otel,confluent]",
-    "opentelemetry-instrumentation-confluent-kafka",
+    "opentelemetry-instrumentation-confluent-kafka>=0.62b1,<0.64b0",
 ]
 redis = ["faststream[redis]", "redis-om>=1.0,<2.0"]
 fastapi = ["fastapi>=0,<1", "uvicorn", "python-multipart"]
@@ -67,6 +67,10 @@ plugins = ["pydantic.mypy", "returns.contrib.mypy.returns_plugin"]
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 [dependency-groups]
 test = [

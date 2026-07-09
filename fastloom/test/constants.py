@@ -1,6 +1,8 @@
 MONGO_PORT = 27017
 MONGO_IMAGE = "mongo:latest"
 
+KAFKA_IMAGE = "confluentinc/cp-kafka:8.2.0"
+
 TIMEOUT = 10
 
 DOCKER_GATEWAY_BASE_URL = "http://172.17.0.1"

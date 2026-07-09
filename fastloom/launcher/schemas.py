@@ -10,7 +10,7 @@ from fastloom.cache.settings import RedisSettings
 from fastloom.db.signals import BaseDocumentSignal
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.signals.lifehooks import init_signals
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.settings import KafkaSettings, RabbitmqSettings
 from fastloom.tenant.handler import init_settings_endpoints
 
 if TYPE_CHECKING:
@@ -124,8 +124,21 @@ class App(BaseModel):
             )
         if self.models:
             handlers.append(db_hc(Configs[MongoSettings].general.MONGO_URI))  # type: ignore[misc]
-        if self.signals_module:
+        if self.signals_module and isinstance(
+            Configs[RabbitmqSettings].general,  # type: ignore[misc]
+            RabbitmqSettings,
+        ):
             handlers.append(signal_hc(RabbitSubscriber.router))
+        if self.signals_module and isinstance(
+            Configs[KafkaSettings].general,  # type: ignore[misc]
+            KafkaSettings,
+        ):
+            from fastloom.signals.kafka_depends import KafkaSubscriber
+            from fastloom.signals.kafka_healthcheck import (
+                get_healthcheck as kafka_signal_hc,
+            )
+
+            handlers.append(kafka_signal_hc(KafkaSubscriber.router))
 
         init_healthcheck(app=app, healthcheck_handlers=handlers)
         # ^for docker and system healthcheck
@@ -159,12 +172,19 @@ class App(BaseModel):
 
     @model_validator(mode="after")
     def validate_signals(self) -> Self:
-        if self.signals_module is not None and not isinstance(
-            Configs[RabbitmqSettings].general,  # type: ignore[misc]
-            RabbitmqSettings,
+        if self.signals_module is not None and not (
+            isinstance(
+                Configs[RabbitmqSettings].general,  # type: ignore[misc]
+                RabbitmqSettings,
+            )
+            or isinstance(
+                Configs[KafkaSettings].general,  # type: ignore[misc]
+                KafkaSettings,
+            )
         ):
             raise ValidationError(
-                "Settings does not inherit from RabbitmqSettings"
+                "Settings does not inherit from "
+                "RabbitmqSettings or KafkaSettings"
             )
         return self
 

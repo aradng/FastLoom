@@ -27,7 +27,7 @@ from fastloom.db.settings import MongoSettings
 from fastloom.launcher.utils import is_installed
 from fastloom.observability.settings import ObservabilitySettings, OtelConfig
 from fastloom.settings.base import FastAPISettings
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.settings import KafkaSettings, RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
 
 if TYPE_CHECKING:
@@ -260,6 +260,7 @@ class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
     RABBIT = instrument_rabbit
+    KAFKA = instrument_confluent_kafka
     HTTPX = instrument_httpx
     REQUESTS = instrument_requests
     METRICS = instrument_metrics
@@ -313,6 +314,8 @@ def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
         instruments.append(Instruments.REDIS)
     if isinstance(settings, RabbitmqSettings):
         instruments.append(Instruments.RABBIT)
+    if isinstance(settings, KafkaSettings):
+        instruments.append(Instruments.KAFKA)
     if isinstance(settings, MongoSettings):
         instruments.append(Instruments.MONGODB)
     if isinstance(settings, ObservabilitySettings) and settings.METRICS:
