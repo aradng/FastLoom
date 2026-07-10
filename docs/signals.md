@@ -137,14 +137,14 @@ class Settings(KafkaSettings, RabbitmqSettings, ...):
 
 `KAFKA_URI` takes librdkafka's bare `host:port[,host:port]` bootstrap-server form. A `kafka://` prefix is accepted and stripped for convenience (`kafka://broker:9092` → `broker:9092`); malformed input raises a validation error rather than silently passing through.
 
-Unlike `RabbitSubscriber`, `KafkaSubscriber` is a **thin** wrapper — `subscriber`/`publisher` forward straight to the underlying `router: KafkaRouter` with no exchange/queue-naming indirection to hide (Kafka has topics, not exchanges):
+Unlike `RabbitSubscriber`, `KafkaSubscriber` is a **thin** wrapper — it only owns `router: KafkaRouter` construction. There's no exchange/queue-naming indirection to hide (Kafka has topics, not exchanges), so declare subscribers and publishers straight off the router:
 
 ```python
 # signals/consumer/order.py
 from fastloom.signals.kafka.depends import KafkaSubscriber
 
 
-@KafkaSubscriber.subscriber(
+@KafkaSubscriber.router.subscriber(
     "my_service.order.create",
     group_id="my_service",
     auto_offset_reset="earliest",
@@ -153,12 +153,12 @@ async def on_order_create(payload: OrderSignal) -> None:
     ...
 
 
-order_publisher = KafkaSubscriber.publisher("my_service.order.create")
+order_publisher = KafkaSubscriber.router.publisher("my_service.order.create")
 ```
 
 Everything FastStream's confluent router supports — `batch`, `ack_policy`, multiple topics per subscriber, etc. — is available directly; fastloom doesn't wrap it. There's no DLX-style retry/backoff (Kafka's append-only log with consumer-group offsets doesn't map onto Rabbit's per-message delay-queue model, and no real consumer has needed it — they NACK-and-move-on via FastStream's own `ack_policy`).
 
-`KafkaSubscriber` can't subclass `KafkaRouter` directly to drop even the `subscriber`/`publisher` forwarding — `SelfSustainingMeta` only proxies attribute names that are *missing* from the class (via `__getattr__`); inheriting from `KafkaRouter` would make its methods present via normal MRO lookup, so `KafkaSubscriber.subscriber` would resolve to the raw unbound function instead of routing through the singleton, breaking at call time. `router` itself is still reachable unchanged (e.g. `KafkaSubscriber.router.broker` in tests) since it's a plain instance attribute, not shadowed by anything class-level.
+`KafkaSubscriber` can't subclass `KafkaRouter` directly to drop the `.router.` indirection — `SelfSustainingMeta` only proxies attribute names that are *missing* from the class (via `__getattr__`); inheriting from `KafkaRouter` would make its methods present via normal MRO lookup, so `KafkaSubscriber.subscriber` would resolve to the raw unbound function instead of routing through the singleton, breaking at call time. A classmethod-forwarding wrapper (`KafkaSubscriber.subscriber(...)` delegating to `cls.router.subscriber(...)`) was tried and works, but degrades the call site's type information to `Any` for no real benefit over `KafkaSubscriber.router.subscriber(...)`, so it was dropped.
 
 The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/kafkaapi`.
 

@@ -332,11 +332,6 @@ def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
 
 
 def instrument_brokers(settings: ObservabilitySettings) -> None:
-    # Runs before RabbitSubscriber/KafkaSubscriber construct, so both can
-    # construct at the same point in the launcher — see
-    # docs/signals.md#ordering. Broker instrumentors
-    # patch client classes at import time, so this must run before either
-    # subscriber's router import is triggered.
     if not int(settings.OTEL_ENABLED):
         return
     for instrument in infer_broker_instruments(settings):

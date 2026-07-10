@@ -52,9 +52,9 @@ def app():
     Configs(get_settings_cls(), get_tenant_cls())
     if isinstance(Configs[LoggingSettings].general, LoggingSettings):
         setup_logging(Configs[LoggingSettings].general)
-    # ^IMPORTANT: brokers must instrument before either subscriber
-    # constructs — their OTel instrumentors patch client classes at
-    # import time, see docs/signals.md#ordering.
+    # NOTE: brokers must instrument before either subscriber constructs —
+    # their OTel instrumentors patch client classes at import time, see
+    # docs/signals.md#ordering.
     instrument_brokers(Configs[ObservabilitySettings].general)
     if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
         RabbitSubscriber(Configs[RabbitSubscriptable].general)
