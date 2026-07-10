@@ -42,9 +42,11 @@ The launcher wires `Configs.from_` as a `TenantDependancySelector` that knows ab
 | `TokenHeaderSource` | OIDC bearer token (required) | Tenant lives in the issuer URL of the JWT (`UserClaims.tenant`). |
 | `OptionalTokenHeaderSource` | OIDC bearer token (optional) | Same as above but the route is publicly accessible. |
 | `TokenBodySource` | `token` field in the JSON body | Webhook-style routes that pass a token in the payload. |
-| `ContextSource` | FastStream message context | Rabbit or Kafka subscriber needs the publishing tenant. |
+| `ContextSource` | `tenant` field in the published message body | Rabbit or Kafka subscriber needs the publishing tenant. |
 
-`ContextSource` uses FastStream's broker-agnostic `Context("message")` (not a Rabbit- or Kafka-specific message type), so it works the same whether the underlying broker is `RabbitSubscriber` or `KafkaSubscriber` — it only needs `faststream` itself installed, not `aio-pika`/`confluent-kafka` specifically. A service with no broker extra at all can still import `fastloom.tenant.depends`/`fastloom.tenant.settings`; only actually wiring `TC.from_[ContextSource]` into a route without `faststream` installed fails (loudly, at dependency-resolution time).
+`ContextSource` reads the raw message via FastStream's broker-agnostic `Context("message")` (not a Rabbit- or Kafka-specific message type), decodes it, and reads a top-level `tenant` key from the body — so publishers using `ContextSource`-based tenant resolution must include `tenant` as a top-level field in the schema they publish. It works the same whether the underlying broker is `RabbitSubscriber` or `KafkaSubscriber`, and only needs `faststream` itself installed, not `aio-pika`/`confluent-kafka` specifically. A service with no broker extra at all can still import `fastloom.tenant.depends`/`fastloom.tenant.settings`; only actually wiring `TC.from_[ContextSource]` into a route without `faststream` installed fails (loudly, at dependency-resolution time).
+
+`get_dep`'s inner dependency is declared with the classic FastAPI default-value form (`tenant: str = StreamDepends(self._dep)`), not `Annotated[str, StreamDepends(self._dep)]` — the `Annotated`-metadata form crashes AsyncAPI schema generation (`PydanticUserError: ... is not fully defined`) because `self._dep` is a closure reference that only `fast_depends`'s own dependency-injection resolver can see, not FastStream's separate AsyncAPI schema builder. The default-value form sidesteps this since it's evaluated eagerly, not deferred through a forward-ref string.
 
 Inject a source-bound tenant dependency like this:
 

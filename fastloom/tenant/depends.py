@@ -153,29 +153,24 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
         return _inner
 
 
-_FASTSTREAM_AVAILABLE = is_installed("faststream")
-
-if TYPE_CHECKING or _FASTSTREAM_AVAILABLE:
+if TYPE_CHECKING or is_installed("faststream"):
     from faststream import Context, StreamMessage
     from faststream import Depends as StreamDepends
 
-    ContextMessage = Annotated[StreamMessage, Context("message")]
-
 
 class ContextSource(BaseTenantSource):
-    async def _dep(self, tenant: Annotated[str, ContextMessage]) -> str | None:
-        return tenant
+    async def _dep(
+        self, message: Annotated[StreamMessage, Context("message")]
+    ) -> str | None:
+        body = await message.decode()
+        return body.get("tenant") if isinstance(body, dict) else None
 
-    if _FASTSTREAM_AVAILABLE:
+    def get_dep(self) -> Callable[..., str | None]:
+        def _inner(tenant: str = StreamDepends(self._dep)) -> str | None:
+            Tenant.set(tenant)
+            return tenant
 
-        def get_dep(self) -> Callable[..., str | None]:
-            def _inner(
-                tenant: Annotated[str, StreamDepends(self._dep)],
-            ) -> str | None:
-                Tenant.set(tenant)
-                return tenant
-
-            return _inner
+        return _inner
 
 
 class TenantDependancySelector[K]:
