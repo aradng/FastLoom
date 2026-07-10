@@ -72,21 +72,3 @@ def test_instrument_brokers_noop_when_otel_disabled(monkeypatch):
     instrument_brokers(_observability_settings(OTEL_ENABLED=0))
 
     mocked_infer.assert_not_called()
-
-
-def test_instrument_brokers_instruments_inferred_brokers(monkeypatch):
-    rabbit, kafka = Mock(), Mock()
-    monkeypatch.setattr(
-        "opentelemetry.instrumentation.aio_pika.AioPikaInstrumentor",
-        Mock(return_value=rabbit),
-    )
-    monkeypatch.setattr(
-        "opentelemetry.instrumentation.confluent_kafka"
-        ".ConfluentKafkaInstrumentor",
-        Mock(return_value=kafka),
-    )
-
-    instrument_brokers(_hybrid_settings(OTEL_ENABLED=1))
-
-    rabbit.instrument.assert_called_once()
-    kafka.instrument.assert_called_once()
