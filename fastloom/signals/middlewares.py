@@ -14,7 +14,7 @@ if TYPE_CHECKING:
         RabbitTelemetrySettingsProvider,
     )
     from faststream.rabbit.response import RabbitPublishCommand
-elif is_installed("aio_pika"):
+elif is_installed("faststream") and is_installed("aio_pika"):
     from faststream.opentelemetry.middleware import TelemetryMiddleware
     from faststream.rabbit.opentelemetry.provider import (
         RabbitTelemetrySettingsProvider,

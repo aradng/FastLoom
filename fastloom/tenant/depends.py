@@ -153,18 +153,20 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
         return _inner
 
 
-_RABBIT_AVAILABLE = is_installed("aio_pika")
+_FASTSTREAM_AVAILABLE = is_installed("faststream")
 
-if TYPE_CHECKING or _RABBIT_AVAILABLE:
+if TYPE_CHECKING or _FASTSTREAM_AVAILABLE:
+    from faststream import Context, StreamMessage
     from faststream import Depends as StreamDepends
-    from faststream.rabbit.fastapi import RabbitMessage
+
+    ContextMessage = Annotated[StreamMessage, Context("message")]
 
 
 class ContextSource(BaseTenantSource):
-    async def _dep(self, tenant: Annotated[str, RabbitMessage]) -> str | None:
+    async def _dep(self, tenant: Annotated[str, ContextMessage]) -> str | None:
         return tenant
 
-    if _RABBIT_AVAILABLE:
+    if _FASTSTREAM_AVAILABLE:
 
         def get_dep(self) -> Callable[..., str | None]:
             def _inner(

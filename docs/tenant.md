@@ -42,9 +42,9 @@ The launcher wires `Configs.from_` as a `TenantDependancySelector` that knows ab
 | `TokenHeaderSource` | OIDC bearer token (required) | Tenant lives in the issuer URL of the JWT (`UserClaims.tenant`). |
 | `OptionalTokenHeaderSource` | OIDC bearer token (optional) | Same as above but the route is publicly accessible. |
 | `TokenBodySource` | `token` field in the JSON body | Webhook-style routes that pass a token in the payload. |
-| `ContextSource` | FastStream rabbit message context | RabbitMQ subscriber needs the publishing tenant. |
+| `ContextSource` | FastStream message context | Rabbit or Kafka subscriber needs the publishing tenant. |
 
-`ContextSource` degrades to always resolving `None` when `fastloom[rabbit]` isn't installed, so importing `fastloom.tenant.depends`/`fastloom.tenant.settings` never requires `aio-pika` — only actually using a Rabbit-backed tenant dependency does.
+`ContextSource` uses FastStream's broker-agnostic `Context("message")` (not a Rabbit- or Kafka-specific message type), so it works the same whether the underlying broker is `RabbitSubscriber` or `KafkaSubscriber` — it only needs `faststream` itself installed, not `aio-pika`/`confluent-kafka` specifically. A service with no broker extra at all can still import `fastloom.tenant.depends`/`fastloom.tenant.settings`; only actually wiring `TC.from_[ContextSource]` into a route without `faststream` installed fails (loudly, at dependency-resolution time).
 
 Inject a source-bound tenant dependency like this:
 
