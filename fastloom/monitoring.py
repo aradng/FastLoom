@@ -335,7 +335,12 @@ def instrument_brokers(settings: ObservabilitySettings) -> None:
     if not settings.OTEL_ENABLED:
         return
     for instrument in infer_broker_instruments(settings):
-        instrument.value()
+        # NOTE: functions in the Instruments body are methods, not members —
+        # attribute access yields the bare callable, same as instrument_otel
+        func: Callable = (
+            instrument if callable(instrument) else instrument.value
+        )
+        func()
 
 
 def setup_otel_config(settings: ObservabilitySettings):
