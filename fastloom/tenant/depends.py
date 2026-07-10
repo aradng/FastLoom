@@ -2,7 +2,7 @@ from abc import abstractmethod
 from collections.abc import Callable, MutableMapping
 from itertools import chain
 from json import JSONDecodeError
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from aredis_om.model.model import NotFoundError  # type: ignore[import-untyped]
 from fastapi import Depends, Header, HTTPException, Path, Request
@@ -150,25 +150,36 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
         return _inner
 
 
-try:
-    from faststream import Depends as StreamDepends
+if TYPE_CHECKING:
     from faststream.rabbit.fastapi import RabbitMessage
 
     class ContextSource(BaseTenantSource):
         async def _dep(self, tenant: Annotated[str, RabbitMessage]):
             return tenant
 
-    def get_dep(self) -> Callable[..., str | None]:
-        def _inner(
-            tenant: Annotated[str, StreamDepends(self._dep)],
-        ) -> str | None:
-            Tenant.set(tenant)
-            return tenant
+else:
+    try:
+        from faststream import Depends as StreamDepends
+        from faststream.rabbit.fastapi import RabbitMessage
 
-        return _inner
+        class ContextSource(BaseTenantSource):
+            async def _dep(self, tenant: Annotated[str, RabbitMessage]):
+                return tenant
 
-except ImportError:
-    pass
+        def get_dep(self) -> Callable[..., str | None]:
+            def _inner(
+                tenant: Annotated[str, StreamDepends(self._dep)],
+            ) -> str | None:
+                Tenant.set(tenant)
+                return tenant
+
+            return _inner
+
+    except ImportError:
+
+        class ContextSource(BaseTenantSource):
+            async def _dep(self, *args, **kwargs) -> str | None:
+                return None
 
 
 class TenantDependancySelector[K]:

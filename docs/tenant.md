@@ -44,6 +44,8 @@ The launcher wires `Configs.from_` as a `TenantDependancySelector` that knows ab
 | `TokenBodySource` | `token` field in the JSON body | Webhook-style routes that pass a token in the payload. |
 | `ContextSource` | FastStream rabbit message context | RabbitMQ subscriber needs the publishing tenant. |
 
+`ContextSource` degrades to always resolving `None` when `fastloom[rabbit]` isn't installed, so importing `fastloom.tenant.depends`/`fastloom.tenant.settings` never requires `aio-pika` — only actually using a Rabbit-backed tenant dependency does.
+
 Inject a source-bound tenant dependency like this:
 
 ```python

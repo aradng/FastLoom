@@ -1,9 +1,5 @@
 from typing import TYPE_CHECKING, Any
 
-from faststream.opentelemetry.middleware import TelemetryMiddleware
-from faststream.rabbit.opentelemetry.provider import (
-    RabbitTelemetrySettingsProvider,
-)
 from opentelemetry.metrics import Meter, MeterProvider
 from opentelemetry.trace import TracerProvider
 from pydantic import BaseModel
@@ -11,7 +7,20 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from aio_pika import IncomingMessage
     from faststream.message import StreamMessage
+    from faststream.opentelemetry.middleware import TelemetryMiddleware
+    from faststream.rabbit.opentelemetry.provider import (
+        RabbitTelemetrySettingsProvider,
+    )
     from faststream.rabbit.response import RabbitPublishCommand
+else:
+    try:
+        from faststream.opentelemetry.middleware import TelemetryMiddleware
+        from faststream.rabbit.opentelemetry.provider import (
+            RabbitTelemetrySettingsProvider,
+        )
+    except ImportError:
+        TelemetryMiddleware = object
+        RabbitTelemetrySettingsProvider = object
 
 
 def message_body_to_str(message_body) -> str:
