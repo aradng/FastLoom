@@ -307,12 +307,12 @@ def instrument_otel(
         func(*args) if args is not None else func()
 
 
-def infer_broker_instruments(settings: BaseModel) -> list[Callable[[], Any]]:
-    instruments: list[Callable[[], Any]] = []
+def infer_broker_instruments(settings: BaseModel) -> list[Instruments]:
+    instruments: list[Instruments] = []
     if isinstance(settings, RabbitmqSettings):
-        instruments.append(instrument_rabbit)
+        instruments.append(Instruments.RABBIT)
     if isinstance(settings, KafkaSettings):
-        instruments.append(instrument_confluent_kafka)
+        instruments.append(Instruments.KAFKA)
     return instruments
 
 
@@ -335,7 +335,7 @@ def instrument_brokers(settings: ObservabilitySettings) -> None:
     if not settings.OTEL_ENABLED:
         return
     for instrument in infer_broker_instruments(settings):
-        instrument()
+        instrument()  # type: ignore[operator]
 
 
 def setup_otel_config(settings: ObservabilitySettings):
