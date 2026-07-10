@@ -335,7 +335,7 @@ def instrument_brokers(settings: ObservabilitySettings) -> None:
     if not settings.OTEL_ENABLED:
         return
     for instrument in infer_broker_instruments(settings):
-        instrument.value()
+        instrument()  # type: ignore[operator]
 
 
 def setup_otel_config(settings: ObservabilitySettings):

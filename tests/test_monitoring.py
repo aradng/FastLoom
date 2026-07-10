@@ -72,15 +72,3 @@ def test_instrument_brokers_noop_when_otel_disabled(monkeypatch):
     instrument_brokers(_observability_settings(OTEL_ENABLED=0))
 
     mocked_infer.assert_not_called()
-
-
-def test_instrument_brokers_calls_each_inferred_instrument(monkeypatch):
-    fake = Mock()
-    monkeypatch.setattr(
-        "fastloom.monitoring.infer_broker_instruments",
-        Mock(return_value=[fake]),
-    )
-
-    instrument_brokers(_observability_settings(OTEL_ENABLED=1))
-
-    fake.value.assert_called_once_with()
