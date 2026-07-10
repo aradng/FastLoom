@@ -307,16 +307,21 @@ def instrument_otel(
         func(*args) if args is not None else func()
 
 
+def infer_broker_instruments[T: BaseModel](settings: T) -> list[Instruments]:
+    instruments: list[Instruments] = []
+    if isinstance(settings, RabbitmqSettings):
+        instruments.append(Instruments.RABBIT)
+    if isinstance(settings, KafkaSettings):
+        instruments.append(Instruments.KAFKA)
+    return instruments
+
+
 def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
     instruments: list[Instruments] = []
     if is_installed("httpx"):
         instruments.append(Instruments.HTTPX)
     if isinstance(settings, RedisSettings):
         instruments.append(Instruments.REDIS)
-    if isinstance(settings, RabbitmqSettings):
-        instruments.append(Instruments.RABBIT)
-    if isinstance(settings, KafkaSettings):
-        instruments.append(Instruments.KAFKA)
     if isinstance(settings, MongoSettings):
         instruments.append(Instruments.MONGODB)
     if isinstance(settings, ObservabilitySettings) and settings.METRICS:
@@ -324,6 +329,18 @@ def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
     if is_installed("pydantic_ai"):
         instruments.append(Instruments.PYDANTIC_AI)
     return instruments
+
+
+def instrument_brokers(settings: ObservabilitySettings) -> None:
+    # Runs before RabbitSubscriber/KafkaSubscriber construct, so both can
+    # construct at the same point in the launcher — see
+    # docs/signals.md#ordering. Broker instrumentors
+    # patch client classes at import time, so this must run before either
+    # subscriber's router import is triggered.
+    if not int(settings.OTEL_ENABLED):
+        return
+    for instrument in infer_broker_instruments(settings):
+        instrument.value()
 
 
 def setup_otel_config(settings: ObservabilitySettings):

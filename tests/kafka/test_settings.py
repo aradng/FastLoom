@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from fastloom.monitoring import Instruments, infer_instruments
+from fastloom.monitoring import Instruments, infer_broker_instruments
 from fastloom.signals.kafka.settings import KafkaSettings
 
 
@@ -43,4 +43,4 @@ def test_kafka_bootstrap_rejects_malformed(raw: str) -> None:
 
 def test_kafka_settings_are_auto_instrumented() -> None:
     settings = KafkaSettings(KAFKA_URI="broker:9092")
-    assert Instruments.KAFKA in infer_instruments(settings)
+    assert Instruments.KAFKA in infer_broker_instruments(settings)

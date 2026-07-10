@@ -20,7 +20,7 @@ ConfluentKafkaInstrumentor().instrument(tracer_provider=_provider)
 This has to happen before the first *construction* of a `KafkaSubscriber` (or
 call to `get_kafka_router()`) anywhere in the process — not before importing
 `fastloom.signals.kafka` itself, which is import-order-safe (see
-[signals.md](signals.md#ordering-is-reversed-from-rabbit)). `KafkaSubscriber`
+[signals.md](signals.md#ordering)). `KafkaSubscriber`
 construction is what triggers `faststream.confluent`'s internal
 `from confluent_kafka import Producer` — `ConfluentKafkaInstrumentor` patches
 those classes at the class level, so a construction that happens before

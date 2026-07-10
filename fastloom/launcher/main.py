@@ -20,7 +20,7 @@ from fastloom.logging.lifehooks import setup_logging
 from fastloom.logging.settings import LoggingSettings
 from fastloom.mcp.lifehooks import get_mcp_asgi, mcp_lifespan
 from fastloom.mcp.settings import MCPSettings
-from fastloom.monitoring import InitMonitoring
+from fastloom.monitoring import InitMonitoring, instrument_brokers
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
@@ -52,12 +52,18 @@ def app():
     Configs(get_settings_cls(), get_tenant_cls())
     if isinstance(Configs[LoggingSettings].general, LoggingSettings):
         setup_logging(Configs[LoggingSettings].general)
+    # ^IMPORTANT: brokers must instrument before either subscriber
+    # constructs — their OTel instrumentors patch client classes at
+    # import time, see docs/signals.md#ordering.
+    instrument_brokers(Configs[ObservabilitySettings].general)
     if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
         RabbitSubscriber(Configs[RabbitSubscriptable].general)
     elif is_installed("aio-pika"):
         logging.warning("Settings Does Not Inherit from RabbitmqSettings")
-    # ^IMPORTANT:rabbit has to init first so aio-pika OTel instrumentation
-    # attaches before its connection opens.
+    if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
+        KafkaSubscriber(Configs[KafkaSubscriptable].general)
+    elif is_installed("confluent_kafka"):
+        logging.warning("Settings Does Not Inherit from KafkaSettings")
     service_app = get_app()
     lifespans = [lifespan]
     if isinstance(Configs[MCPSettings].general, MCPSettings):
@@ -67,12 +73,6 @@ def app():
         instruments=service_app.additional_instruments,
         otel_sampling=service_app.otel_sampling,
     ) as monitor:
-        # NOTE: kafka constructs after InitMonitoring, opposite of rabbit —
-        # see docs/signals.md#ordering-is-reversed-from-rabbit.
-        if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
-            KafkaSubscriber(Configs[KafkaSubscriptable].general)
-        elif is_installed("confluent_kafka"):
-            logging.warning("Settings Does Not Inherit from KafkaSettings")
         app = FastAPI(
             lifespan=combine_lifespans(
                 *(lifespans + [service_app.lifespan_fn])

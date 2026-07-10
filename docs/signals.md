@@ -44,7 +44,7 @@ app = App(signals_module=signals, ...)
 
 `init_signals` recursively imports subpackages so FastStream sees every `@RabbitSubscriber.subscriber(...)` decorator. The launcher then includes `RabbitSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/rabbitapi`.
 
-The launcher constructs `RabbitSubscriber(TC.general)` **before** `InitMonitoring`, so aio-pika OTel instrumentation attaches to the broker (`TC.general` satisfies the `RabbitSubscriptable` protocol because your `Settings` inherits both `MonitoringSettings` and `RabbitmqSettings`).
+The launcher calls `instrument_brokers(TC.general)` then constructs `RabbitSubscriber(TC.general)` — both **before** `get_app()`/`InitMonitoring` — so aio-pika OTel instrumentation attaches to the broker before anything else runs (`TC.general` satisfies the `RabbitSubscriptable` protocol because your `Settings` inherits both `MonitoringSettings` and `RabbitmqSettings`). `KafkaSubscriber` constructs at the same point, right after — see [Ordering](#ordering) below.
 
 ## Publishers
 
@@ -137,14 +137,14 @@ class Settings(KafkaSettings, RabbitmqSettings, ...):
 
 `KAFKA_URI` takes librdkafka's bare `host:port[,host:port]` bootstrap-server form. A `kafka://` prefix is accepted and stripped for convenience (`kafka://broker:9092` → `broker:9092`); malformed input raises a validation error rather than silently passing through.
 
-Unlike `RabbitSubscriber`, `KafkaSubscriber` is a **thin** wrapper — it only owns `router: KafkaRouter` construction. There's no exchange/queue-naming indirection to hide (Kafka has topics, not exchanges), so declare subscribers and publishers straight off the router:
+Unlike `RabbitSubscriber`, `KafkaSubscriber` is a **thin** wrapper — `subscriber`/`publisher` forward straight to the underlying `router: KafkaRouter` with no exchange/queue-naming indirection to hide (Kafka has topics, not exchanges):
 
 ```python
 # signals/consumer/order.py
 from fastloom.signals.kafka.depends import KafkaSubscriber
 
 
-@KafkaSubscriber.router.subscriber(
+@KafkaSubscriber.subscriber(
     "my_service.order.create",
     group_id="my_service",
     auto_offset_reset="earliest",
@@ -153,10 +153,12 @@ async def on_order_create(payload: OrderSignal) -> None:
     ...
 
 
-order_publisher = KafkaSubscriber.router.publisher("my_service.order.create")
+order_publisher = KafkaSubscriber.publisher("my_service.order.create")
 ```
 
 Everything FastStream's confluent router supports — `batch`, `ack_policy`, multiple topics per subscriber, etc. — is available directly; fastloom doesn't wrap it. There's no DLX-style retry/backoff (Kafka's append-only log with consumer-group offsets doesn't map onto Rabbit's per-message delay-queue model, and no real consumer has needed it — they NACK-and-move-on via FastStream's own `ack_policy`).
+
+`KafkaSubscriber` can't subclass `KafkaRouter` directly to drop even the `subscriber`/`publisher` forwarding — `SelfSustainingMeta` only proxies attribute names that are *missing* from the class (via `__getattr__`); inheriting from `KafkaRouter` would make its methods present via normal MRO lookup, so `KafkaSubscriber.subscriber` would resolve to the raw unbound function instead of routing through the singleton, breaking at call time. `router` itself is still reachable unchanged (e.g. `KafkaSubscriber.router.broker` in tests) since it's a plain instance attribute, not shadowed by anything class-level.
 
 The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/kafkaapi`.
 
@@ -164,11 +166,13 @@ The launcher includes `KafkaSubscriber.router` in the FastAPI app so AsyncAPI do
 
 A service using both `RabbitSubscriber` and `KafkaSubscriber` (a hybrid signals setup) gets two independent AsyncAPI documents — Rabbit's at `{API_PREFIX}/rabbitapi`, Kafka's at `{API_PREFIX}/kafkaapi` — never a merged one. FastStream's `AsyncAPI` specification factory (`faststream.specification.asyncapi.factory`) has partial scaffolding for multiple brokers (`add_broker()`, a `self.brokers` list), but `to_specification()` only ever renders `self.brokers[0]`, and the underlying schema generators (`get_broker_server`/`get_broker_channels`) each take a single broker — there's no version of FastStream today that can produce one combined multi-broker document. Each `StreamRouter` (`RabbitRouter`/`KafkaRouter`) mounts its own 3-route docs sub-router (`GET {schema_url}`, `.json`, `.yaml`) onto the parent app at ASGI-lifespan-startup, purely additively, with **no path-collision check** — if both routers ever computed the same `schema_url`, both sets of routes would silently coexist in the route table and Starlette's first-match-wins matching would permanently shadow whichever was included second, with no error or warning anywhere. `get_rabbit_router`/`get_kafka_router` give each broker a distinct path specifically to avoid this.
 
-### Ordering is reversed from Rabbit
+### Ordering
 
-`RabbitSubscriber` is constructed **before** `InitMonitoring` (so `AioPikaInstrumentor` attaches before the connection opens). `KafkaSubscriber` is constructed **after** `InitMonitoring` enters — the opposite order. `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` at the class level, and FastStream's confluent client does `from confluent_kafka import Producer` at *import* time; constructing a `KafkaSubscriber` (which triggers that import internally) before instrumentation runs would bind the unpatched classes permanently for the process.
+`RabbitSubscriber` and `KafkaSubscriber` both construct **before** `get_app()`/`InitMonitoring` — the launcher calls `instrument_brokers(TC.general)` first, then constructs whichever of the two subscribers apply. `instrument_brokers` runs `AioPikaInstrumentor`/`ConfluentKafkaInstrumentor` up front, independent of the rest of `InitMonitoring` (Sentry init, FastAPI instrumentation, service-specific `additional_instruments`), because neither depends on data from `get_app()` — both are auto-inferred straight from `TC.general` (`infer_broker_instruments`).
 
-Note this is about **construction**, not the top-level `import fastloom.signals.kafka.depends` statement — `kafka.depends` defers its own `faststream.confluent` import into `get_kafka_router()`'s body specifically so the module itself can be imported eagerly (same as `RabbitSubscriber`) without tripping the ordering constraint. This is handled for you inside the launcher — just know that if you construct `KafkaSubscriber` yourself outside the launcher (e.g. a standalone script), instrument first.
+This split exists because `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` by reassigning the *module attribute* (`confluent_kafka.Producer = AutoInstrumentedProducer`), not by wrapping methods in place — FastStream's confluent client does `from confluent_kafka import Producer` at *import* time, which copies a reference to whatever class is bound at that moment. If that import happens before the patch, FastStream keeps referring to the unpatched class for the lifetime of the process, no matter when a `Producer` instance actually gets constructed later. (`aio-pika`'s instrumentor doesn't have this problem — `AioPikaInstrumentor` wraps `Queue.consume`/`Exchange.publish` in place on the existing class objects, so it's insensitive to import order; that's the underlying reason Kafka's ordering constraint used to look different from Rabbit's.)
+
+Note this is about when `get_kafka_router()` actually **runs**, not the top-level `import fastloom.signals.kafka.depends` statement — `kafka.depends` defers its own `faststream.confluent` import into `get_kafka_router()`'s body specifically so the module itself can be imported eagerly without tripping the ordering constraint. This is handled for you inside the launcher — just know that if you construct `KafkaSubscriber` yourself outside the launcher (e.g. a standalone script), call `instrument_brokers` first.
 
 ### Telemetry caveat
 
