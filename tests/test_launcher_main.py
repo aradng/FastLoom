@@ -14,7 +14,7 @@ class _LauncherTestSettings(
 ): ...
 
 
-def test_app_runs_early_monitoring_and_constructs_subscribers_before_get_app(
+def test_app_instruments_and_constructs_subscribers_before_get_app(
     monkeypatch,
 ):
     settings = _LauncherTestSettings(
@@ -35,7 +35,7 @@ def test_app_runs_early_monitoring_and_constructs_subscribers_before_get_app(
         "get_settings_cls": Mock(),
         "get_tenant_cls": Mock(),
         "get_app": Mock(return_value=service_app),
-        "init_early_monitoring": Mock(),
+        "instrument_brokers": Mock(),
         "RabbitSubscriber": Mock(router=APIRouter()),
         "KafkaSubscriber": Mock(router=APIRouter()),
         "InitMonitoring": MagicMock(),
@@ -50,7 +50,7 @@ def test_app_runs_early_monitoring_and_constructs_subscribers_before_get_app(
     positions = [
         call_order.index(name)
         for name in (
-            "init_early_monitoring",
+            "instrument_brokers",
             "RabbitSubscriber",
             "KafkaSubscriber",
             "get_app",

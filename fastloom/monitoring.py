@@ -21,7 +21,6 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.trace import Span
 from pydantic import AnyHttpUrl, BaseModel
 from sentry_sdk import init as sentry_init
-from sentry_sdk import is_initialized as sentry_is_initialized
 
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.settings import MongoSettings
@@ -44,8 +43,6 @@ if not TYPE_CHECKING:
 
 
 def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
-    if sentry_is_initialized():
-        return
     integrations = []
     if is_installed("pydantic_ai"):
         from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
@@ -339,15 +336,6 @@ def instrument_brokers(settings: ObservabilitySettings) -> None:
         return
     for instrument in infer_broker_instruments(settings):
         instrument.value()
-
-
-def init_early_monitoring(settings: ObservabilitySettings) -> None:
-    # NOTE: must run before either subscriber constructs — broker OTel
-    # instrumentors patch client classes at import time, and a crash here
-    # should still reach Sentry. See docs/signals.md#ordering.
-    if int(settings.SENTRY_ENABLED):
-        init_sentry(settings.SENTRY_DSN, settings.ENVIRONMENT)
-    instrument_brokers(settings)
 
 
 def setup_otel_config(settings: ObservabilitySettings):

@@ -20,7 +20,7 @@ from fastloom.logging.lifehooks import setup_logging
 from fastloom.logging.settings import LoggingSettings
 from fastloom.mcp.lifehooks import get_mcp_asgi, mcp_lifespan
 from fastloom.mcp.settings import MCPSettings
-from fastloom.monitoring import InitMonitoring, init_early_monitoring
+from fastloom.monitoring import InitMonitoring, instrument_brokers
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
@@ -52,7 +52,10 @@ def app():
     Configs(get_settings_cls(), get_tenant_cls())
     if isinstance(Configs[LoggingSettings].general, LoggingSettings):
         setup_logging(Configs[LoggingSettings].general)
-    init_early_monitoring(Configs[ObservabilitySettings].general)
+    # NOTE: brokers must instrument before either subscriber constructs —
+    # their OTel instrumentors patch client classes at import time, see
+    # docs/signals.md#ordering.
+    instrument_brokers(Configs[ObservabilitySettings].general)
     if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
         RabbitSubscriber(Configs[RabbitSubscriptable].general)
     elif is_installed("aio-pika"):

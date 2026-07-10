@@ -4,7 +4,6 @@ from fastloom.monitoring import (
     Instruments,
     infer_broker_instruments,
     infer_instruments,
-    init_early_monitoring,
     instrument_brokers,
 )
 from fastloom.observability.settings import ObservabilitySettings
@@ -85,32 +84,3 @@ def test_instrument_brokers_calls_each_inferred_instrument(monkeypatch):
     instrument_brokers(_observability_settings(OTEL_ENABLED=1))
 
     fake.value.assert_called_once_with()
-
-
-def test_init_early_monitoring_inits_sentry_before_instrumenting_brokers(
-    monkeypatch,
-):
-    manager = Mock()
-    mocked_init_sentry = Mock()
-    mocked_instrument_brokers = Mock()
-    manager.attach_mock(mocked_init_sentry, "init_sentry")
-    manager.attach_mock(mocked_instrument_brokers, "instrument_brokers")
-    monkeypatch.setattr("fastloom.monitoring.init_sentry", mocked_init_sentry)
-    monkeypatch.setattr(
-        "fastloom.monitoring.instrument_brokers", mocked_instrument_brokers
-    )
-
-    init_early_monitoring(_observability_settings(SENTRY_ENABLED=1))
-
-    call_order = [call[0] for call in manager.mock_calls]
-    assert call_order == ["init_sentry", "instrument_brokers"]
-
-
-def test_init_early_monitoring_skips_sentry_when_disabled(monkeypatch):
-    mocked_init_sentry = Mock()
-    monkeypatch.setattr("fastloom.monitoring.init_sentry", mocked_init_sentry)
-    monkeypatch.setattr("fastloom.monitoring.instrument_brokers", Mock())
-
-    init_early_monitoring(_observability_settings(SENTRY_ENABLED=0))
-
-    mocked_init_sentry.assert_not_called()
