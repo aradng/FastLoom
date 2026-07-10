@@ -157,16 +157,25 @@ if TYPE_CHECKING or is_installed("faststream"):
     from faststream import Context, StreamMessage
     from faststream import Depends as StreamDepends
 
-
-class ContextSource(BaseTenantSource):
-    async def _dep(
-        self, message: Annotated[StreamMessage, Context("message")]
+    async def _context_dep(
+        message: Annotated[StreamMessage, Context("message")],
     ) -> str | None:
         body = await message.decode()
         return body.get("tenant") if isinstance(body, dict) else None
 
+else:
+
+    async def _context_dep(*args, **kwargs) -> str | None:
+        return None
+
+
+class ContextSource(BaseTenantSource):
+    _dep = staticmethod(_context_dep)
+
     def get_dep(self) -> Callable[..., str | None]:
-        def _inner(tenant: str = StreamDepends(self._dep)) -> str | None:
+        def _inner(
+            tenant: Annotated[str, StreamDepends(_context_dep)],
+        ) -> str | None:
             Tenant.set(tenant)
             return tenant
 
