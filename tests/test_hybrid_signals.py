@@ -15,6 +15,19 @@ def _mock_broker(router):
     return router
 
 
+def _flatten_route_paths(routes) -> list[str]:
+    # newer FastAPI wraps included routers lazily (no `.path` until
+    # `effective_candidates()` resolves them); older FastAPI exposes
+    # `.path` directly. Handle both so this doesn't break across upgrades.
+    paths = []
+    for route in routes:
+        if hasattr(route, "effective_candidates"):
+            paths.extend(_flatten_route_paths(route.effective_candidates()))
+        elif path := getattr(route, "path", None):
+            paths.append(path)
+    return paths
+
+
 async def test_rabbit_and_kafka_asyncapi_docs_do_not_collide():
     name = "/api/hybrid-test"
     rabbit_router = _mock_broker(
@@ -39,10 +52,10 @@ async def test_rabbit_and_kafka_asyncapi_docs_do_not_collide():
     assert kafka_schema["servers"]["development"]["protocol"] == "kafka"
 
     docs_paths = [
-        route.path
-        for route in app.routes
-        if route.path.startswith(f"{name}/rabbitapi")
-        or route.path.startswith(f"{name}/kafkaapi")
+        path
+        for path in _flatten_route_paths(app.routes)
+        if path.startswith(f"{name}/rabbitapi")
+        or path.startswith(f"{name}/kafkaapi")
     ]
     assert len(docs_paths) == len(set(docs_paths)), (
         "Rabbit and Kafka registered a route at the same path — one is "
