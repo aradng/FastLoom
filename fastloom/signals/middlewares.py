@@ -4,6 +4,8 @@ from opentelemetry.metrics import Meter, MeterProvider
 from opentelemetry.trace import TracerProvider
 from pydantic import BaseModel
 
+from fastloom.launcher.utils import is_installed
+
 if TYPE_CHECKING:
     from aio_pika import IncomingMessage
     from faststream.message import StreamMessage
@@ -12,15 +14,14 @@ if TYPE_CHECKING:
         RabbitTelemetrySettingsProvider,
     )
     from faststream.rabbit.response import RabbitPublishCommand
+elif is_installed("aio_pika"):
+    from faststream.opentelemetry.middleware import TelemetryMiddleware
+    from faststream.rabbit.opentelemetry.provider import (
+        RabbitTelemetrySettingsProvider,
+    )
 else:
-    try:
-        from faststream.opentelemetry.middleware import TelemetryMiddleware
-        from faststream.rabbit.opentelemetry.provider import (
-            RabbitTelemetrySettingsProvider,
-        )
-    except ImportError:
-        TelemetryMiddleware = object
-        RabbitTelemetrySettingsProvider = object
+    TelemetryMiddleware = object
+    RabbitTelemetrySettingsProvider = object
 
 
 def message_body_to_str(message_body) -> str:

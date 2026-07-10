@@ -14,13 +14,6 @@ _AFFECTED_PREFIXES = (
 )
 
 
-class _BlockAioPika:
-    def find_spec(self, name, path=None, target=None):
-        if name == "aio_pika" or name.startswith("aio_pika."):
-            raise ImportError(f"simulated: {name} not installed")
-        return None
-
-
 def _drop_affected_modules():
     for name in list(sys.modules):
         if name.startswith(_AFFECTED_PREFIXES):
@@ -29,18 +22,17 @@ def _drop_affected_modules():
 
 @pytest.fixture
 def without_aio_pika():
+    """`sys.modules[name] = None` fakes "not installed" for import/find_spec"""
     saved = {
         name: mod
         for name, mod in sys.modules.items()
         if name.startswith(_AFFECTED_PREFIXES)
     }
     _drop_affected_modules()
-    blocker = _BlockAioPika()
-    sys.meta_path.insert(0, blocker)
+    sys.modules["aio_pika"] = None
     try:
         yield
     finally:
-        sys.meta_path.remove(blocker)
         _drop_affected_modules()
         sys.modules.update(saved)
 

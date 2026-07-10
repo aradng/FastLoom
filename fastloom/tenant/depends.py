@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import abstractmethod
 from collections.abc import Callable, MutableMapping
 from itertools import chain
@@ -12,6 +14,7 @@ from fastloom.auth.depends import JWTAuth, OptionalJWTAuth
 from fastloom.auth.schemas import UserClaims
 from fastloom.cache.base import HostTenantMapping
 from fastloom.cache.lifehooks import RedisHandler
+from fastloom.launcher.utils import is_installed
 from fastloom.tenant import Tenant
 from fastloom.tenant.protocols import TenantHostSchema, TenantNameSchema
 
@@ -150,21 +153,18 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
         return _inner
 
 
-if TYPE_CHECKING:
+_RABBIT_AVAILABLE = is_installed("aio_pika")
+
+if TYPE_CHECKING or _RABBIT_AVAILABLE:
+    from faststream import Depends as StreamDepends
     from faststream.rabbit.fastapi import RabbitMessage
 
-    class ContextSource(BaseTenantSource):
-        async def _dep(self, tenant: Annotated[str, RabbitMessage]):
-            return tenant
 
-else:
-    try:
-        from faststream import Depends as StreamDepends
-        from faststream.rabbit.fastapi import RabbitMessage
+class ContextSource(BaseTenantSource):
+    async def _dep(self, tenant: Annotated[str, RabbitMessage]) -> str | None:
+        return tenant
 
-        class ContextSource(BaseTenantSource):
-            async def _dep(self, tenant: Annotated[str, RabbitMessage]):
-                return tenant
+    if _RABBIT_AVAILABLE:
 
         def get_dep(self) -> Callable[..., str | None]:
             def _inner(
@@ -174,12 +174,6 @@ else:
                 return tenant
 
             return _inner
-
-    except ImportError:
-
-        class ContextSource(BaseTenantSource):
-            async def _dep(self, *args, **kwargs) -> str | None:
-                return None
 
 
 class TenantDependancySelector[K]:
