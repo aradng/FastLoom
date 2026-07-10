@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 def get_kafka_router(name: str, settings: KafkaSettings) -> KafkaRouter:
-    # deferred: see docs/signals.md#ordering-is-reversed-from-rabbit
+    # deferred: see docs/signals.md#ordering
     from faststream.confluent.fastapi import KafkaRouter
 
     return KafkaRouter(
