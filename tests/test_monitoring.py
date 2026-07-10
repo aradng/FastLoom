@@ -4,6 +4,7 @@ from fastloom.monitoring import (
     Instruments,
     infer_broker_instruments,
     infer_instruments,
+    init_early_monitoring,
     instrument_brokers,
 )
 from fastloom.observability.settings import ObservabilitySettings
@@ -11,8 +12,9 @@ from fastloom.signals.kafka.settings import KafkaSettings
 from fastloom.signals.settings import RabbitmqSettings
 
 
-class _HybridSettings(ObservabilitySettings, RabbitmqSettings, KafkaSettings):
-    pass
+class _HybridSettings(
+    ObservabilitySettings, RabbitmqSettings, KafkaSettings
+): ...
 
 
 def _hybrid_settings(**overrides) -> _HybridSettings:
@@ -25,6 +27,12 @@ def _hybrid_settings(**overrides) -> _HybridSettings:
     )
 
 
+def _observability_settings(**overrides) -> ObservabilitySettings:
+    return ObservabilitySettings(
+        ENVIRONMENT="test", PROJECT_NAME="fastloom_test", **overrides
+    )
+
+
 def test_infer_broker_instruments_detects_rabbit_and_kafka():
     assert infer_broker_instruments(_hybrid_settings()) == [
         Instruments.RABBIT,
@@ -32,33 +40,39 @@ def test_infer_broker_instruments_detects_rabbit_and_kafka():
     ]
 
 
-def test_infer_broker_instruments_empty_without_broker_settings():
-    settings = ObservabilitySettings(
-        ENVIRONMENT="test", PROJECT_NAME="fastloom_test"
+def test_infer_broker_instruments_kafka_only():
+    settings = KafkaSettings(KAFKA_URI="broker:9092")
+    assert infer_broker_instruments(settings) == [Instruments.KAFKA]
+
+
+def test_infer_broker_instruments_rabbit_only():
+    settings = RabbitmqSettings(
+        RABBIT_URI="amqp://guest:guest@localhost:5672/"
     )
-    assert infer_broker_instruments(settings) == []
+    assert infer_broker_instruments(settings) == [Instruments.RABBIT]
+
+
+def test_infer_broker_instruments_empty_without_broker_settings():
+    assert infer_broker_instruments(_observability_settings()) == []
 
 
 def test_infer_instruments_no_longer_includes_broker_instruments():
-    # Broker instrumentation moved to infer_broker_instruments/
-    # instrument_brokers so it can run before either subscriber
-    # constructs — see docs/signals.md#ordering. infer_instruments must
-    # not re-include them, or InitMonitoring would double-instrument.
+    # moved to infer_broker_instruments/instrument_brokers — see
+    # docs/signals.md#ordering
     instruments = infer_instruments(_hybrid_settings())
     assert Instruments.RABBIT not in instruments
     assert Instruments.KAFKA not in instruments
 
 
 def test_instrument_brokers_noop_when_otel_disabled(monkeypatch):
-    fake = Mock()
+    mocked_infer = Mock()
     monkeypatch.setattr(
-        "fastloom.monitoring.infer_broker_instruments",
-        Mock(return_value=[fake]),
+        "fastloom.monitoring.infer_broker_instruments", mocked_infer
     )
 
-    instrument_brokers(_hybrid_settings(OTEL_ENABLED=0))
+    instrument_brokers(_observability_settings(OTEL_ENABLED=0))
 
-    fake.value.assert_not_called()
+    mocked_infer.assert_not_called()
 
 
 def test_instrument_brokers_calls_each_inferred_instrument(monkeypatch):
@@ -68,6 +82,35 @@ def test_instrument_brokers_calls_each_inferred_instrument(monkeypatch):
         Mock(return_value=[fake]),
     )
 
-    instrument_brokers(_hybrid_settings(OTEL_ENABLED=1))
+    instrument_brokers(_observability_settings(OTEL_ENABLED=1))
 
     fake.value.assert_called_once_with()
+
+
+def test_init_early_monitoring_inits_sentry_before_instrumenting_brokers(
+    monkeypatch,
+):
+    manager = Mock()
+    mocked_init_sentry = Mock()
+    mocked_instrument_brokers = Mock()
+    manager.attach_mock(mocked_init_sentry, "init_sentry")
+    manager.attach_mock(mocked_instrument_brokers, "instrument_brokers")
+    monkeypatch.setattr("fastloom.monitoring.init_sentry", mocked_init_sentry)
+    monkeypatch.setattr(
+        "fastloom.monitoring.instrument_brokers", mocked_instrument_brokers
+    )
+
+    init_early_monitoring(_observability_settings(SENTRY_ENABLED=1))
+
+    call_order = [call[0] for call in manager.mock_calls]
+    assert call_order == ["init_sentry", "instrument_brokers"]
+
+
+def test_init_early_monitoring_skips_sentry_when_disabled(monkeypatch):
+    mocked_init_sentry = Mock()
+    monkeypatch.setattr("fastloom.monitoring.init_sentry", mocked_init_sentry)
+    monkeypatch.setattr("fastloom.monitoring.instrument_brokers", Mock())
+
+    init_early_monitoring(_observability_settings(SENTRY_ENABLED=0))
+
+    mocked_init_sentry.assert_not_called()
