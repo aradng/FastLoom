@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from fastloom.cache.settings import RedisSettings
 from fastloom.extras import AREDIS_OM_INSTALLED
+from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import ProjectSettings
 from fastloom.tenant import Tenant
 from fastloom.tenant.settings import ConfigAlias as Configs
@@ -26,4 +27,10 @@ def setup_http_cache(app: FastAPI, general: BaseModel) -> None:
     settings = get_settings()
     settings.url = str(general.REDIS_URL)
     settings.prefix = Configs[ProjectSettings].general.PROJECT_NAME  # type: ignore[misc]
-    FastAPIRedis(app).lifespan().caching()
+    builder = FastAPIRedis(app).lifespan().caching()
+
+    observability = Configs[ObservabilitySettings].general  # type: ignore[misc]
+    if isinstance(observability, ObservabilitySettings) and int(
+        observability.OTEL_ENABLED
+    ):
+        builder.otel()

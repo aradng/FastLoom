@@ -99,6 +99,8 @@ Fastloom wires the official [`fastapi-redis-sdk`](https://github.com/redis/fasta
 
 The launcher points the SDK's own key prefix at `Configs[ProjectSettings].general.PROJECT_NAME` (instead of its default `redis:fastapi`), so cache keys are namespaced per service — required since multiple fastloom services typically share one Redis instance.
 
+When `ObservabilitySettings.OTEL_ENABLED` is on, the launcher also calls the SDK's own `.otel()` — this emits spans/metrics for the *caching layer itself* (hit/miss ratio, eviction counts, write type, latency per `eviction_group`), which is genuinely new signal on top of what `fastloom.monitoring.instrument_redis()` already gives you (raw Redis command tracing). It reads `opentelemetry.trace.get_tracer(...)`/`get_meter(...)` — the *global* provider — so it only picks up Logfire's configured pipeline because `setup_http_cache` runs inside the `InitMonitoring` context, after `logfire.configure()` has already registered it. The SDK's own `otel_redis_enabled` flag (native redis-py command instrumentation) is deliberately left off — `instrument_redis()` already covers that, and turning both on would double-instrument every Redis command.
+
 ### Manual invalidation across routers
 
 `cache_evict()` only works for the route/group that populated the cache. When invalidation is triggered by something else entirely — a cascade delete on a foreign key, a background job, a broker signal — reach for `RedisHandler.cache_backend.delete_group(...)` directly (see [`RedisHandler`](#redishandler) above):

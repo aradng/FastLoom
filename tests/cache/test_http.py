@@ -7,10 +7,12 @@ from redis_fastapi.cache import (
     CacheHitException,
     CacheResponseCaptureMiddleware,
 )
+from redis_fastapi.telemetry import disable_telemetry, is_enabled
 
 import fastloom.cache.http as http
 from fastloom.cache.http import scoped_eviction_group, setup_http_cache
 from fastloom.cache.settings import RedisSettings
+from fastloom.observability.settings import ObservabilitySettings
 from fastloom.tenant import Tenant
 
 
@@ -54,3 +56,20 @@ def test_setup_http_cache_wires_middleware_pool_url_and_project_prefix(
     assert app.exception_handlers.get(CacheHitException) is not None
     assert get_settings().url == "redis://cache-host:6379/2"
     assert get_settings().prefix == "my_service"
+
+
+def test_setup_http_cache_enables_otel_when_observability_enabled(
+    monkeypatch,
+):
+    configs = MagicMock()
+    configs.__getitem__.return_value.general = ObservabilitySettings(
+        ENVIRONMENT="test", PROJECT_NAME="my_service", OTEL_ENABLED=1
+    )
+    monkeypatch.setattr(http, "Configs", configs)
+
+    disable_telemetry()
+    try:
+        setup_http_cache(FastAPI(), RedisSettings())
+        assert is_enabled() is True
+    finally:
+        disable_telemetry()
