@@ -3,24 +3,23 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from fastloom.i18n.base import DoesNotExist
 from fastloom.launcher.depends import reject_external
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.launcher.utils import reload_app
 from fastloom.tenant.depends import TenantNotFound
-from fastloom.tenant.settings import ConfigAlias as _ConfigAlias
-from fastloom.tenant.settings import Configs
+from fastloom.tenant.settings import ConfigAlias as Configs
 
 
 def init_settings_endpoints(
     app: FastAPI,
-    configs: type[Configs[Any, BaseModel]],
+    configs: type[Configs[Any]],
 ) -> None:
     dependencies = (
         []
-        if _ConfigAlias[LauncherSettings].general.SETTINGS_PUBLIC  # type: ignore[misc]
+        if Configs[LauncherSettings].general.SETTINGS_PUBLIC  # type: ignore[misc]
         else [Depends(reject_external)]
     )
     router = APIRouter(dependencies=dependencies)
