@@ -156,12 +156,9 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
 if TYPE_CHECKING or is_installed("faststream"):
     from faststream import StreamMessage
 
-    # FastAPI-integration routers (RabbitRouter/KafkaRouter) resolve each
-    # message through FastAPI's own dependency system, not fast_depends —
-    # faststream.Context returns a fast_depends marker FastAPI can't see,
-    # so it silently misclassifies the field. This Context returns a real
-    # fastapi.params.Depends and is shared (broker-agnostic) internal
-    # infra: same object re-exported by every `<broker>.fastapi` module.
+    # faststream.Context doesn't work with RabbitRouter/KafkaRouter (they
+    # resolve via FastAPI's own DI) — see docs/tenant.md for why this
+    # private-but-broker-agnostic import is the correct one instead.
     from faststream._internal.fastapi.context import Context
 
 
