@@ -33,7 +33,11 @@ kafka = [
     "faststream[otel,confluent]",
     "opentelemetry-instrumentation-confluent-kafka>=0.62b1,<0.64b0",
 ]
-redis = ["faststream[redis]", "redis-om>=1.0,<2.0"]
+redis = [
+    "faststream[redis]",
+    "redis-om>=1.0,<2.0",
+    "fastapi-redis-sdk>=0.7.0,<0.8.0",
+]
 fastapi = ["fastapi>=0,<1", "uvicorn", "python-multipart"]
 
 mongo = ["beanie>=2.0.0,<3.0.0"]

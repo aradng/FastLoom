@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 SettingsCls = type[BaseModel]
 
 
+def is_installed(module: str) -> bool:
+    return importlib.util.find_spec(module) is not None
+
+
 def _dynamic_import(name: str):
     if (cwd := Path.cwd()) not in sys.path:
         sys.path.insert(0, str(cwd))
@@ -58,6 +62,36 @@ def get_tenant_cls() -> SettingsCls:
         return BaseModel
 
 
+def setup_brokers() -> None:
+    from fastloom.extras import AIO_PIKA_INSTALLED, CONFLUENT_KAFKA_INSTALLED
+    from fastloom.monitoring import instrument_brokers
+    from fastloom.observability.settings import ObservabilitySettings
+    from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
+    from fastloom.signals.kafka.depends import KafkaSubscriber
+    from fastloom.signals.kafka.settings import (
+        KafkaSettings,
+        KafkaSubscriptable,
+    )
+    from fastloom.signals.settings import RabbitmqSettings
+    from fastloom.tenant.settings import ConfigAlias as Configs
+
+    instrument_brokers(Configs[ObservabilitySettings].general)  # type: ignore[misc]
+    if isinstance(
+        Configs[RabbitSubscriptable].general,  # type: ignore[misc]
+        RabbitmqSettings,
+    ):
+        RabbitSubscriber(Configs[RabbitSubscriptable].general)  # type: ignore[misc]
+    elif AIO_PIKA_INSTALLED:
+        logging.warning("Settings Does Not Inherit from RabbitmqSettings")
+    if isinstance(
+        Configs[KafkaSubscriptable].general,  # type: ignore[misc]
+        KafkaSettings,
+    ):
+        KafkaSubscriber(Configs[KafkaSubscriptable].general)  # type: ignore[misc]
+    elif CONFLUENT_KAFKA_INSTALLED:
+        logging.warning("Settings Does Not Inherit from KafkaSettings")
+
+
 def reload_app():
     import inspect
     from pathlib import Path
@@ -75,10 +109,6 @@ def reload_app():
     ).touch()
     if not Configs[LauncherSettings].general.DEBUG:
         os.kill(os.getppid(), signal.SIGHUP)
-
-
-def is_installed(module: str) -> bool:
-    return importlib.util.find_spec(module) is not None
 
 
 def combine_lifespans[AppT](

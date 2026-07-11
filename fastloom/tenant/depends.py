@@ -14,7 +14,7 @@ from fastloom.auth.depends import JWTAuth, OptionalJWTAuth
 from fastloom.auth.schemas import UserClaims
 from fastloom.cache.base import HostTenantMapping
 from fastloom.cache.lifehooks import RedisHandler
-from fastloom.launcher.utils import is_installed
+from fastloom.extras import FASTSTREAM_INSTALLED
 from fastloom.tenant import Tenant
 from fastloom.tenant.protocols import TenantHostSchema, TenantNameSchema
 
@@ -153,7 +153,7 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
         return _inner
 
 
-if TYPE_CHECKING or is_installed("faststream"):
+if TYPE_CHECKING or FASTSTREAM_INSTALLED:
     from faststream import StreamMessage
 
     # faststream.Context doesn't work with RabbitRouter/KafkaRouter (they
