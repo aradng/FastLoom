@@ -157,6 +157,7 @@ Parameters:
 | `key` | Suffix appended to `<PROJECT_NAME>:lock:<key>` to namespace the lock per service. |
 | `ttl` | Seconds the lock stays held while the function runs. Set this **longer than the worst-case runtime** of the protected code. |
 | `grace` | On clean exit, the key is re-expired to this many seconds instead of being deleted. Use a non-zero grace to keep other replicas from racing back in if the work isn't actually re-runnable until some downstream timer fires. |
+| `scope_to_parent` | Prefixes `key` with `os.getppid()` — the parent watcher process's pid (uvicorn/gunicorn master, a supervisor, etc.), not the worker's own. A worker respawn/reload keeps the same parent, so the lock key is unchanged; a full restart of the watcher itself gets a fresh key immediately instead of waiting out whatever TTL the previous generation's lock still had left. |
 
 Semantics:
 

@@ -1,3 +1,5 @@
+from os import getppid
+
 from pydantic import BaseModel
 
 from fastloom.cache.base import (
@@ -44,5 +46,9 @@ def test_setup_redis_scopes_all_cache_prefixes_by_project_name():
 
         Configs.self = configs
         assert RedisGuardGate("bootstrap").key == "my_service:lock:bootstrap"
+        assert (
+            RedisGuardGate("tick_loop", scope_to_parent=True).key
+            == f"my_service:lock:{getppid()}:tick_loop"
+        )
     finally:
         Configs.self = None  # type: ignore[misc, assignment]
