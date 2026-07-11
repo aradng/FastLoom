@@ -24,7 +24,11 @@ from sentry_sdk import init as sentry_init
 
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.settings import MongoSettings
-from fastloom.launcher.utils import is_installed
+from fastloom.extras import (
+    FASTMCP_INSTALLED,
+    HTTPX_INSTALLED,
+    PYDANTIC_AI_INSTALLED,
+)
 from fastloom.observability.settings import ObservabilitySettings, OtelConfig
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.kafka.settings import KafkaSettings
@@ -44,12 +48,12 @@ if not TYPE_CHECKING:
 
 def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
     integrations = []
-    if is_installed("pydantic_ai"):
+    if PYDANTIC_AI_INSTALLED:
         from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
 
         integrations.append(PydanticAIIntegration())
 
-    if is_installed("fastmcp"):
+    if FASTMCP_INSTALLED:
         from sentry_sdk.integrations.mcp import MCPIntegration
 
         integrations.append(MCPIntegration())
@@ -318,7 +322,7 @@ def infer_broker_instruments(settings: BaseModel) -> list[Instruments]:
 
 def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
     instruments: list[Instruments] = []
-    if is_installed("httpx"):
+    if HTTPX_INSTALLED:
         instruments.append(Instruments.HTTPX)
     if isinstance(settings, RedisSettings):
         instruments.append(Instruments.REDIS)
@@ -326,7 +330,7 @@ def infer_instruments[T: BaseModel](settings: T) -> list[Instruments]:
         instruments.append(Instruments.MONGODB)
     if isinstance(settings, ObservabilitySettings) and settings.METRICS:
         instruments.append(Instruments.METRICS)
-    if is_installed("pydantic_ai"):
+    if PYDANTIC_AI_INSTALLED:
         instruments.append(Instruments.PYDANTIC_AI)
     return instruments
 

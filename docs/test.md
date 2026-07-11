@@ -9,6 +9,8 @@ Fastloom ships with a batteries-included test helper package: pytest fixtures th
 - `fastloom.test.fixtures.settings.settings_mock`, `TC` — rebuild the `Configs` singleton from in-test YAML.
 - `fastloom.test.fixtures.docker.mongo_container` — session-scoped Mongo via testcontainers.
 - `fastloom.test.fixtures.docker.kafka_container` — session-scoped Kafka (KRaft mode, no Zookeeper) via testcontainers.
+- `fastloom.test.fixtures.docker.redis_container` — session-scoped Redis via testcontainers (`redis-stack-server` image, so RediSearch is available for `redis-om` indexes).
+- `fastloom.test.fixtures.docker.postgres_container` — session-scoped Postgres via testcontainers (not used by fastloom itself — for services that bring their own Postgres/SQLAlchemy layer).
 - `fastloom.test.container.create_container`, `PrivateRegistryDocker` — testcontainers helper with private-registry auth.
 - `fastloom.test.utils.assert_deep_diff`, `status_check`, `assert_success`, `expect_calling`, `to_dict`, `generate_token`, `token_to_header`, `ignore_keys` — assertion + setup helpers.
 - `fastloom.test.constants` — `SECRET_KEY`, image names, port constants.
@@ -166,28 +168,28 @@ def mongo_container() -> ContainerDataFixture:
 
 1. Pulls from a **private registry** when `REGISTRY_ADDRESS`, `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` env vars are set. (CI sets these; local dev usually doesn't need to.)
 2. Accepts `env_vars`, `volumes`, `commands`, `wait_strategy` as plain kwargs.
-3. Yields `(container, exposed_port_string)`.
+3. Yields `(container, host, exposed_port_string)`.
 
-Spin up Redis, RabbitMQ, or any other service the same way:
+`redis_container` and `postgres_container` are already provided the same way — import them instead of rolling your own:
 
 ```python
-@pytest.fixture(scope="session")
-def redis_container():
-    with create_container("redis:7-alpine", port=6379) as (_, port):
-        yield port
+from fastloom.test.fixtures.docker import postgres_container, redis_container  # noqa: F401
 
 
-@pytest.fixture(scope="session")
-def rabbit_container():
-    with create_container(
-        "rabbitmq:3-management",
-        port=5672,
-        env_vars={"RABBITMQ_DEFAULT_USER": "test", "RABBITMQ_DEFAULT_PASS": "test"},
-    ) as (_, port):
-        yield port
+@pytest.fixture
+def service_settings(redis_container) -> Settings:
+    container, host, port = redis_container
+    return Settings(
+        ENVIRONMENT="test",
+        PROJECT_NAME="my_service",
+        REDIS_URL=f"redis://{host}:{port}/0",
+        # ... other capability fields
+    )
 ```
 
-Wire those URIs into `service_settings` and the fastloom fixtures take over from there.
+`redis_container` uses the `redis-stack-server` image, not plain `redis` — `redis-om`'s indexed `JsonModel` queries need the RediSearch module, which the stock image doesn't ship. `postgres_container` isn't consumed by anything in fastloom itself (fastloom has no Postgres capability); it's there for services that bring their own Postgres/SQLAlchemy layer, matching the same `(container, host, port)` shape as every other fixture here.
+
+Need a broker container fastloom doesn't ship (e.g. RabbitMQ)? Spin it up the same way `create_container` is used above — same three kwargs, same yielded shape — and wire the resulting URI into `service_settings`.
 
 Kafka doesn't fit `create_container`'s single-port model (KRaft/Zookeeper listener config, advertised listeners) — use the fastloom-provided `kafka_container` fixture instead, which wraps `testcontainers.kafka.KafkaContainer` directly:
 

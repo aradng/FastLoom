@@ -5,7 +5,8 @@ Fastloom uses Redis for two distinct purposes: a per-tenant settings cache (and 
 **Symbols at a glance**
 
 - `fastloom.cache.settings.RedisSettings` — `REDIS_URL` (default `redis://localhost:6379/0`).
-- `fastloom.cache.lifehooks.RedisHandler` — singleton holding sync + async `Redis` clients.
+- `fastloom.cache.lifehooks.RedisHandler` — singleton holding sync + async (decoded and raw-bytes) `Redis` clients, plus a `cache_backend` (see [HTTP response caching](#http-response-caching)).
+- `fastloom.cache.http` — launcher wiring for `fastapi-redis-sdk` (bundled in the `redis` extra).
 - `fastloom.cache.base.BaseCache` — `redis-om` `JsonModel` base.
 - `fastloom.cache.base.BaseTenantSettingCache` — settings cache row (`id` primary key).
 - `fastloom.cache.base.HostTenantMapping` — host → tenant index.
@@ -31,7 +32,8 @@ When `Settings` inherits `RedisSettings`, `Configs._setup_redis()` instantiates 
 ```python
 class RedisHandler(SelfSustaining):
     enabled: bool = False
-    redis: Redis             # redis.asyncio.Redis
+    redis: Redis             # redis.asyncio.Redis, decode_responses=True
+    redis_bytes: Redis       # redis.asyncio.Redis, decode_responses=False
     sync_redis: SyncRedis    # redis.Redis (sync)
 ```
 
@@ -45,7 +47,11 @@ if RedisHandler.enabled:
     RedisHandler.sync_redis.get("key")
 ```
 
+`redis` decodes responses to `str` — it backs `redis-om` and is the right choice for everyday string/hash/JSON commands. `redis_bytes` is undecoded and exists specifically for raw binary payloads (e.g. a serialized Arrow/IPC buffer) where UTF-8 decoding would corrupt the data.
+
 `enabled` is set by a sync `ping()` at construction; respect it when deciding whether to use the cache as authoritative.
+
+`RedisHandler.cache_backend` is also set — a `CacheBackend(redis)` instance built with no `eviction_group`, since every `CacheBackend` method (`get`/`set`/`delete`/`has`/`delete_group`) takes its own `eviction_group=` override per call. One shared instance covers every group in the service; see [HTTP response caching](#http-response-caching) for how to use it for manual, cross-router invalidation.
 
 ## Custom JSON caches
 
@@ -86,6 +92,30 @@ class HostTenantMapping(BaseCache, index=True):
 ## Migrator
 
 The launcher's lifespan runs `await aredis_om.Migrator().run()` when `cache_enabled` is true. This creates the secondary indexes that `redis-om` needs for `find(...)` queries. If you add `index=True` columns to your cache models, the migrator will pick them up at next boot.
+
+## HTTP response caching
+
+Fastloom wires the official [`fastapi-redis-sdk`](https://github.com/redis/fastapi-redis-sdk) into the launcher for route-level GET caching (`ETag`/`304`, `X-Redis-Cache`) with DI-based invalidation (`cache()`, `cache_evict()`, `cache_put()`). Fastloom doesn't reimplement that machinery — it only wires the SDK's connection pool onto the `REDIS_URL` you already configured. `fastapi-redis-sdk` ships as part of the `redis` extra, so nothing beyond `class Settings(..., RedisSettings, ...)` is needed — the launcher wires it whenever `RedisSettings` is present. Actual caching stays opt-in per route via `Depends(cache(...))`; there's no separate service-level toggle.
+
+The launcher points the SDK's own key prefix at `Configs[ProjectSettings].general.PROJECT_NAME` (instead of its default `redis:fastapi`), so cache keys are namespaced per service — required since multiple fastloom services typically share one Redis instance.
+
+### Manual invalidation across routers
+
+`cache_evict()` only works for the route/group that populated the cache. When invalidation is triggered by something else entirely — a cascade delete on a foreign key, a background job, a broker signal — reach for `RedisHandler.cache_backend.delete_group(...)` directly (see [`RedisHandler`](#redishandler) above):
+
+```python
+from fastloom.cache.lifehooks import RedisHandler
+
+async def delete_curve_share(share_id: str) -> None:
+    await db.delete_share(share_id)  # FK cascade deletes junctions
+
+    await RedisHandler.cache_backend.delete_group("curve_share")
+    await RedisHandler.cache_backend.delete_group(f"junctions:{share_id}")
+```
+
+Scope `eviction_group` names per-parent (`f"junctions:{share_id}"` rather than one flat `"junctions"` group) when you need to invalidate a slice of a group rather than all of it — `delete_group` matches on a key pattern, so the resolution is whatever you bake into the group name. `fastloom.cache.http.scoped_eviction_group(eviction_group)` is available if you also want to fold `fastloom.tenant.Tenant` into that name yourself — it's a plain helper, not automatic.
+
+For the DI factories themselves (`cache()`, `cache_evict()`, `cache_put()`, `CacheBackend.get`/`set`/`has`) see the [upstream docs](https://redis.github.io/fastapi-redis-sdk/) — fastloom only supplies the connection and prefix wiring described above.
 
 ## `RedisGuardGate` — single-leader work
 

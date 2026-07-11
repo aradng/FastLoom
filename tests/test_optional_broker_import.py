@@ -7,6 +7,7 @@ _AFFECTED_PREFIXES = (
     "aio_pika",
     "confluent_kafka",
     "faststream",
+    "fastloom.extras",
     "fastloom.signals",
     "fastloom.tenant.depends",
     "fastloom.tenant.settings",

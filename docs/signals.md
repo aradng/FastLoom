@@ -44,7 +44,7 @@ app = App(signals_module=signals, ...)
 
 `init_signals` recursively imports subpackages so FastStream sees every `@RabbitSubscriber.subscriber(...)` decorator. The launcher then includes `RabbitSubscriber.router` in the FastAPI app so AsyncAPI docs render at `{API_PREFIX}/rabbitapi`.
 
-The launcher calls `instrument_brokers(TC.general)` then constructs `RabbitSubscriber(TC.general)` — both **before** `get_app()`/`InitMonitoring` — so aio-pika OTel instrumentation attaches to the broker before anything else runs (`TC.general` satisfies the `RabbitSubscriptable` protocol because your `Settings` inherits both `MonitoringSettings` and `RabbitmqSettings`). `KafkaSubscriber` constructs at the same point, right after — see [Ordering](#ordering) below.
+The launcher's `fastloom.launcher.utils.setup_brokers()` calls `instrument_brokers(TC.general)` then constructs `RabbitSubscriber(TC.general)` — both **before** `get_app()`/`InitMonitoring` — so aio-pika OTel instrumentation attaches to the broker before anything else runs (`TC.general` satisfies the `RabbitSubscriptable` protocol because your `Settings` inherits both `MonitoringSettings` and `RabbitmqSettings`). `KafkaSubscriber` constructs at the same point, right after — see [Ordering](#ordering) below.
 
 ## Publishers
 
@@ -168,7 +168,7 @@ A service using both `RabbitSubscriber` and `KafkaSubscriber` (a hybrid signals 
 
 ### Ordering
 
-`RabbitSubscriber` and `KafkaSubscriber` both construct **before** `get_app()`/`InitMonitoring` — the launcher calls `instrument_brokers(TC.general)` first, then constructs whichever of the two subscribers apply. `instrument_brokers` runs `AioPikaInstrumentor`/`ConfluentKafkaInstrumentor` up front, independent of the rest of `InitMonitoring` (Sentry init, FastAPI instrumentation, service-specific `additional_instruments`), because neither depends on data from `get_app()` — both are auto-inferred straight from `TC.general` (`infer_broker_instruments`).
+`RabbitSubscriber` and `KafkaSubscriber` both construct **before** `get_app()`/`InitMonitoring` — `fastloom.launcher.utils.setup_brokers()` calls `instrument_brokers(TC.general)` first, then constructs whichever of the two subscribers apply. `instrument_brokers` runs `AioPikaInstrumentor`/`ConfluentKafkaInstrumentor` up front, independent of the rest of `InitMonitoring` (Sentry init, FastAPI instrumentation, service-specific `additional_instruments`), because neither depends on data from `get_app()` — both are auto-inferred straight from `TC.general` (`infer_broker_instruments`).
 
 This split exists because `ConfluentKafkaInstrumentor` patches `confluent_kafka.Producer`/`Consumer` by reassigning the *module attribute* (`confluent_kafka.Producer = AutoInstrumentedProducer`), not by wrapping methods in place — FastStream's confluent client does `from confluent_kafka import Producer` at *import* time, which copies a reference to whatever class is bound at that moment. If that import happens before the patch, FastStream keeps referring to the unpatched class for the lifetime of the process, no matter when a `Producer` instance actually gets constructed later. (`aio-pika`'s instrumentor doesn't have this problem — `AioPikaInstrumentor` wraps `Queue.consume`/`Exchange.publish` in place on the existing class objects, so it's insensitive to import order; that's the underlying reason Kafka's ordering constraint used to look different from Rabbit's.)
 

@@ -8,19 +8,21 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from fastloom.cache.http import setup_http_cache
+from fastloom.cache.settings import RedisSettings
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.launcher.utils import (
     combine_lifespans,
     get_app,
     get_settings_cls,
     get_tenant_cls,
-    is_installed,
+    setup_brokers,
 )
 from fastloom.logging.lifehooks import setup_logging
 from fastloom.logging.settings import LoggingSettings
 from fastloom.mcp.lifehooks import get_mcp_asgi, mcp_lifespan
 from fastloom.mcp.settings import MCPSettings
-from fastloom.monitoring import InitMonitoring, instrument_brokers
+from fastloom.monitoring import InitMonitoring
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
@@ -52,18 +54,7 @@ def app():
     Configs(get_settings_cls(), get_tenant_cls())
     if isinstance(Configs[LoggingSettings].general, LoggingSettings):
         setup_logging(Configs[LoggingSettings].general)
-    # NOTE: brokers must instrument before either subscriber constructs —
-    # their OTel instrumentors patch client classes at import time, see
-    # docs/signals.md#ordering.
-    instrument_brokers(Configs[ObservabilitySettings].general)
-    if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
-        RabbitSubscriber(Configs[RabbitSubscriptable].general)
-    elif is_installed("aio-pika"):
-        logging.warning("Settings Does Not Inherit from RabbitmqSettings")
-    if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
-        KafkaSubscriber(Configs[KafkaSubscriptable].general)
-    elif is_installed("confluent_kafka"):
-        logging.warning("Settings Does Not Inherit from KafkaSettings")
+    setup_brokers()
     service_app = get_app()
     lifespans = [lifespan]
     if isinstance(Configs[MCPSettings].general, MCPSettings):
@@ -93,6 +84,7 @@ def app():
             allow_methods=["*"],
             allow_headers=["*"],
         )
+        setup_http_cache(app, Configs[RedisSettings].general)
         service_app.load_exception_handlers(app)
         service_app.load_healthchecks(app)
         service_app.load_system_endpoints(app)

@@ -47,9 +47,9 @@ else:
 Pair the import pattern with a runtime gate. Two correct forms:
 
 ```python
-from fastloom.launcher.utils import is_installed
+from fastloom.extras import AIO_PIKA_INSTALLED
 
-if is_installed("aio_pika"):
+if AIO_PIKA_INSTALLED:
     ...
 ```
 
@@ -59,6 +59,10 @@ if isinstance(TC.general, RabbitmqSettings):
 ```
 
 `isinstance(TC.general, X)` is preferred when the capability is driven by which settings mixin the service inherited.
+
+`fastloom.extras` is the single place every optional module's installed-flag is computed (once, at import time, via `fastloom.launcher.utils.is_installed`) — import the precomputed `X_INSTALLED` constant from there rather than calling `is_installed("module_name")` yourself at each call site. Add a new one there when wiring a new optional integration.
+
+Test note: `tests/test_optional_broker_import.py` simulates "package missing" by setting `sys.modules[name] = None` and force-reimporting a fixed module list — any module whose top-level code caches an `is_installed()` result (like `fastloom.extras`) must be in that test's `_AFFECTED_PREFIXES` reload list, or the cached value goes stale across parametrized runs.
 
 ## Anti-patterns
 

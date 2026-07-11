@@ -134,7 +134,7 @@ else:
         from pydantic import BaseModel as Document
 ```
 
-Pair it with runtime gates: `fastloom.launcher.utils.is_installed("module_name")` or `isinstance(Configs.general, Capability)`. Don't put unguarded imports of optional packages at module top level — `import fastloom` must work with the minimum extras.
+Pair it with runtime gates: a precomputed `fastloom.extras.X_INSTALLED` constant (built once, on `fastloom.launcher.utils.is_installed("module_name")`) or `isinstance(Configs.general, Capability)`. Don't put unguarded imports of optional packages at module top level — `import fastloom` must work with the minimum extras.
 
 ## Settings field naming
 
