@@ -32,7 +32,7 @@ default:
     MCP_OPENAPI: true   # also expose your FastAPI endpoints as MCP tools
 ```
 
-When `MCP_ENABLED=True`, the launcher mounts `get_mcp_asgi()` at `FastAPISettings.API_PREFIX` (so the final MCP endpoint is `<API_PREFIX>/mcp`). The MCP lifespan is composed into the FastAPI lifespan via `combine_lifespans`, so MCP transports start and stop in step with your service.
+When `MCP_ENABLED=True`, the launcher mounts `get_mcp_asgi()` at the app root (bare `/mcp`). The FastAPI instance is built with `root_path=API_PREFIX`, so the same endpoint is reachable both directly (`/mcp`) and through the `API_PREFIX`-prefixed path a gateway like Envoy forwards (`<API_PREFIX>/mcp`) — no double mount needed. The MCP lifespan is composed into the FastAPI lifespan via `combine_lifespans`, so MCP transports start and stop in step with your service.
 
 ## Defining tools
 
@@ -92,7 +92,7 @@ async def my_lifespan(app):
 
 
 app = App(
-    mounts=[(f"{Configs.general.API_PREFIX}/mcp", mcp_app)],
+    mounts=[("/mcp", mcp_app)],
     lifespan_fn=combine_lifespans(my_lifespan, mcp_app.lifespan),
     ...
 )

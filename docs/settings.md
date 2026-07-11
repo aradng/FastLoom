@@ -174,14 +174,14 @@ class S(BaseModel):
 
 ## System settings endpoints
 
-When the `Configs` singleton is wired, the launcher mounts these routes (always under `/`, optionally also under `API_PREFIX` if `LauncherSettings.SETTINGS_PUBLIC=True`):
+When the `Configs` singleton is wired, the launcher mounts these routes bare (under `/`):
 
 - `GET /tenant_schema` — JSON Schema for `TenantSettings`.
 - `GET /tenant_settings?tenant=<name>` — current resolved settings for that tenant.
 - `POST /tenant_settings?tenant=<name>` — persist a partial update (merged on top of the existing document; cache is invalidated).
 - `GET /reload` — touches a service file and (when not in `DEBUG`) sends `SIGHUP` to the parent process to trigger reload.
 
-In production, leave `SETTINGS_PUBLIC` off and front the always-on routes with an auth gateway.
+`root_path` would otherwise make these reachable through `API_PREFIX` too, same as any other route — unless `LauncherSettings.SETTINGS_PUBLIC=True`, requests arriving through the prefixed path are rejected with a 404 via `fastloom.launcher.depends.reject_external`. In production, leave `SETTINGS_PUBLIC` off and front the bare routes with an auth gateway.
 
 ## Related
 

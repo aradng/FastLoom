@@ -23,7 +23,7 @@ async def test_kafka_healthcheck_fails_against_dead_broker():
         PROJECT_NAME="fastloom_test",
         KAFKA_URI="localhost:1",
     )
-    router = get_kafka_router(settings.API_PREFIX, settings)
+    router = get_kafka_router(settings)
     try:
         # ping() on an unstarted router short-circuits to False
         await router.broker.start()

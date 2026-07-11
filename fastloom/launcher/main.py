@@ -69,10 +69,11 @@ def app():
                 *(lifespans + [service_app.lifespan_fn])
             ),
             title=Configs[FastAPISettings].general.PROJECT_NAME,
-            docs_url=f"{Configs[FastAPISettings].general.API_PREFIX}/docs",
-            redoc_url=f"{Configs[FastAPISettings].general.API_PREFIX}/redoc",
-            openapi_url=f"{Configs[FastAPISettings].general.API_PREFIX}/openapi.json",
-            swagger_ui_oauth2_redirect_url=f"{Configs[FastAPISettings].general.API_PREFIX}/docs/oauth2-redirect",
+            root_path=Configs[FastAPISettings].general.API_PREFIX,
+            docs_url="/docs",
+            redoc_url="/redoc",
+            openapi_url="/openapi.json",
+            swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect",
             swagger_ui_init_oauth={
                 "additionalQueryStringParams": {"browser": "false"},
             },
@@ -95,9 +96,7 @@ def app():
             isinstance(Configs[MCPSettings].general, MCPSettings)
             and Configs[MCPSettings].general.MCP_ENABLED
         ):
-            app.mount(
-                Configs[FastAPISettings].general.API_PREFIX, get_mcp_asgi()
-            )
+            app.mount("/", get_mcp_asgi())
         if isinstance(Configs[RabbitSubscriptable].general, RabbitmqSettings):
             app.include_router(RabbitSubscriber.router)
         if isinstance(Configs[KafkaSubscriptable].general, KafkaSettings):
