@@ -57,7 +57,7 @@ TC: type[Configs[Settings, TenantSettings]] = Configs
 | `IAMSettings` | OIDC + OAuth2 + introspection knobs (see [auth.md](auth.md)) |
 | `LoggingSettings` | structured logging config |
 | `MonitoringSettings` | `PROJECT_NAME`, `ENVIRONMENT` |
-| `FastAPISettings` | `DEBUG`, `EXCLUDED_ENDPOINTS`, computed `API_PREFIX` |
+| `FastAPISettings` | `DEBUG`, `DOCS_ENABLED`, `EXCLUDED_ENDPOINTS`, computed `API_PREFIX` |
 
 `PROJECT_NAME` defaults to the name read from the caller's `pyproject.toml` (via `infer_project_name()` in `fastloom/meta.py`), so most services don't need to set it explicitly.
 

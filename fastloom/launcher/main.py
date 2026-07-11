@@ -59,6 +59,11 @@ def app():
     lifespans = [lifespan]
     if isinstance(Configs[MCPSettings].general, MCPSettings):
         lifespans.append(mcp_lifespan)
+    fastapi_settings = Configs[FastAPISettings].general
+
+    def _docs_path(path: str) -> str | None:
+        return path if fastapi_settings.DOCS_ENABLED else None
+
     with InitMonitoring(
         Configs[ObservabilitySettings].general,
         instruments=service_app.additional_instruments,
@@ -68,12 +73,12 @@ def app():
             lifespan=combine_lifespans(
                 *(lifespans + [service_app.lifespan_fn])
             ),
-            title=Configs[FastAPISettings].general.PROJECT_NAME,
-            root_path=Configs[FastAPISettings].general.API_PREFIX,
-            docs_url="/docs",
-            redoc_url="/redoc",
-            openapi_url="/openapi.json",
-            swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect",
+            title=fastapi_settings.PROJECT_NAME,
+            root_path=fastapi_settings.API_PREFIX,
+            docs_url=_docs_path("/docs"),
+            redoc_url=_docs_path("/redoc"),
+            openapi_url=_docs_path("/openapi.json"),
+            swagger_ui_oauth2_redirect_url=_docs_path("/docs/oauth2-redirect"),
             swagger_ui_init_oauth={
                 "additionalQueryStringParams": {"browser": "false"},
             },

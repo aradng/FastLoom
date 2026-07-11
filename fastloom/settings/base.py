@@ -20,6 +20,7 @@ class ProjectSettings(BaseModel):
 
 class FastAPISettings(ProjectSettings):
     DEBUG: bool = True
+    DOCS_ENABLED: bool = True
     EXCLUDED_ENDPOINTS: tuple[Pattern | str, ...] = (
         r"/api/\w+/healthcheck",
         r"/healthcheck",
