@@ -154,8 +154,15 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
 
 
 if TYPE_CHECKING or is_installed("faststream"):
-    from faststream import Context, StreamMessage
-    from faststream import Depends as StreamDepends
+    from faststream import StreamMessage
+
+    # FastAPI-integration routers (RabbitRouter/KafkaRouter) resolve each
+    # message through FastAPI's own dependency system, not fast_depends —
+    # faststream.Context returns a fast_depends marker FastAPI can't see,
+    # so it silently misclassifies the field. This Context returns a real
+    # fastapi.params.Depends and is shared (broker-agnostic) internal
+    # infra: same object re-exported by every `<broker>.fastapi` module.
+    from faststream._internal.fastapi.context import Context
 
     async def _context_dep(
         message: Annotated[StreamMessage, Context("message")],
@@ -173,9 +180,7 @@ class ContextSource(BaseTenantSource):
     _dep = staticmethod(_context_dep)
 
     def get_dep(self) -> Callable[..., str | None]:
-        def _inner(
-            tenant: Annotated[str, StreamDepends(_context_dep)],
-        ) -> str | None:
+        def _inner(tenant: str = Depends(_context_dep)) -> str | None:
             Tenant.set(tenant)
             return tenant
 

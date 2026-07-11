@@ -4,8 +4,10 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+from faststream.confluent import TestKafkaBroker
 from faststream.confluent.fastapi import KafkaRouter
 from faststream.message.source_type import SourceType
+from faststream.rabbit import TestRabbitBroker
 from faststream.rabbit.fastapi import RabbitRouter
 from faststream.rabbit.message import RabbitMessage
 from faststream.rabbit.parser import AioPikaParser
@@ -26,6 +28,30 @@ async def test_context_source_extracts_tenant_from_message_body():
     tenant = await ContextSource(settings={}, general=None)._dep(message)
 
     assert tenant == "acme"
+
+
+@pytest.mark.parametrize(
+    ("router_cls", "test_broker_cls", "uri"),
+    [
+        (RabbitRouter, TestRabbitBroker, "amqp://guest:guest@localhost:5672/"),
+        (KafkaRouter, TestKafkaBroker, "localhost:9092"),
+    ],
+)
+async def test_context_source_resolves_tenant_end_to_end(
+    router_cls, test_broker_cls, uri
+):
+    router = router_cls(uri)
+    dep_fn = ContextSource(settings={"acme": object()}, general=None).get_dep()
+    received = {}
+
+    @router.subscriber("probe")
+    async def handler(tenant: Annotated[str | None, Depends(dep_fn)] = None):
+        received["tenant"] = tenant
+
+    async with test_broker_cls(router.broker) as br:
+        await br.publish({"tenant": "acme", "foo": "bar"}, "probe")
+
+    assert received["tenant"] == "acme"
 
 
 def _mock_broker(router):
