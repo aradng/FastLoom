@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 from abc import abstractmethod
 from collections.abc import Callable, MutableMapping
 from itertools import chain
 from json import JSONDecodeError
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from aredis_om.model.model import NotFoundError  # type: ignore[import-untyped]
 from fastapi import Depends, Header, HTTPException, Path, Request
@@ -12,6 +14,7 @@ from fastloom.auth.depends import JWTAuth, OptionalJWTAuth
 from fastloom.auth.schemas import UserClaims
 from fastloom.cache.base import HostTenantMapping
 from fastloom.cache.lifehooks import RedisHandler
+from fastloom.launcher.utils import is_installed
 from fastloom.tenant import Tenant
 from fastloom.tenant.protocols import TenantHostSchema, TenantNameSchema
 
@@ -150,25 +153,30 @@ class TokenHeaderSource(OptionalTokenHeaderSource):
         return _inner
 
 
-try:
-    from faststream import Depends as StreamDepends
-    from faststream.rabbit.fastapi import RabbitMessage
+if TYPE_CHECKING or is_installed("faststream"):
+    from faststream import StreamMessage
 
-    class ContextSource(BaseTenantSource):
-        async def _dep(self, tenant: Annotated[str, RabbitMessage]):
-            return tenant
+    # faststream.Context doesn't work with RabbitRouter/KafkaRouter (they
+    # resolve via FastAPI's own DI) — see docs/tenant.md for why this
+    # private-but-broker-agnostic import is the correct one instead.
+    from faststream._internal.fastapi.context import Context
+
+
+class ContextSource(BaseTenantSource):
+    async def _dep(
+        self, message: Annotated[StreamMessage, Context("message")]
+    ) -> str | None:
+        body = await message.decode()
+        tenant = body.get("tenant") if isinstance(body, dict) else None
+        if tenant is not None:
+            Tenant.set(tenant)
+        return tenant
 
     def get_dep(self) -> Callable[..., str | None]:
-        def _inner(
-            tenant: Annotated[str, StreamDepends(self._dep)],
-        ) -> str | None:
-            Tenant.set(tenant)
+        def _inner(tenant: str = Depends(self._dep)) -> str | None:
             return tenant
 
         return _inner
-
-except ImportError:
-    pass
 
 
 class TenantDependancySelector[K]:

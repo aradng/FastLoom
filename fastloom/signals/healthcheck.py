@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from collections.abc import Callable, Coroutine
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from faststream.rabbit.fastapi import RabbitRouter
+if TYPE_CHECKING:
+    from faststream.rabbit.fastapi import RabbitRouter
 
 
 class RabbitConnectionError(Exception): ...

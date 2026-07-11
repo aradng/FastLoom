@@ -1,25 +1,9 @@
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import aio_pika
-from aio_pika import Message
-from aio_pika.robust_channel import RobustChannel
-from aio_pika.robust_connection import RobustConnection
-from faststream import ExceptionMiddleware
-from faststream.rabbit import (
-    ExchangeType,
-    RabbitExchange,
-    RabbitMessage,
-    RabbitQueue,
-)
-from faststream.rabbit.fastapi import RabbitRouter
-from faststream.rabbit.publisher.usecase import RabbitPublisher
-from faststream.rabbit.schemas.queue import (
-    ClassicQueueArgs,
-    QuorumQueueArgs,
-    StreamQueueArgs,
-)
 from opentelemetry import trace
 
 from fastloom.meta import SelfSustaining
@@ -27,10 +11,30 @@ from fastloom.settings.base import MonitoringSettings
 from fastloom.signals.middlewares import RabbitPayloadTelemetryMiddleware
 from fastloom.signals.settings import RabbitmqSettings
 
+if TYPE_CHECKING:
+    from aio_pika.robust_channel import RobustChannel
+    from aio_pika.robust_connection import RobustConnection
+    from faststream import ExceptionMiddleware
+    from faststream.rabbit import (
+        RabbitExchange,
+        RabbitMessage,
+        RabbitQueue,
+    )
+    from faststream.rabbit.fastapi import RabbitRouter
+    from faststream.rabbit.publisher.usecase import RabbitPublisher
+    from faststream.rabbit.schemas.queue import (
+        ClassicQueueArgs,
+        QuorumQueueArgs,
+        StreamQueueArgs,
+    )
+
 logger = logging.getLogger(__name__)
 
 
 def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
+    # deferred: see docs/signals.md#ordering
+    from faststream.rabbit.fastapi import RabbitRouter
+
     return RabbitRouter(
         settings.RABBIT_URI,
         schema_url=f"{name}/rabbitapi",
@@ -84,6 +88,9 @@ class RabbitSubscriber(SelfSustaining):
             async def handler(message: StreamMessage[IncomingMessage]): ...
             ```
         """
+        from faststream import ExceptionMiddleware
+        from faststream.rabbit import ExchangeType, RabbitExchange
+
         super().__init__()
         self._settings = settings
         if exceptions is None:
@@ -127,6 +134,8 @@ class RabbitSubscriber(SelfSustaining):
 
     @classmethod
     async def _get_topology_channel(cls) -> RobustChannel:
+        import aio_pika
+
         async with cls._topology_lock:
             if (
                 cls._topology_connection is None
@@ -174,6 +183,8 @@ class RabbitSubscriber(SelfSustaining):
         :param auto_delete: whether the queue is auto-deleted
         :return: RabbitQueue
         """
+        from faststream.rabbit import RabbitQueue
+
         return RabbitQueue(
             name=cls._get_queue_name(cls._sanitize_routing_key(name)),
             routing_key=name,
@@ -198,6 +209,9 @@ class RabbitSubscriber(SelfSustaining):
         creates a dead letter queue with specified delay
         and binds it to the exchange
         """
+        from faststream.rabbit import RabbitQueue
+        from faststream.rabbit.schemas.queue import ClassicQueueArgs
+
         suffix = ".fallback" if fallback else ""
         queue_name = (
             f"{cls._get_dlx_name(cls._sanitize_routing_key(routing_key))}"
@@ -247,6 +261,8 @@ class RabbitSubscriber(SelfSustaining):
         exc: Exception,
         message: RabbitMessage,
     ):
+        from aio_pika import Message
+
         message.headers["x-delivery-count"] = (
             message.headers.get("x-delivery-count", 0) + 1
         )
