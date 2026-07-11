@@ -72,6 +72,9 @@ def app():
             ),
             title=fastapi_settings.PROJECT_NAME,
             root_path=fastapi_settings.API_PREFIX,
+            swagger_ui_init_oauth={
+                "additionalQueryStringParams": {"browser": "false"},
+            },
             **(
                 {}
                 if fastapi_settings.DOCS_ENABLED
@@ -79,7 +82,6 @@ def app():
                     "docs_url": None,
                     "redoc_url": None,
                     "openapi_url": None,
-                    "swagger_ui_oauth2_redirect_url": None,
                 }
             ),
         )
