@@ -4,7 +4,7 @@ from opentelemetry.metrics import Meter, MeterProvider
 from opentelemetry.trace import TracerProvider
 from pydantic import BaseModel
 
-from fastloom.launcher.utils import is_installed
+from fastloom.extras import AIO_PIKA_INSTALLED, FASTSTREAM_INSTALLED
 
 if TYPE_CHECKING:
     from aio_pika import IncomingMessage
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
         RabbitTelemetrySettingsProvider,
     )
     from faststream.rabbit.response import RabbitPublishCommand
-elif is_installed("faststream") and is_installed("aio_pika"):
+elif FASTSTREAM_INSTALLED and AIO_PIKA_INSTALLED:
     from faststream.opentelemetry.middleware import TelemetryMiddleware
     from faststream.rabbit.opentelemetry.provider import (
         RabbitTelemetrySettingsProvider,

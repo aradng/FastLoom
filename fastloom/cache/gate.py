@@ -1,6 +1,6 @@
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from os import getpid
+from os import getpid, getppid
 
 from fastloom.cache.lifehooks import RedisHandler
 from fastloom.settings.base import ProjectSettings
@@ -21,6 +21,13 @@ class RedisGuardGate:
     async def lifespan_init():
         ...
     ```
+    - *scoped to the current watcher process* (a fresh key per restart,
+    instead of waiting out a stale TTL left by the previous one):
+    ```
+    @RedisGuardGate("tick_loop", ttl=30, scope_to_parent=True)
+    async def tick_loop():
+        ...
+    ```
     """
 
     key: str
@@ -28,9 +35,17 @@ class RedisGuardGate:
     grace: int
     _acquired: bool = False
 
-    def __init__(self, key: str, ttl: int = 60, grace: int = 0):
+    def __init__(
+        self,
+        key: str,
+        ttl: int = 60,
+        grace: int = 0,
+        scope_to_parent: bool = False,
+    ):
+        if scope_to_parent:
+            key = f"{getppid()}:{key}"
         self.key = (
-            f"{Configs[ProjectSettings].general.PROJECT_NAME}:{key}:leader"  # type: ignore[misc]
+            f"{Configs[ProjectSettings].general.PROJECT_NAME}:lock:{key}"  # type: ignore[misc]
         )
         self.ttl = ttl
         self.grace = grace

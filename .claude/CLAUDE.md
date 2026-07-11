@@ -68,7 +68,7 @@ else:
         from pydantic import BaseModel as Document
 ```
 
-When adding new optional integrations, follow the same shape and gate runtime instantiation behind `fastloom.launcher.utils.is_installed("module_name")` or `isinstance(Configs[X].general, X)`.
+When adding new optional integrations, follow the same shape and gate runtime instantiation behind a precomputed `fastloom.extras.X_INSTALLED` constant (backed by `fastloom.launcher.utils.is_installed("module_name")`, computed once at import time — add a new constant there rather than calling `is_installed` ad hoc) or `isinstance(Configs[X].general, X)`.
 
 ### Signals / messaging (`fastloom/signals/`)
 

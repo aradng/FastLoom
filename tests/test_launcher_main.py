@@ -35,7 +35,7 @@ def test_app_instruments_and_constructs_subscribers_before_get_app(
         "get_settings_cls": Mock(),
         "get_tenant_cls": Mock(),
         "get_app": Mock(return_value=service_app),
-        "instrument_brokers": Mock(),
+        "setup_brokers": Mock(),
         "RabbitSubscriber": Mock(router=APIRouter()),
         "KafkaSubscriber": Mock(router=APIRouter()),
         "InitMonitoring": MagicMock(),
@@ -49,12 +49,6 @@ def test_app_instruments_and_constructs_subscribers_before_get_app(
     call_order = [call[0] for call in manager.mock_calls]
     positions = [
         call_order.index(name)
-        for name in (
-            "instrument_brokers",
-            "RabbitSubscriber",
-            "KafkaSubscriber",
-            "get_app",
-            "InitMonitoring",
-        )
+        for name in ("setup_brokers", "get_app", "InitMonitoring")
     ]
     assert positions == sorted(positions)
