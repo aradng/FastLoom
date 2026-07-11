@@ -59,6 +59,8 @@ def app():
     lifespans = [lifespan]
     if isinstance(Configs[MCPSettings].general, MCPSettings):
         lifespans.append(mcp_lifespan)
+    fastapi_settings = Configs[FastAPISettings].general
+
     with InitMonitoring(
         Configs[ObservabilitySettings].general,
         instruments=service_app.additional_instruments,
@@ -68,15 +70,20 @@ def app():
             lifespan=combine_lifespans(
                 *(lifespans + [service_app.lifespan_fn])
             ),
-            title=Configs[FastAPISettings].general.PROJECT_NAME,
-            root_path=Configs[FastAPISettings].general.API_PREFIX,
-            docs_url="/docs",
-            redoc_url="/redoc",
-            openapi_url="/openapi.json",
-            swagger_ui_oauth2_redirect_url="/docs/oauth2-redirect",
+            title=fastapi_settings.PROJECT_NAME,
+            root_path=fastapi_settings.API_PREFIX,
             swagger_ui_init_oauth={
                 "additionalQueryStringParams": {"browser": "false"},
             },
+            **(
+                {}
+                if fastapi_settings.DOCS_ENABLED
+                else {
+                    "docs_url": None,
+                    "redoc_url": None,
+                    "openapi_url": None,
+                }
+            ),
         )
         app.add_middleware(
             CORSMiddleware,
