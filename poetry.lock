@@ -1532,6 +1532,8 @@ files = [
 
 [package.dependencies]
 fastapi = {version = ">=0.115.0", extras = ["standard"]}
+opentelemetry-api = {version = ">=1.20", optional = true, markers = "extra == \"otel\""}
+opentelemetry-sdk = {version = ">=1.20", optional = true, markers = "extra == \"otel\""}
 pydantic = ">=2.12.5"
 pydantic-settings = ">=2.0.0"
 redis = ">=6.0.0,<7.3.0"
@@ -7151,4 +7153,4 @@ test = ["deepdiff", "freezegun", "httpx2", "pytest", "pytest-asyncio", "pytest-c
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "124e6793eb0b41b6c98d2826664828d2946d3a4887d1843bb59387da91927225"
+content-hash = "fc49762a16f24508cdea5a43f1e52103d633dbe6f5e25dcd211726aaf62139f1"

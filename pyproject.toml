@@ -36,7 +36,7 @@ kafka = [
 redis = [
     "faststream[redis]",
     "redis-om>=1.0,<2.0",
-    "fastapi-redis-sdk>=0.7.0,<0.8.0",
+    "fastapi-redis-sdk[otel]>=0.7.0,<0.8.0",
 ]
 fastapi = ["fastapi>=0,<1", "uvicorn", "python-multipart"]
 
