@@ -1,7 +1,7 @@
 from gettext import gettext as _
 from typing import Any
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
@@ -14,19 +14,16 @@ from fastloom.tenant.settings import ConfigAlias as _ConfigAlias
 from fastloom.tenant.settings import Configs
 
 
-def _require_public_or_internal(request: Request) -> None:
-    if _ConfigAlias[LauncherSettings].general.SETTINGS_PUBLIC:  # type: ignore[misc]
-        return
-    reject_external(request)
-
-
 def init_settings_endpoints(
     app: FastAPI,
     configs: type[Configs[Any, BaseModel]],
 ) -> None:
-    router = APIRouter(
-        dependencies=[Depends(_require_public_or_internal)],
+    dependencies = (
+        []
+        if _ConfigAlias[LauncherSettings].general.SETTINGS_PUBLIC  # type: ignore[misc]
+        else [Depends(reject_external)]
     )
+    router = APIRouter(dependencies=dependencies)
 
     @router.get("/tenant_schema")
     async def get_tenant_schema() -> dict[str, Any]:

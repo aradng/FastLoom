@@ -110,7 +110,7 @@ app = App(
 )
 ```
 
-Route triples are `(router, prefix, openapi_tag)`. The prefix is added on top of `FastAPISettings.API_PREFIX` (which defaults to `/api/<PROJECT_NAME>`).
+Route triples are `(router, prefix, openapi_tag)`, registered bare. The FastAPI instance's `root_path` (`FastAPISettings.API_PREFIX`, which defaults to `/api/<PROJECT_NAME>`) makes each route reachable both directly and through the prefixed path a gateway forwards — see [launcher.md](launcher.md).
 
 ## 5. Run it
 

@@ -133,7 +133,7 @@ beta:
 - `POST /tenant_settings?tenant=<name>` — partial update merged with the existing document; cache invalidated.
 - `GET /reload` — triggers uvicorn reload (touches a service file).
 
-These are always mounted at the root; set `LauncherSettings.SETTINGS_PUBLIC=True` to also mount them under `API_PREFIX`. Treat the always-on root paths as admin-only.
+These are registered at their bare path; `root_path` (see [launcher.md](launcher.md)) makes them reachable both directly and through the `API_PREFIX`-prefixed path a gateway like Envoy forwards. Unless `LauncherSettings.SETTINGS_PUBLIC=True`, requests arriving through the prefixed path are rejected with a 404 via `fastloom.launcher.depends.reject_external`. Treat the bare path as admin-only/internal traffic.
 
 ## Related
 

@@ -20,7 +20,7 @@ A single `/healthcheck` endpoint runs every registered async handler in sequence
 | Redis | `cache.healthcheck.get_healthcheck(REDIS_URL)` | `App(cache_healthcheck=True)`. |
 | Custom | each entry in `App.healthchecks` | always. |
 
-The route is mounted **twice**: once at the root (`/healthcheck`) for Docker/Kubernetes probes, and once under `API_PREFIX` (`/api/<PROJECT_NAME>/healthcheck`) for proxy-routed clients.
+The route is registered once, bare (`/healthcheck`). The FastAPI instance's `root_path` (`API_PREFIX`) makes it reachable both directly — for Docker/Kubernetes probes — and through the prefixed path (`/api/<PROJECT_NAME>/healthcheck`) a gateway forwards, for proxy-routed clients.
 
 ## Adding service-specific handlers
 

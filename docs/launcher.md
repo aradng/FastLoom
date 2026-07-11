@@ -12,6 +12,7 @@ The launcher orchestrates service startup. It discovers `app.py` and `settings.p
 - `fastloom.launcher.utils.is_installed` — runtime check for optional dependencies; see `fastloom.extras` for the precomputed `X_INSTALLED` constants built on top of it.
 - `fastloom.launcher.utils.setup_brokers` — instruments and constructs `RabbitSubscriber`/`KafkaSubscriber` (in that order, before `get_app()`) based on which settings the service inherits.
 - `fastloom.launcher.utils.reload_app` — touch the caller's source file to trigger uvicorn `--reload`.
+- `fastloom.launcher.depends.reject_external` — a FastAPI dependency that 404s a request reaching a route via the `API_PREFIX`-prefixed path, for endpoints that should only ever be hit internally.
 
 ## Discovery contract
 
@@ -48,7 +49,7 @@ App(
 )
 ```
 
-- **`routes`** — each tuple is `(router, prefix, openapi_tag)`. The prefix is appended to `FastAPISettings.API_PREFIX` (default `/api/<PROJECT_NAME>`).
+- **`routes`** — each tuple is `(router, prefix, openapi_tag)`, registered bare via `include_router(router, prefix=prefix, tags=[openapi_tag])`. Routes are **not** prefixed with `API_PREFIX`; the FastAPI instance is built with `root_path=API_PREFIX` instead, so the same bare route is reachable both directly (`/prefix/...`) and via the `API_PREFIX`-prefixed path a gateway like Envoy forwards (`/api/<PROJECT_NAME>/prefix/...`).
 - **`mounts`** — sub-ASGI apps to mount. Tuple is `(path, app)` or `(path, app, name)`.
 - **`models_module`** — a package whose submodules each contain `beanie.Document` / `View` / `UnionDoc` subclasses. The launcher walks it via `pkgutil.iter_modules` and registers everything for Beanie.
 - **`models`** — explicit list; takes precedence over `models_module`.
@@ -71,7 +72,7 @@ App(
 3. If `Settings` inherits `RabbitmqSettings`, construct `RabbitSubscriber(...)` **before** monitoring — so aio-pika instrumentation can attach.
 4. Compose lifespans: the library's `lifespan` (Beanie init + Redis migrator + signal stream registration) + optional `mcp_lifespan` + your `App.lifespan_fn`.
 5. Enter `InitMonitoring(...)` context — configures Logfire, Sentry, OpenTelemetry. Auto-enables instrumentation for Redis/Rabbit/Mongo/Pydantic-AI via `infer_instruments`.
-6. Build the FastAPI instance (custom `docs_url`, `openapi_url`, OAuth2 redirect under `API_PREFIX`).
+6. Build the FastAPI instance with `root_path=API_PREFIX` (bare `docs_url`, `openapi_url`, OAuth2 redirect — reachable both directly and under `API_PREFIX`).
 7. Register CORS, exception handlers, healthcheck routes, system endpoints, then user routes, mounts, MCP mount, RabbitSubscriber router.
 8. Call `monitor.instrument(app, …)` **last** — FastAPI instrumentation must run after all middlewares and routes are bound, or it will miss them.
 
@@ -96,10 +97,20 @@ class LauncherSettings(BaseModel):
     APP_PORT: int = 8000
     DEBUG: bool = True       # enables uvicorn --reload
     WORKERS: int = 4
-    SETTINGS_PUBLIC: bool = False  # when True, mounts /tenant_* under API_PREFIX
+    SETTINGS_PUBLIC: bool = False  # when True, /tenant_* is reachable through API_PREFIX too
 ```
 
-When `SETTINGS_PUBLIC=True`, the tenant settings endpoints are also exposed under `API_PREFIX` (in addition to the always-mounted unprefixed system endpoints). Keep this off in production unless you front the service with an auth layer.
+The system endpoints (`/tenant_schema`, `/tenant_settings`, `/reload`) are registered bare, so `root_path` alone would make them reachable both directly and through the `API_PREFIX`-prefixed path a gateway like Envoy forwards — the same as any other route. Unless `SETTINGS_PUBLIC=True`, `fastloom.tenant.handler.init_settings_endpoints` attaches `Depends(reject_external)` to these routes, which inspects the raw (unstripped) `request.url.path` and 404s any request arriving through the prefixed path. Keep `SETTINGS_PUBLIC` off in production unless you front the service with an auth layer.
+
+## `reject_external`
+
+```python
+from fastloom.launcher.depends import reject_external
+
+router = APIRouter(dependencies=[Depends(reject_external)])
+```
+
+A reusable dependency for any endpoint that should only ever be reachable directly (bare path), never through the `API_PREFIX`-prefixed path a gateway forwards. It exists because `root_path` strips a matching prefix *before* route matching but does not mutate `request.url.path` — so this is the one place that still needs to look at the raw path to tell an internal request apart from an external one.
 
 ## `reload_app`
 
