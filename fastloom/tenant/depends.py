@@ -164,24 +164,19 @@ if TYPE_CHECKING or is_installed("faststream"):
     # infra: same object re-exported by every `<broker>.fastapi` module.
     from faststream._internal.fastapi.context import Context
 
-    async def _context_dep(
-        message: Annotated[StreamMessage, Context("message")],
-    ) -> str | None:
-        body = await message.decode()
-        return body.get("tenant") if isinstance(body, dict) else None
-
-else:
-
-    async def _context_dep(*args, **kwargs) -> str | None:
-        return None
-
 
 class ContextSource(BaseTenantSource):
-    _dep = staticmethod(_context_dep)
+    async def _dep(
+        self, message: Annotated[StreamMessage, Context("message")]
+    ) -> str | None:
+        body = await message.decode()
+        tenant = body.get("tenant") if isinstance(body, dict) else None
+        if tenant is not None:
+            Tenant.set(tenant)
+        return tenant
 
     def get_dep(self) -> Callable[..., str | None]:
-        def _inner(tenant: str = Depends(_context_dep)) -> str | None:
-            Tenant.set(tenant)
+        def _inner(tenant: str = Depends(self._dep)) -> str | None:
             return tenant
 
         return _inner
