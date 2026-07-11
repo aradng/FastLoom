@@ -55,7 +55,7 @@ def test_setup_http_cache_wires_middleware_pool_url_and_project_prefix(
     )
     assert app.exception_handlers.get(CacheHitException) is not None
     assert get_settings().url == "redis://cache-host:6379/2"
-    assert get_settings().prefix == "my_service"
+    assert get_settings().prefix == "my_service:http"
 
 
 def test_setup_http_cache_enables_otel_when_observability_enabled(

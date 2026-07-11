@@ -30,7 +30,7 @@ class RedisGuardGate:
 
     def __init__(self, key: str, ttl: int = 60, grace: int = 0):
         self.key = (
-            f"{Configs[ProjectSettings].general.PROJECT_NAME}:{key}:leader"  # type: ignore[misc]
+            f"{Configs[ProjectSettings].general.PROJECT_NAME}:lock:{key}"  # type: ignore[misc]
         )
         self.ttl = ttl
         self.grace = grace

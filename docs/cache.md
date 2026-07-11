@@ -27,6 +27,18 @@ app = App(cache_healthcheck=True, ...)
 
 When `Settings` inherits `RedisSettings`, `Configs._setup_redis()` instantiates `RedisHandler(general)` and wires both `BaseCache` and the tenant-settings cache class to the shared connection. If Redis is unreachable at startup, `RedisHandler.enabled` stays `False` and the launcher silently falls back to the document / YAML tiers — the cache becomes a no-op rather than failing the boot.
 
+## Key naming convention
+
+Every key fastloom writes is `{PROJECT_NAME}:{category}:...` — colon-separated, `PROJECT_NAME` always first, so services sharing one Redis instance never collide and `redis-cli --scan --pattern 'my_service:*'` gives you the whole picture. Three categories:
+
+| Category | What lives there | Example |
+|----------|-------------------|---------|
+| `cache` | `BaseCache` and subclasses — structured object/JSON caching | `my_service:cache:host_mapping:{host}`, `my_service:cache:tenant_settings:{tenant_id}` |
+| `http` | HTTP response caching (`fastapi-redis-sdk`) — its own sibling namespace, not just another `cache` row, since it's a different subsystem with its own TTL/eviction-group model | `my_service:http:cache:{eviction_group}:{key}` |
+| `lock` | Coordination primitives that aren't cache at all (`RedisGuardGate`) | `my_service:lock:bootstrap` |
+
+`Configs._setup_redis()` sets `global_key_prefix = f"{PROJECT_NAME}:cache"` on `BaseCache`, `BaseTenantSettingCache`, `HostTenantMapping`, and the tenant-schema cache class — you don't need to (and shouldn't) put `PROJECT_NAME` in your own `model_key_prefix`; that field is for distinguishing cache *types* within the `cache` namespace, not for cross-service scoping.
+
 ## `RedisHandler`
 
 ```python
@@ -68,9 +80,7 @@ class UserSessionCache(BaseCache, index=True):
     expires_at: int = Field(index=True)
 ```
 
-`BaseCache` extends `aredis_om.JsonModel`. Key layout is `<global_key_prefix>:<model_key_prefix>:<id>` — `global_key_prefix` defaults to `cache`. For tenant-aware cache rows, override `model_key_prefix` in your `Meta` with the project name so different services on the same Redis don't collide.
-
-The `Configs._setup_redis()` step also rewrites the tenant settings cache's `model_key_prefix` to `<PROJECT_NAME>` for the same reason.
+`BaseCache` extends `aredis_om.JsonModel`. Key layout is `<global_key_prefix>:<model_key_prefix>:<id>` — `global_key_prefix` is rewritten to `<PROJECT_NAME>:cache` at startup (see [Key naming convention](#key-naming-convention) above), so `model_key_prefix` only needs to distinguish this cache type from others in the same service — no need to put the project name in it yourself.
 
 ## Tenant-settings cache
 
@@ -144,7 +154,7 @@ Parameters:
 
 | Param | Purpose |
 |-------|---------|
-| `key` | Suffix appended to `<PROJECT_NAME>:<key>:leader` to namespace the lock per service. |
+| `key` | Suffix appended to `<PROJECT_NAME>:lock:<key>` to namespace the lock per service. |
 | `ttl` | Seconds the lock stays held while the function runs. Set this **longer than the worst-case runtime** of the protected code. |
 | `grace` | On clean exit, the key is re-expired to this many seconds instead of being deleted. Use a non-zero grace to keep other replicas from racing back in if the work isn't actually re-runnable until some downstream timer fires. |
 

@@ -123,9 +123,12 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
 
         if isinstance(self.general, MonitoringSettings):
             narrowed_general = self.general
-            self.tenant_schema.cache.Meta.model_key_prefix = (
-                f"{narrowed_general.PROJECT_NAME}"
-            )
+            cache_prefix = f"{narrowed_general.PROJECT_NAME}:cache"
+            BaseCache.Meta.global_key_prefix = cache_prefix
+            BaseTenantSettingCache.Meta.global_key_prefix = cache_prefix
+            HostTenantMapping.Meta.global_key_prefix = cache_prefix
+            self.tenant_schema.cache.Meta.global_key_prefix = cache_prefix
+            self.tenant_schema.cache.Meta.model_key_prefix = "tenant_settings"
 
     def _load_settings_yaml(self):
         self.settings = load_settings(
