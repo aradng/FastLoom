@@ -60,16 +60,6 @@ def app():
     if isinstance(Configs[MCPSettings].general, MCPSettings):
         lifespans.append(mcp_lifespan)
     fastapi_settings = Configs[FastAPISettings].general
-    docs_kwargs = (
-        {}
-        if fastapi_settings.DOCS_ENABLED
-        else {
-            "docs_url": None,
-            "redoc_url": None,
-            "openapi_url": None,
-            "swagger_ui_oauth2_redirect_url": None,
-        }
-    )
 
     with InitMonitoring(
         Configs[ObservabilitySettings].general,
@@ -82,10 +72,16 @@ def app():
             ),
             title=fastapi_settings.PROJECT_NAME,
             root_path=fastapi_settings.API_PREFIX,
-            swagger_ui_init_oauth={
-                "additionalQueryStringParams": {"browser": "false"},
-            },
-            **docs_kwargs,
+            **(
+                {}
+                if fastapi_settings.DOCS_ENABLED
+                else {
+                    "docs_url": None,
+                    "redoc_url": None,
+                    "openapi_url": None,
+                    "swagger_ui_oauth2_redirect_url": None,
+                }
+            ),
         )
         app.add_middleware(
             CORSMiddleware,
