@@ -8,11 +8,10 @@ from fastapi.responses import JSONResponse
 def init_healthcheck(
     app: FastAPI,
     healthcheck_handlers: list[Callable[[], Coroutine[Any, Any, None]]],
-    prefix: str = "",
 ) -> None:
     router = APIRouter()
 
-    @router.get(f"{prefix}/healthcheck")
+    @router.get("/healthcheck")
     async def healthcheck_endpoint() -> JSONResponse:
         try:
             for handler in healthcheck_handlers:

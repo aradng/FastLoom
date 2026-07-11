@@ -31,13 +31,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get_rabbit_router(name: str, settings: RabbitmqSettings) -> RabbitRouter:
+def get_rabbit_router(settings: RabbitmqSettings) -> RabbitRouter:
     # deferred: see docs/signals.md#ordering
     from faststream.rabbit.fastapi import RabbitRouter
 
     return RabbitRouter(
         settings.RABBIT_URI,
-        schema_url=f"{name}/rabbitapi",
+        schema_url="/rabbitapi",
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()
@@ -95,9 +95,7 @@ class RabbitSubscriber(SelfSustaining):
         self._settings = settings
         if exceptions is None:
             exceptions = [Exception]
-        self.router = get_rabbit_router(
-            self._settings.API_PREFIX, self._settings
-        )
+        self.router = get_rabbit_router(self._settings)
         self.exchange = RabbitExchange(
             name="amq.topic", type=ExchangeType.TOPIC, durable=True
         )

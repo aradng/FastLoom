@@ -8,7 +8,6 @@ from starlette.types import ASGIApp
 
 from fastloom.cache.settings import RedisSettings
 from fastloom.db.signals import BaseDocumentSignal
-from fastloom.launcher.settings import LauncherSettings
 from fastloom.signals.kafka.depends import KafkaSubscriber
 from fastloom.signals.kafka.healthcheck import (
     get_healthcheck as kafka_signal_hc,
@@ -51,7 +50,6 @@ from fastloom.db.settings import MongoSettings
 from fastloom.healthcheck.handler import init_healthcheck
 from fastloom.i18n.base import CustomI18NException
 from fastloom.i18n.handler import i18n_exception_handler
-from fastloom.settings.base import FastAPISettings
 from fastloom.signals.depends import RabbitSubscriber
 from fastloom.signals.healthcheck import (
     get_healthcheck as signal_hc,
@@ -97,11 +95,7 @@ class App(BaseModel):
 
     def load_routes(self, app: FastAPI):
         for router, prefix, name in self.routes:
-            app.include_router(
-                router,
-                prefix=Configs[FastAPISettings].general.API_PREFIX + prefix,  # type: ignore[misc]
-                tags=[name],
-            )
+            app.include_router(router, prefix=prefix, tags=[name])
 
     def load_mounts(self, app: FastAPI):
         for mount in self.mounts:
@@ -141,21 +135,9 @@ class App(BaseModel):
             handlers.append(kafka_signal_hc(KafkaSubscriber.router))
 
         init_healthcheck(app=app, healthcheck_handlers=handlers)
-        # ^for docker and system healthcheck
-        init_healthcheck(
-            app=app,
-            healthcheck_handlers=handlers,
-            prefix=Configs[FastAPISettings].general.API_PREFIX,  # type: ignore[misc]
-        )
 
     def load_system_endpoints(self, app: FastAPI):
         init_settings_endpoints(app=app, configs=Configs)
-        if Configs[LauncherSettings].general.SETTINGS_PUBLIC:  # type: ignore[misc]
-            init_settings_endpoints(
-                app=app,
-                configs=Configs,
-                prefix=Configs[FastAPISettings].general.API_PREFIX,  # type: ignore[misc]
-            )
 
     def load_exception_handlers(self, app: FastAPI):
         for exc_class_or_status_code, handler in (
