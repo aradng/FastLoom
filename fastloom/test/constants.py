@@ -7,7 +7,7 @@ REDIS_PORT = 6379
 REDIS_IMAGE = "redis/redis-stack-server:latest"
 
 POSTGRES_PORT = 5432
-POSTGRES_IMAGE = "postgres:18"
+POSTGRES_IMAGE = "postgres:latest"
 POSTGRES_PASSWORD = "postgres"
 POSTGRES_DB = "test"
 
