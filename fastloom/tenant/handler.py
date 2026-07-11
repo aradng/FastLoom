@@ -6,9 +6,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from fastloom.i18n.base import DoesNotExist
+from fastloom.launcher.depends import reject_external
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.launcher.utils import reload_app
-from fastloom.settings.base import FastAPISettings
 from fastloom.tenant.depends import TenantNotFound
 from fastloom.tenant.settings import ConfigAlias as _ConfigAlias
 from fastloom.tenant.settings import Configs
@@ -17,9 +17,7 @@ from fastloom.tenant.settings import Configs
 def _require_public_or_internal(request: Request) -> None:
     if _ConfigAlias[LauncherSettings].general.SETTINGS_PUBLIC:  # type: ignore[misc]
         return
-    api_prefix = _ConfigAlias[FastAPISettings].general.API_PREFIX  # type: ignore[misc]
-    if request.url.path.startswith(api_prefix):
-        raise HTTPException(status_code=404)
+    reject_external(request)
 
 
 def init_settings_endpoints(
