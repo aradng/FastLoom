@@ -92,17 +92,11 @@ So: per-field override is a *data-only* patch, valid only for fields nothing els
 
 Documented caveat, not hidden: overriding `PROJECT_NAME` itself (or anything else `_setup_mongo`/`_setup_redis` derived from) via `override_fields` leaves `BaseDocumentSignal._PROJECT_NAME`/cache key prefixes pointing at the old value. Use full `override(...)` (which re-runs `__init__`) whenever the overridden field feeds a derived side effect; use `override_fields(...)` for independent flags.
 
-### Test fixtures: session scope becomes the shipped default
+### Test fixtures: `tc_context` now uses `.override()` internally, scope left unchanged
 
-Both `iam` and `assistant` already override fastloom's default (function-scoped, per-test rebuild) `TC` fixture to `scope="session", autouse=True`. Ship that as the default:
+Implemented: `tc_context`/`TC`/`settings_mock` in `fastloom/test/fixtures/settings.py` now use `Configs.override(...)` internally instead of manual `Configs.self = None` before/after — same external behavior, correct token-based reset.
 
-```python
-# fastloom/test/fixtures/settings.py
-@pytest.fixture(scope="session", autouse=True)
-def TC(service_settings, tenant_settings):
-    with Configs.override(service_settings, tenant_settings):
-        yield Configs
-```
+**Deliberately not changed**: the shipped `TC` fixture's scope stays function-scoped (unchanged from today), rather than flipping the default to `session, autouse=True` as originally proposed. Reason found during implementation: if `TC` becomes session-scoped by default while a consuming service's own `service_settings`/`tenant_settings` fixtures stay function-scoped (pytest's normal default, and not verified for every fastloom consumer — only `iam` and `assistant` were audited), pytest raises a hard `ScopeMismatch` error at collection time for that service's entire suite, not a subtle behavior change. `iam` and `assistant` already get session-scoped behavior today by overriding the fixture themselves at their own conftest — that pattern still works unchanged and is the recommended path until every consumer's fixture scopes are confirmed. Both `iam`'s and `assistant`'s existing overrides can be rewritten to wrap `Configs.override(...)` directly instead of `tc_context`, but that's a per-service follow-up, not part of this change.
 
 A per-test/per-case override (feature-flag testing) is then just:
 
@@ -140,15 +134,22 @@ The `.self` back-compat property (metaclass-level) covers **class-level** access
 - `assistant/sandbox/bench_curve_batch.py`, `tests/fixtures/postgres.py`, `tests/fixtures/redis.py` — same `.self =` idiom (including on `assistant`'s own `PGManager`, if it independently follows the same naming convention) — covered by compat property where genuinely class-level.
 - `iam` production code: **nothing required** — no direct `.self` access anywhere outside its own test fixtures.
 
-Net: the back-compat `.self` property means this ships without a coordinated flag-day migration of every downstream consumer. Only `fastloom/tenant/settings.py:82` is a forced, immediate rewrite; everything else can migrate to `.override()` opportunistically.
+Net: the back-compat `.self` property means this ships without a coordinated flag-day migration of every downstream consumer. Only `fastloom/tenant/settings.py:82` was a forced, immediate rewrite; everything else migrates to `.override()` opportunistically.
+
+**Confirmed, not just assumed**: fastloom's own 79 tests pass unchanged, including the 5 test files that construct via `Cls.__new__(Cls)` + direct `.self =` assignment — none of them needed touching. The compat shim eliminated that entire migration item in practice, not just in theory.
 
 ## Non-goals
 
 - Not eliminating `from settings import TC` — that needs a custom mypy plugin to do without losing static type safety, which is out of scope (flagged as Approach B in discussion, explicitly not pursued here).
 - Not making `Configs.__init__` async — Vault integration is handled as a pre-construction step instead.
 - Not touching `RabbitSubscriber`/`KafkaSubscriber`/`RedisHandler`'s own internals beyond inheriting the new `SelfSustaining` — they get `.override()` for free with no class-specific work.
+- Not flipping the shipped `TC` fixture's default scope to session — see the fixtures section above for why.
 
-## Open questions for implementation planning
+## Resolved during implementation
 
-1. Should `override_fields` live only on `Configs` (the only class where "one field" is a meaningful concept today), or on `SelfSustaining` generically? `RabbitSubscriber`/`KafkaSubscriber`/`RedisHandler` don't have an obvious "fields" concept the way `Configs.general` does.
-2. Should the YAML dump-then-reparse round trip in `tc_context`/`patched_settings` (`dump_settings(...)` → patch loader → `Configs(get_settings_cls(), get_tenant_cls())` re-parses it) be collapsed into a direct "construct from pre-built instances" path now that we're touching this code anyway, or left as a separate follow-up?
+1. `override_fields` lives on `Configs` specifically (`fastloom/tenant/settings.py`), not on `SelfSustaining` generically — `RabbitSubscriber`/`KafkaSubscriber`/`RedisHandler` have no equivalent "one field" concept, and adding an unused generic method to all four would be exactly the kind of premature abstraction this codebase's own conventions warn against.
+2. The YAML dump-then-reparse round trip in `tc_context`/`patched_settings` was left as-is — collapsing it into a direct "construct from pre-built instances" path is a separate, unrelated simplification and would have widened this diff beyond the actual goal.
+
+## Implementation
+
+Shipped in this PR: `fastloom/meta.py` (`SelfSustainingMeta`/`SelfSustaining` rewrite), `fastloom/tenant/settings.py` (idempotency-guard fix + `override_fields`), `fastloom/test/fixtures/settings.py` (`tc_context` now uses `.override()`). All 79 existing tests pass unchanged; ruff/mypy/pre-commit clean.

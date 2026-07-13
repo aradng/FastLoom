@@ -47,12 +47,13 @@ def tc_context[V: BaseModel, T: BaseModel](
 ) -> "Generator[Configs[BaseModel, BaseModel]]":
     from fastloom.tenant.settings import Configs
 
-    with patched_settings(service_settings, tenant_settings):
-        Configs.self = None  # type: ignore[misc, assignment]
-        try:
-            yield Configs(get_settings_cls(), get_tenant_cls())
-        finally:
-            Configs.self = None  # type: ignore[misc, assignment]
+    with (
+        patched_settings(service_settings, tenant_settings),
+        Configs.override(  # type: ignore[misc,var-annotated]
+            get_settings_cls(), get_tenant_cls()
+        ) as configs,
+    ):
+        yield configs
 
 
 @pytest.fixture

@@ -1,5 +1,8 @@
 import inspect
 import tomllib
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Self, cast
 
@@ -9,30 +12,50 @@ from pydantic.fields import FieldInfo
 
 class SelfSustainingMeta(type):
     def __new__(mcls, name, bases, namespace):
-        namespace["self"] = cast(object, None)  # reserve the slot
+        namespace["_var"] = ContextVar(f"{name}.instance", default=None)
         return super().__new__(mcls, name, bases, namespace)
 
     def __getattr__(cls, name):
-        if cls.self is None:
+        instance = cls._var.get()
+        if instance is None:
             raise AttributeError(f"{cls.__name__}.self is not initialized")
-
-        return getattr(cls.self, name)
+        return getattr(instance, name)
 
     def __setattr__(cls, name, value):
-        if name == "self" or name in cls.__dict__:
+        if name in ("self", "_var", "__parameters__") or name in cls.__dict__:
             return super().__setattr__(name, value)
-        if name == "__parameters__":
-            return super().__setattr__(name, value)
-        if cls.self is None:
+        instance = cls._var.get()
+        if instance is None:
             raise AttributeError(f"{cls.__name__}.self is not initialized")
-        return setattr(cls.self, name, value)
+        return setattr(instance, name, value)
+
+    @property
+    def self(cls):
+        """Back-compat alias for `cls._var.get()` — see docs/conventions.md."""
+        return cls._var.get()
+
+    @self.setter
+    def self(cls, value):
+        cls._var.set(value)
 
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
     self: Self
 
     def __init__(self, *args, **kwargs):
-        type(self).self = self  # store the singleton
+        type(self)._var.set(self)  # store the singleton
+
+    @classmethod
+    @contextmanager
+    def override(cls, *args, **kwargs) -> Generator[Self]:
+        """Bind a fresh instance for the `with` block only. Whatever was
+        bound before — the prod singleton, an outer override, or nothing —
+        comes back on exit. Nests correctly, unlike `Cls.self = None`."""
+        token = cls._var.set(cls(*args, **kwargs))
+        try:
+            yield cls._var.get()
+        finally:
+            cls._var.reset(token)
 
 
 def optional_fieldinfo(
