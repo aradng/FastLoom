@@ -26,6 +26,16 @@ class _Tombstone:
     def __bool__(self) -> bool:
         return False
 
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: Any):
+        from pydantic_core import core_schema
+
+        return core_schema.is_instance_schema(cls)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, schema: Any, handler: Any):
+        return {"const": "TOMBSTONE"}
+
 
 TOMBSTONE = _Tombstone()
 
@@ -90,14 +100,14 @@ def _patch_tombstone_consumption(
     parser_cls: type[AsyncConfluentParser],
 ) -> None:
     # NOTE: consumer-side half of the same gap - a real tombstone decodes to
-    # b"" (parse_message()'s own `or b""`), so a typed Optional[Model] body
+    # b"" (parse_message()'s own `or b""`), so a typed Model | TOMBSTONE body
     # param still crash-loops: FastAPI's body-solving flattens the model's
     # own required fields rather than ever seeing "no body at all"
     # (ag2ai/faststream#2933, open, no PyPI release either way). Tags the
-    # body with a dedicated sentinel at parse time, decodes it to None, and
-    # patches the fastapi bridge to pass real None through instead of
-    # wrapping it as {param_name: None} - the wrapping is what defeats
-    # FastAPI's own no-body shortcut in the first place.
+    # body with a dedicated sentinel at parse time and patches the fastapi
+    # bridge to pass it through unwrapped instead of as {param_name: TOMBSTONE}
+    # - the wrapping is what defeats FastAPI's own no-body shortcut in the
+    # first place.
     if getattr(parser_cls, "_fastloom_tombstone_consumption", False):
         return
 
@@ -112,7 +122,7 @@ def _patch_tombstone_consumption(
 
     async def decode_message(self: AsyncConfluentParser, msg: Any):
         if msg.body is TOMBSTONE:
-            return None
+            return TOMBSTONE
         return await original_decode_message(self, msg)
 
     parser_cls.parse_message = parse_message
@@ -175,14 +185,14 @@ def _patch_fastapi_body_wrapping() -> None:
         async def parsed_consumer(message: Any) -> Any:
             body = await message.decode()
 
-            fastapi_body: dict[str, Any] | list[Any] | None
+            fastapi_body: dict[str, Any] | list[Any] | None | _Tombstone
             if first_arg is not None:
                 if isinstance(body, dict):
                     path = fastapi_body = body or {}
-                elif isinstance(body, list):
+                elif (
+                    isinstance(body, list) or body is None or body is TOMBSTONE
+                ):
                     fastapi_body, path = body, {}
-                elif body is None:
-                    fastapi_body, path = None, {}
                 else:
                     path = fastapi_body = {first_arg: body}
 

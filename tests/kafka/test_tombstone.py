@@ -5,6 +5,8 @@ from confluent_kafka import Message
 from faststream.confluent.fastapi import KafkaMessage
 from pydantic import BaseModel
 
+from fastloom.signals.kafka.depends import TOMBSTONE, _Tombstone
+
 
 async def test_publish_none_sends_a_real_null_value(kafka_subscriber):
     router = kafka_subscriber.router
@@ -40,11 +42,11 @@ class _Foo(BaseModel):
     x: int
 
 
-async def test_optional_body_param_resolves_to_none_for_tombstone(
+async def test_typed_body_param_resolves_to_tombstone_sentinel(
     kafka_subscriber,
 ):
     router = kafka_subscriber.router
-    received: list[_Foo | None] = []
+    received: list[_Foo | _Tombstone] = []
     done = asyncio.Event()
 
     @router.subscriber(
@@ -52,7 +54,7 @@ async def test_optional_body_param_resolves_to_none_for_tombstone(
         group_id="consumer-tombstone-test",
         auto_offset_reset="earliest",
     )
-    async def handler(msg: _Foo | None = None) -> None:
+    async def handler(msg: _Foo | _Tombstone) -> None:
         received.append(msg)
         if len(received) == 2:
             done.set()
@@ -66,4 +68,6 @@ async def test_optional_body_param_resolves_to_none_for_tombstone(
     finally:
         await router.broker.stop()
 
-    assert received == [_Foo(x=5), None]
+    regular, tombstone = received
+    assert regular == _Foo(x=5)
+    assert tombstone is TOMBSTONE
