@@ -1,8 +1,8 @@
 import inspect
 import tomllib
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Self, cast
 
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
@@ -30,7 +30,15 @@ class SelfSustainingMeta(type):
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
     def __init__(self, *args, **kwargs):
-        type(self)._self.set(self)  # store the singleton
+        type(self).bind(self)  # store the singleton
+
+    @classmethod
+    def bind(cls, instance: Self | None) -> Token[Self | None]:
+        return cls._self.set(instance)
+
+    @classmethod
+    def reset(cls, token: Token[Self | None]) -> None:
+        cls._self.reset(token)
 
 
 def optional_fieldinfo(

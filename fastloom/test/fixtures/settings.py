@@ -48,13 +48,11 @@ def tc_context[V: BaseModel, T: BaseModel](
     from fastloom.tenant.settings import Configs
 
     with patched_settings(service_settings, tenant_settings):
-        token = Configs._self.set(
-            Configs(get_settings_cls(), get_tenant_cls())
-        )
+        token = Configs.bind(Configs(get_settings_cls(), get_tenant_cls()))
         try:
-            yield Configs._self.get()
+            yield Configs.self
         finally:
-            Configs._self.reset(token)
+            Configs.reset(token)
 
 
 @pytest.fixture

@@ -107,13 +107,13 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         or `BaseCache.Meta`) needs a full `.override(...)` instead, or those
         stay stale. See docs/conventions.md.
         """
-        patched = copy.copy(cls._self.get())
+        patched = copy.copy(cls.self)
         patched.general = patched.general.model_copy(update=field_updates)
-        token = cls._self.set(patched)
+        token = cls.bind(patched)
         try:
             yield patched
         finally:
-            cls._self.reset(token)
+            cls.reset(token)
 
     def _setup_mongo(self):
         if not issubclass(self.service_cls, MongoSettings):
