@@ -18,30 +18,19 @@ class SelfSustainingMeta(type):
     def __getattr__(cls, name):
         instance = cls._var.get()
         if instance is None:
-            raise AttributeError(f"{cls.__name__}.self is not initialized")
+            raise AttributeError(f"{cls.__name__} is not bound")
         return getattr(instance, name)
 
     def __setattr__(cls, name, value):
-        if name in ("self", "_var", "__parameters__") or name in cls.__dict__:
+        if name in ("_var", "__parameters__") or name in cls.__dict__:
             return super().__setattr__(name, value)
         instance = cls._var.get()
         if instance is None:
-            raise AttributeError(f"{cls.__name__}.self is not initialized")
+            raise AttributeError(f"{cls.__name__} is not bound")
         return setattr(instance, name, value)
-
-    @property
-    def self(cls):
-        """Back-compat alias for `cls._var.get()` — see docs/conventions.md."""
-        return cls._var.get()
-
-    @self.setter
-    def self(cls, value):
-        cls._var.set(value)
 
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
-    self: Self
-
     def __init__(self, *args, **kwargs):
         type(self)._var.set(self)  # store the singleton
 
@@ -50,7 +39,7 @@ class SelfSustaining(metaclass=SelfSustainingMeta):
     def override(cls, *args, **kwargs) -> Generator[Self]:
         """Bind a fresh instance for the `with` block only. Whatever was
         bound before — the prod singleton, an outer override, or nothing —
-        comes back on exit. Nests correctly, unlike `Cls.self = None`."""
+        comes back on exit, correctly nested."""
         token = cls._var.set(cls(*args, **kwargs))
         try:
             yield cls._var.get()
