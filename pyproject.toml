@@ -1,6 +1,6 @@
 [project]
 name = "fastloom"
-version = "0.4.49"
+version = "0.4.50"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -30,7 +30,7 @@ rabbit = [
 ]
 kafka = [
     "uvicorn",
-    "faststream[otel,confluent] @ git+https://github.com/ag2ai/faststream.git@9d54a6d80303443e32e132c19d002a715bf476e0",
+    "faststream[otel,confluent]",
     "opentelemetry-instrumentation-confluent-kafka>=0.62b1,<0.64b0",
 ]
 redis = [
