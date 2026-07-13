@@ -58,7 +58,7 @@ TenantMappingWithHosts = MutableMapping[TenantName, TenantHostSchema]
 
 class GetSettingsFrom[V](BaseGetFrom):
     async def _item_getter(self, tenant: str) -> V:
-        return await Configs[BaseModel, V]._var.get().get(tenant)  # type: ignore[type-var, misc]
+        return await Configs[BaseModel, V]._self.get().get(tenant)  # type: ignore[type-var, misc]
 
 
 class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
@@ -80,7 +80,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         service_cls: type[T],
         tenant_cls: type[V],
     ) -> None:
-        if type(self)._var.get() is not None:
+        if type(self)._self.get() is not None:
             return
         super().__init__()
         self.cache_enabled = False
@@ -107,13 +107,13 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         or `BaseCache.Meta`) needs a full `.override(...)` instead, or those
         stay stale. See docs/conventions.md.
         """
-        patched = copy.copy(cls._var.get())
+        patched = copy.copy(cls._self.get())
         patched.general = patched.general.model_copy(update=field_updates)
-        token = cls._var.set(patched)
+        token = cls._self.set(patched)
         try:
             yield patched
         finally:
-            cls._var.reset(token)
+            cls._self.reset(token)
 
     def _setup_mongo(self):
         if not issubclass(self.service_cls, MongoSettings):

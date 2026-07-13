@@ -1,4 +1,4 @@
-# `SelfSustaining`: ContextVar-backed storage + a shared `.override()`
+# `SelfSustaining`: ContextVar-backed storage
 
 ## Problem
 
@@ -20,45 +20,40 @@ Separately: services want to write eager values (topic `StrEnum`s, `Depends(TC.a
 
 ```python
 from contextvars import ContextVar
-from contextlib import contextmanager
-from typing import Self
 
 
 class SelfSustainingMeta(type):
     def __new__(mcls, name, bases, ns):
-        ns["_var"] = ContextVar(f"{name}.instance", default=None)
+        ns["_self"] = ContextVar(f"{name}.instance", default=None)
         return super().__new__(mcls, name, bases, ns)
 
+    def _bound(cls):
+        if (instance := cls._self.get()) is None:
+            raise AttributeError(f"{cls.__name__} is not bound")
+        return instance
+
     def __getattr__(cls, name):
-        instance = cls._var.get()
-        if instance is None:
-            raise AttributeError(f"{cls.__name__} not bound in this context")
-        return getattr(instance, name)
+        return getattr(cls._bound(), name)
 
     def __setattr__(cls, name, value):
-        if name == "_var":
+        if name == "__parameters__" or name in cls.__dict__:
             return super().__setattr__(name, value)
-        return setattr(cls._var.get(), name, value)
+        return setattr(cls._bound(), name, value)
 
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
     def __init__(self, *args, **kwargs) -> None:
-        type(self)._var.set(self)
-
-    @classmethod
-    @contextmanager
-    def override(cls, *args, **kwargs):
-        """Bind a fresh instance for the `with` block only. Whatever was
-        bound before — prod singleton, an outer override, or nothing —
-        comes back on exit, correctly nested."""
-        token = cls._var.set(cls(*args, **kwargs))
-        try:
-            yield cls._var.get()
-        finally:
-            cls._var.reset(token)
+        type(self)._self.set(self)
 ```
 
-`Configs.general`, `TC.general.X`, `TC.from_[TokenHeaderSource]` — unchanged syntax. The only thing that moved is what backs `cls._var.get()`.
+`Configs.general`, `TC.general.X`, `TC.from_[TokenHeaderSource]` — unchanged syntax. The only thing that moved is what backs `cls._self.get()`.
+
+Two things worth calling out about `__setattr__`'s special-case, both verified empirically rather than assumed:
+
+- `name in cls.__dict__` alone already covers `_self` — it's populated via the namespace dict at class-creation time, before any `setattr` call ever happens, so an explicit `"_self"` entry in the tuple is dead code (confirmed by deleting it and running the full suite — still green).
+- `"__parameters__"` is **not** redundant with `cls.__dict__` and can't be dropped: Python's own `typing._generic_init_subclass` does `cls.__parameters__ = tuple(tvars)` as the *first* write to that name, before it's in `__dict__` — confirmed by removing the check and watching `class Foo[T](SelfSustaining): pass` crash with `AttributeError: Foo is not bound` the instant it's defined.
+
+No shared `override()`/swap-safely context manager on the base class — checked every production construction site (`main.py`'s `Configs(...)`/`RabbitSubscriber(...)`/`KafkaSubscriber(...)`/`RedisHandler(...)` calls) and none of them ever swap or reset an already-bound instance; that only happens in tests. So the set/try/finally/reset pattern is inlined directly into its one actual caller, `tc_context` (see below), rather than living as a method on the production base class for a need only tests have.
 
 ### Per-field override
 
@@ -70,24 +65,22 @@ So: per-field override is a *data-only* patch, valid only for fields nothing els
     @classmethod
     @contextmanager
     def override_fields(cls, **field_updates):
-        import copy
-        current = cls._var.get()
-        patched = copy.copy(current)  # reuses existing Mongo/Redis/tenant machinery
-        patched.general = current.general.model_copy(update=field_updates)
-        token = cls._var.set(patched)
+        patched = copy.copy(cls._self.get())  # reuses existing Mongo/Redis/tenant machinery
+        patched.general = patched.general.model_copy(update=field_updates)
+        token = cls._self.set(patched)
         try:
             yield patched
         finally:
-            cls._var.reset(token)
+            cls._self.reset(token)
 ```
 
-Documented caveat, not hidden: overriding `PROJECT_NAME` itself (or anything else `_setup_mongo`/`_setup_redis` derived from) via `override_fields` leaves `BaseDocumentSignal._PROJECT_NAME`/cache key prefixes pointing at the old value. Use full `override(...)` (which re-runs `__init__`) whenever the overridden field feeds a derived side effect; use `override_fields(...)` for independent flags.
+Documented caveat, not hidden: overriding `PROJECT_NAME` itself (or anything else `_setup_mongo`/`_setup_redis` derived from) via `override_fields` leaves `BaseDocumentSignal._PROJECT_NAME`/cache key prefixes pointing at the old value. Reconstruct fully (`Configs(service_cls, tenant_cls)`, re-running `__init__`) whenever the overridden field feeds a derived side effect; use `override_fields(...)` for independent flags.
 
-### Test fixtures: `tc_context` now uses `.override()` internally, scope left unchanged
+### Test fixtures: `tc_context` inlines the set/reset pattern directly, scope left unchanged
 
-Implemented: `tc_context`/`TC`/`settings_mock` in `fastloom/test/fixtures/settings.py` now use `Configs.override(...)` internally instead of manual `Configs.self = None` before/after — same external behavior, correct token-based reset.
+Implemented: `tc_context`/`TC`/`settings_mock` in `fastloom/test/fixtures/settings.py` now do `token = Configs._self.set(Configs(...)); try: yield ...; finally: Configs._self.reset(token)` directly instead of manual `Configs.self = None` before/after — same external behavior, correct token-based reset, no extra shared method for a pattern with exactly one caller.
 
-**Deliberately not changed**: the shipped `TC` fixture's scope stays function-scoped (unchanged from today), rather than flipping the default to `session, autouse=True` as originally proposed. Reason found during implementation: if `TC` becomes session-scoped by default while a consuming service's own `service_settings`/`tenant_settings` fixtures stay function-scoped (pytest's normal default, and not verified for every fastloom consumer — only `iam` and `assistant` were audited), pytest raises a hard `ScopeMismatch` error at collection time for that service's entire suite, not a subtle behavior change. `iam` and `assistant` already get session-scoped behavior today by overriding the fixture themselves at their own conftest — that pattern still works unchanged and is the recommended path until every consumer's fixture scopes are confirmed. Both `iam`'s and `assistant`'s existing overrides can be rewritten to wrap `Configs.override(...)` directly instead of `tc_context`, but that's a per-service follow-up, not part of this change.
+**Deliberately not changed**: the shipped `TC` fixture's scope stays function-scoped (unchanged from today), rather than flipping the default to `session, autouse=True` as originally proposed. Reason found during implementation: if `TC` becomes session-scoped by default while a consuming service's own `service_settings`/`tenant_settings` fixtures stay function-scoped (pytest's normal default, and not verified for every fastloom consumer — only `iam` and `assistant` were audited), pytest raises a hard `ScopeMismatch` error at collection time for that service's entire suite, not a subtle behavior change. `iam` and `assistant` already get session-scoped behavior today by overriding the fixture themselves at their own conftest — that pattern still works unchanged and is the recommended path until every consumer's fixture scopes are confirmed. Both `iam`'s and `assistant`'s existing overrides can keep using `tc_context` as-is, or inline the same `Configs._self.set(...)`/`.reset(...)` pattern directly, but that's a per-service follow-up, not part of this change.
 
 A per-test/per-case override (feature-flag testing) is then just:
 
@@ -100,7 +93,7 @@ def test_feature_x():
 
 ### Eager values (topic names, `Depends(...)`) — no new mechanism needed
 
-`iam`'s production code already does `Depends(TC.auth.get_claims)` as an eager function-default, evaluated once at import time, and it already works — because `main.py`'s `app()` factory constructs `Configs`/brokers *before* `get_app()` imports any route/signal module (`fastloom/launcher/main.py:52-58`). This is the same principle that makes `iam`'s `constants.py` `StrEnum` topics safe. The fix for "I hate lazy functions in API dependencies" isn't a new mechanism — it's documenting and relying on the same construction-before-import discipline everywhere, which this design doesn't change (`SelfSustaining`'s job is unaffected by *when* `Cls(...)`/`.override()` is called, only by *what* backs the binding once it is).
+`iam`'s production code already does `Depends(TC.auth.get_claims)` as an eager function-default, evaluated once at import time, and it already works — because `main.py`'s `app()` factory constructs `Configs`/brokers *before* `get_app()` imports any route/signal module (`fastloom/launcher/main.py:52-58`). This is the same principle that makes `iam`'s `constants.py` `StrEnum` topics safe. The fix for "I hate lazy functions in API dependencies" isn't a new mechanism — it's documenting and relying on the same construction-before-import discipline everywhere, which this design doesn't change (`SelfSustaining`'s job is unaffected by *when* `Cls(...)` is called, only by *what* backs the binding once it is).
 
 The one place discipline is still required, unrelated to `ContextVar` vs. class-attribute: a value needed at *test-collection* time (an eager class-body constant in a test file) still requires the binding to happen at conftest **module** scope, not inside a fixture (autouse or not) — pytest imports conftest.py before collecting sibling test files, but fixtures only run after the entire collection phase. `patch_tenant_loader_at_import` (already shipped, PR #17) remains the mechanism for that specific case.
 
@@ -117,12 +110,12 @@ The one place discipline is still required, unrelated to `ContextVar` vs. class-
 Decided against keeping a `.self` back-compat property: it added real code (a property + setter on the metaclass) purely to avoid a small, bounded, one-time rewrite. Since the actual footprint is small and fully known from the audit, doing the direct rewrite everywhere is less code overall than shipping a permanent compatibility layer for it. Full list, all applied in this PR except the `assistant`-side items:
 
 - `fastloom/meta.py` — the metaclass itself (expected; this *is* the change).
-- `fastloom/tenant/settings.py:82` — idempotency guard, instance-level: `if self.self is not None` → `if type(self)._var.get() is not None`.
-- `fastloom/tenant/settings.py:61` (`GetSettingsFrom._item_getter`) and `fastloom/tenant/handler.py:34` (`get_tenant_settings`) — class-level `.self` access, both bypassing generic-subscript/`__getitem__` conflicts: `Configs[BaseModel, V].self.get(tenant)` → `Configs[BaseModel, V]._var.get().get(tenant)`; `configs.self[tenant]` → `configs._var.get()[tenant]`.
-- `fastloom/test/fixtures/settings.py` (`tc_context`) — now uses `.override()` internally.
-- 4 fastloom test files (`test_launcher_depends.py`, `test_key_prefixes.py`, `test_lifehooks.py`, `kafka/conftest.py`) construct via `Cls.__new__(Cls)` + direct `.self = ...`/`.self = None` — rewritten to `Cls._var.set(...)`/`Cls._var.set(None)`.
+- `fastloom/tenant/settings.py:82` — idempotency guard, instance-level: `if self.self is not None` → `if type(self)._self.get() is not None`.
+- `fastloom/tenant/settings.py:61` (`GetSettingsFrom._item_getter`) and `fastloom/tenant/handler.py:34` (`get_tenant_settings`) — class-level `.self` access, both bypassing generic-subscript/`__getitem__` conflicts: `Configs[BaseModel, V].self.get(tenant)` → `Configs[BaseModel, V]._self.get().get(tenant)`; `configs.self[tenant]` → `configs._self.get()[tenant]`.
+- `fastloom/test/fixtures/settings.py` (`tc_context`) — now does the set/try/finally/reset inline (see above).
+- 4 fastloom test files (`test_launcher_depends.py`, `test_key_prefixes.py`, `test_lifehooks.py`, `kafka/conftest.py`) construct via `Cls.__new__(Cls)` + direct `.self = ...`/`.self = None` — rewritten to `Cls._self.set(...)`/`Cls._self.set(None)`.
 - `iam` production code: **nothing required** — confirmed via audit, no direct `.self` access anywhere outside its own test fixtures.
-- **Left for `assistant` to apply on their end** (not fastloom's repo, tracked here so it isn't lost): `alembic/env.py:67-68` (`TC.self.general.POSTGRES_DSN` → `TC._var.get().general.POSTGRES_DSN`), and their own documented `PGManager.self = None`/`CHManager.self = None` test-reset convention (`.claude/docs/conventions.md`, `tests/fixtures/postgres.py`, `tests/fixtures/redis.py`) → `PGManager._var.set(None)` / `CHManager._var.set(None)`. Each is a one-line change.
+- **Left for `assistant` to apply on their end** (not fastloom's repo, tracked here so it isn't lost): `alembic/env.py:67-68` (`TC.self.general.POSTGRES_DSN` → `TC._self.get().general.POSTGRES_DSN`), and their own documented `PGManager.self = None`/`CHManager.self = None` test-reset convention (`.claude/docs/conventions.md`, `tests/fixtures/postgres.py`, `tests/fixtures/redis.py`) → `PGManager._self.set(None)` / `CHManager._self.set(None)`. Each is a one-line change.
 
 **Confirmed, not just assumed**: fastloom's own 80 tests pass with all of the above applied — ruff/mypy/pre-commit clean.
 
@@ -130,7 +123,8 @@ Decided against keeping a `.self` back-compat property: it added real code (a pr
 
 - Not eliminating `from settings import TC` — that needs a custom mypy plugin to do without losing static type safety, which is out of scope (flagged as Approach B in discussion, explicitly not pursued here).
 - Not making `Configs.__init__` async — Vault integration is handled as a pre-construction step instead.
-- Not touching `RabbitSubscriber`/`KafkaSubscriber`/`RedisHandler`'s own internals beyond inheriting the new `SelfSustaining` — they get `.override()` for free with no class-specific work.
+- Not touching `RabbitSubscriber`/`KafkaSubscriber`/`RedisHandler`'s own internals beyond inheriting the new `SelfSustaining` — same `ContextVar`-backed storage applies to them automatically.
+- Not adding a shared `override()`/swap-safely method to the base class — audited every production construction site and found zero callers; it would be a test-only concept living in the production class, so the pattern is inlined into its one real caller (`tc_context`) instead.
 - Not flipping the shipped `TC` fixture's default scope to session — see the fixtures section above for why.
 
 ## Resolved during implementation
@@ -140,4 +134,4 @@ Decided against keeping a `.self` back-compat property: it added real code (a pr
 
 ## Implementation
 
-Shipped in this PR: `fastloom/meta.py` (`SelfSustainingMeta`/`SelfSustaining` rewrite, no back-compat shim), `fastloom/tenant/settings.py` (idempotency-guard fix + `override_fields` + the two direct `.self` reads updated), `fastloom/tenant/handler.py` (one direct `.self` read updated), `fastloom/test/fixtures/settings.py` (`tc_context` now uses `.override()`), and 4 fastloom test files updated to `Cls._var.set(...)`. All 80 existing tests pass; ruff/mypy/pre-commit clean.
+Shipped in this PR: `fastloom/meta.py` (`SelfSustainingMeta`/`SelfSustaining` rewrite — `_self` ContextVar, deduplicated `_bound()` helper, no back-compat shim, no shared `override()`), `fastloom/tenant/settings.py` (idempotency-guard fix + `override_fields` + the two direct `.self` reads updated), `fastloom/tenant/handler.py` (one direct `.self` read updated), `fastloom/test/fixtures/settings.py` (`tc_context` inlines the set/reset pattern), and 4 fastloom test files updated to `Cls._self.set(...)`. All 80 existing tests pass; ruff/mypy/pre-commit clean.

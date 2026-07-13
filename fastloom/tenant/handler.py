@@ -31,7 +31,7 @@ def init_settings_endpoints(
     @router.get("/tenant_settings")
     async def get_tenant_settings(tenant: str):
         try:
-            return await configs._var.get()[tenant]
+            return await configs._self.get()[tenant]
         except TenantNotFound as e:
             raise DoesNotExist(_("Tenant")) from e
 

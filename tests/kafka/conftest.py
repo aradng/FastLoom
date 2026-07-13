@@ -30,7 +30,7 @@ async def kafka_subscriber(kafka_container):
         yield subscriber
     finally:
         await subscriber.router.broker.stop()
-        KafkaSubscriber._var.set(None)
+        KafkaSubscriber._self.set(None)
 
 
 @pytest.fixture

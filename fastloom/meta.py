@@ -1,10 +1,8 @@
 import inspect
 import tomllib
-from collections.abc import Generator
-from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Self, cast
+from typing import Any, cast
 
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
@@ -12,39 +10,26 @@ from pydantic.fields import FieldInfo
 
 class SelfSustainingMeta(type):
     def __new__(mcls, name, bases, namespace):
-        namespace["_var"] = ContextVar(f"{name}.instance", default=None)
+        namespace["_self"] = ContextVar(f"{name}.instance", default=None)
         return super().__new__(mcls, name, bases, namespace)
 
-    def __getattr__(cls, name):
-        instance = cls._var.get()
-        if instance is None:
+    def _bound(cls):
+        if (instance := cls._self.get()) is None:
             raise AttributeError(f"{cls.__name__} is not bound")
-        return getattr(instance, name)
+        return instance
+
+    def __getattr__(cls, name):
+        return getattr(cls._bound(), name)
 
     def __setattr__(cls, name, value):
-        if name in ("_var", "__parameters__") or name in cls.__dict__:
+        if name == "__parameters__" or name in cls.__dict__:
             return super().__setattr__(name, value)
-        instance = cls._var.get()
-        if instance is None:
-            raise AttributeError(f"{cls.__name__} is not bound")
-        return setattr(instance, name, value)
+        return setattr(cls._bound(), name, value)
 
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
     def __init__(self, *args, **kwargs):
-        type(self)._var.set(self)  # store the singleton
-
-    @classmethod
-    @contextmanager
-    def override(cls, *args, **kwargs) -> Generator[Self]:
-        """Bind a fresh instance for the `with` block only. Whatever was
-        bound before — the prod singleton, an outer override, or nothing —
-        comes back on exit, correctly nested."""
-        token = cls._var.set(cls(*args, **kwargs))
-        try:
-            yield cls._var.get()
-        finally:
-            cls._var.reset(token)
+        type(self)._self.set(self)  # store the singleton
 
 
 def optional_fieldinfo(
