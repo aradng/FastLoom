@@ -27,18 +27,15 @@ class SelfSustainingMeta(type):
         ns["_self"] = ContextVar(f"{name}.instance", default=None)
         return super().__new__(mcls, name, bases, ns)
 
-    def _bound(cls):
+    def __getattr__(cls, name):
         if (instance := cls._self.get()) is None:
             raise AttributeError(f"{cls.__name__} is not bound")
-        return instance
-
-    def __getattr__(cls, name):
-        return getattr(cls._bound(), name)
+        return getattr(instance, name)
 
     def __setattr__(cls, name, value):
-        if name == "__parameters__" or name in cls.__dict__:
+        if (instance := cls._self.get()) is None:
             return super().__setattr__(name, value)
-        return setattr(cls._bound(), name, value)
+        return setattr(instance, name, value)
 
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
@@ -48,12 +45,9 @@ class SelfSustaining(metaclass=SelfSustainingMeta):
 
 `Configs.general`, `TC.general.X`, `TC.from_[TokenHeaderSource]` — unchanged syntax. The only thing that moved is what backs `cls._self.get()`.
 
-Two things worth calling out about `__setattr__`'s special-case, both verified empirically rather than assumed:
+`__setattr__` is keyed off *whether an instance is bound yet*, not a name allowlist: before construction, behave like a plain class-attribute set; once bound, forward everything to the instance. This covers `__parameters__` — Python's own `typing._generic_init_subclass` does `cls.__parameters__ = tuple(tvars)` as the first write to that name, before construction, before it's in `__dict__` — without naming it explicitly, and without needing an explicit `_self`/`cls.__dict__` check either (empirically tried an earlier version keyed off `name in cls.__dict__`, worked, but this is simpler and covers anything else Python's class machinery might write pre-construction that hasn't been discovered yet). Verified: removing the "is bound" branch entirely and watching `class Foo[T](SelfSustaining): pass` crash immediately confirms this is load-bearing, not defensive cruft.
 
-- `name in cls.__dict__` alone already covers `_self` — it's populated via the namespace dict at class-creation time, before any `setattr` call ever happens, so an explicit `"_self"` entry in the tuple is dead code (confirmed by deleting it and running the full suite — still green).
-- `"__parameters__"` is **not** redundant with `cls.__dict__` and can't be dropped: Python's own `typing._generic_init_subclass` does `cls.__parameters__ = tuple(tvars)` as the *first* write to that name, before it's in `__dict__` — confirmed by removing the check and watching `class Foo[T](SelfSustaining): pass` crash with `AttributeError: Foo is not bound` the instant it's defined.
-
-No shared `override()`/swap-safely context manager on the base class — checked every production construction site (`main.py`'s `Configs(...)`/`RabbitSubscriber(...)`/`KafkaSubscriber(...)`/`RedisHandler(...)` calls) and none of them ever swap or reset an already-bound instance; that only happens in tests. So the set/try/finally/reset pattern is inlined directly into its one actual caller, `tc_context` (see below), rather than living as a method on the production base class for a need only tests have.
+No shared `override()`/swap-safely context manager on the base class. Checked every production construction site (`main.py`'s `Configs(...)`/`RabbitSubscriber(...)`/`KafkaSubscriber(...)`/`RedisHandler(...)` calls) and found zero callers that swap or reset an already-bound instance — that only happens in tests. Also considered whether Vault-based secret rotation (a planned future feature) might be a genuine runtime caller: it isn't, because rotation wants a *permanent* rebind, and `.override()`'s whole shape is a context manager that reverts on exit — the wrong tool even if rotation existed today. So the set/try/finally/reset pattern is inlined directly into its one actual caller, `tc_context` (see below), rather than living as a method on the production base class for a need only tests have.
 
 ### Per-field override
 
@@ -134,4 +128,4 @@ Decided against keeping a `.self` back-compat property: it added real code (a pr
 
 ## Implementation
 
-Shipped in this PR: `fastloom/meta.py` (`SelfSustainingMeta`/`SelfSustaining` rewrite — `_self` ContextVar, deduplicated `_bound()` helper, no back-compat shim, no shared `override()`), `fastloom/tenant/settings.py` (idempotency-guard fix + `override_fields` + the two direct `.self` reads updated), `fastloom/tenant/handler.py` (one direct `.self` read updated), `fastloom/test/fixtures/settings.py` (`tc_context` inlines the set/reset pattern), and 4 fastloom test files updated to `Cls._self.set(...)`. All 80 existing tests pass; ruff/mypy/pre-commit clean.
+Shipped in this PR: `fastloom/meta.py` (`SelfSustainingMeta`/`SelfSustaining` rewrite — `_self` ContextVar, `__setattr__` keyed off bound-or-not rather than a name allowlist, no back-compat shim, no shared `override()`; 14 lines total for both dunder methods, down from 29 originally), `fastloom/tenant/settings.py` (idempotency-guard fix + `override_fields` + the two direct `.self` reads updated), `fastloom/tenant/handler.py` (one direct `.self` read updated), `fastloom/test/fixtures/settings.py` (`tc_context` inlines the set/reset pattern), and 4 fastloom test files updated to `Cls._self.set(...)`. All 80 existing tests pass; ruff/mypy/pre-commit clean.
