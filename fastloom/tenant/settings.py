@@ -107,9 +107,8 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         or `BaseCache.Meta`) needs a full `.override(...)` instead, or those
         stay stale. See docs/conventions.md.
         """
-        current = cls._var.get()
-        patched = copy.copy(current)
-        patched.general = current.general.model_copy(update=field_updates)
+        patched = copy.copy(cls._var.get())
+        patched.general = patched.general.model_copy(update=field_updates)
         token = cls._var.set(patched)
         try:
             yield patched
