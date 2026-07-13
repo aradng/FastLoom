@@ -24,30 +24,20 @@ def get_kafka_router(settings: KafkaSettings) -> KafkaRouter:
 
 
 def _patch_publish_tombstone(publisher_cls: type[DefaultPublisher]) -> None:
-    """Give every `router.publisher(...)` instance a `.publish_tombstone(key)`.
-
-    `publisher.publish(None, ...)` is *not* a Kafka tombstone: FastStream's
-    `encode_message()` unconditionally turns a `None` body into `b""` before
-    it ever reaches the producer (see `faststream.message.utils`), and Kafka
-    log compaction only reclaims a key on a literal null value — a
-    zero-length-but-present byte string is kept forever as "the current
-    value" for that key (see ag2ai/faststream#1967, which fixed *consuming*
-    a real tombstone but left producing one unaddressed). `publish_tombstone`
-    bypasses `encode_message` and sends the null straight through the raw
-    producer. Patched onto the class rather than exposed as a standalone
-    helper so every publisher gets it without touching its construction
-    call sites - the same monkey-patch shape `ConfluentKafkaInstrumentor`
-    already uses on `confluent_kafka.Producer` (see docs/signals.md#ordering).
-    """
+    # NOTE: publish(None, ...) isn't a real Kafka tombstone - encode_message()
+    # turns None into b"", and compaction only reclaims a key on a literal
+    # null value (ag2ai/faststream#1967). Patched onto the class, at the same
+    # deferred point get_kafka_router() imports from, so every publisher gets
+    # .publish_tombstone(key) for free - see docs/signals.md#ordering.
     if hasattr(publisher_cls, "publish_tombstone"):
         return
 
     async def publish_tombstone(
         self: DefaultPublisher, key: bytes | str
     ) -> None:
-        key_bytes = key.encode() if isinstance(key, str) else key
-        raw_producer = self._outer_config.producer._producer.producer  # noqa: SLF001
-        await raw_producer.send(topic=self.topic, key=key_bytes, value=None)
+        await self._outer_config.producer._producer.producer.send(  # noqa: SLF001
+            topic=self.topic, key=key, value=None
+        )
 
     publisher_cls.publish_tombstone = publish_tombstone
 
