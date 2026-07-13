@@ -27,6 +27,7 @@ Walk through `settings.py` and `tenants.yaml` and report violations of fastloom 
 - [ ] URL/DSN fields use `Str[T]` (e.g. `Str[HttpUrl]`, `Str[AmqpDsn]`, `Str[RedisDsn]`), not `HttpUrl` directly. Reason: downstream callers (uvicorn, mongo client) need a plain `str`.
 - [ ] `TenantSettings` (if present) contains only tenant-domain fields (snake_case business data). ❗ Flag if it contains infrastructure URIs, credentials, or env-var-style fields.
 - [ ] `TC` alias is defined (or `Configs` is used directly). ❗ Flag if neither is exported.
+- [ ] If `TC = Configs(service_cls=..., tenant_cls=...)` (eager binding, not `TC: type[Configs[...]] = Configs`), check the project's `conftest.py` for a module-scope (not fixture) call to `patch_tenant_loader_at_import` before any other local import. ❗ Flag eager binding with no such call, or one wrapped in a `@pytest.fixture` — fixtures run after collection, too late to protect an eager binding. See `docs/conventions.md#eager-vs-deferred-tcgeneral-reads`.
 - [ ] No `__init__` defaults — defaults belong on `Field(default=...)` / `Field(default_factory=...)`.
 - [ ] No `model_validator` that just fills defaults (defaults belong on the field).
 

@@ -40,6 +40,20 @@ TC.from_[TokenHeaderSource]
 
 `TC` is exactly the same singleton as `Configs` — the alias just narrows the generic parameters so mypy knows the field types up front. Pick one alias per project and stick to it.
 
+### Eager vs. deferred `TC.general` reads
+
+The class-alias form above is a bare type annotation — importing `settings.py` doesn't construct anything. So any module-level constant computed from `TC.general.X` (a Kafka topic name, say) must be a function/classmethod called at actual use time, not a plain value computed at import time — `Configs` isn't built yet when `settings.py` is merely imported, and won't be until the launcher (or a test fixture) calls `Configs(Settings, TenantSettings)`. This is the safe default: it works regardless of who imports the module or in what order, including pytest collecting a test file before any fixture runs.
+
+If you'd rather write plain constants or a `StrEnum` instead of wrapper functions, `settings.py` can bind `TC` eagerly instead:
+
+```python
+TC = Configs(service_cls=Settings, tenant_cls=TenantSettings)
+```
+
+This works because anything that needs `TC` does `from settings import TC`, which forces Python to fully execute `settings.py` — including this line — before the importing module's own subsequent code runs. But it moves the burden onto your test setup: `Configs` now gets built the moment anything imports `settings.py` for the first time, so your `conftest.py` must patch the tenant-YAML loader *before that first import can happen*. See [`patch_tenant_loader_at_import`](test.md#patch_tenant_loader_at_import) — it must run as a bare statement at conftest module scope, not inside a fixture (a fixture runs after pytest's whole collection phase, too late if any test file imports the constant at its own module level).
+
+Default to the deferred form. Reach for the eager form only when you're also willing to keep the conftest discipline it requires.
+
 ### `await Configs[tenant_id]` for tenant settings
 
 To resolve **per-tenant** settings (cache → Mongo → YAML), subscript the singleton with a tenant id and await:
