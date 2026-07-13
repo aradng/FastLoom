@@ -5,7 +5,7 @@ from confluent_kafka import Message
 from faststream.confluent.fastapi import KafkaMessage
 
 
-async def test_publish_tombstone_sends_a_real_null_value(kafka_subscriber):
+async def test_publish_none_sends_a_real_null_value(kafka_subscriber):
     router = kafka_subscriber.router
     values: list[bytes | None] = []
     received = asyncio.Event()
@@ -24,14 +24,12 @@ async def test_publish_tombstone_sends_a_real_null_value(kafka_subscriber):
     publisher = router.publisher("tombstone-test-topic")
     await router.broker.start()
     try:
-        # the existing/naive approach: encode_message() turns None into b""
-        await publisher.publish(None, key=b"naive-delete")
-        # the fix: a genuine null value on the wire
-        await publisher.publish_tombstone(key=b"real-delete")
+        await publisher.publish("hello", key=b"regular-message")
+        await publisher.publish(None, key=b"real-delete")
         await asyncio.wait_for(received.wait(), timeout=15)
     finally:
         await router.broker.stop()
 
-    naive_publish_value, real_tombstone_value = values
-    assert naive_publish_value == b""
-    assert real_tombstone_value is None
+    regular_value, tombstone_value = values
+    assert regular_value == b"hello"
+    assert tombstone_value is None
