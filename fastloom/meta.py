@@ -13,10 +13,14 @@ class SelfSustainingMeta(type):
         namespace["_self"] = ContextVar(f"{name}.instance", default=None)
         return super().__new__(mcls, name, bases, namespace)
 
-    def __getattr__(cls, name):
+    @property
+    def self(cls):
         if (instance := cls._self.get()) is None:
             raise AttributeError(f"{cls.__name__} is not bound")
-        return getattr(instance, name)
+        return instance
+
+    def __getattr__(cls, name):
+        return getattr(cls.self, name)
 
     def __setattr__(cls, name, value):
         if (instance := cls._self.get()) is None:
