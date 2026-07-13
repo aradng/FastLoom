@@ -67,3 +67,39 @@ async def test_optional_body_param_resolves_to_none_for_tombstone(
         await router.broker.stop()
 
     assert received == [_Foo(x=5), None]
+
+
+async def test_optional_body_param_resolves_to_none_for_legacy_empty_value(
+    kafka_subscriber,
+):
+    """A pre-0.4.50 delete is b"" on the wire, not a real null (the original
+    tombstone bug) - a fresh `earliest` replay must still resolve it to
+    None instead of crash-looping on required fields."""
+    router = kafka_subscriber.router
+    received: list[_Foo | None] = []
+    done = asyncio.Event()
+
+    @router.subscriber(
+        "legacy-empty-test-topic",
+        group_id="legacy-empty-test",
+        auto_offset_reset="earliest",
+    )
+    async def handler(msg: _Foo | None = None) -> None:
+        received.append(msg)
+        if len(received) == 2:
+            done.set()
+
+    await router.broker.start()
+    try:
+        raw_producer = router.broker._producer._producer.producer  # noqa: SLF001
+        await raw_producer.send(
+            topic="legacy-empty-test-topic", key=b"legacy-delete", value=b""
+        )
+        await router.publisher("legacy-empty-test-topic").publish(
+            {"x": 5}, key=b"regular-message"
+        )
+        await asyncio.wait_for(done.wait(), timeout=15)
+    finally:
+        await router.broker.stop()
+
+    assert received == [None, _Foo(x=5)]

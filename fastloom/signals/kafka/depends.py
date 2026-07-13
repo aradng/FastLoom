@@ -106,7 +106,13 @@ def _patch_tombstone_consumption(
 
     async def parse_message(self: AsyncConfluentParser, message: Any):
         parsed = await original_parse_message(self, message)
-        if message.value() is None:
+        # not is-None: legacy deletes published before fastloom 0.4.50/#18
+        # landed are b"" on the wire (the original tombstone bug), and will
+        # keep showing up on a fresh `earliest` replay until compaction
+        # eventually reclaims them. Treating both as TOMBSTONE here is an
+        # internal detection detail only - the consumer-facing type
+        # (Optional[Model] = None) stays identical to upstream #2933.
+        if not message.value():
             parsed.body = TOMBSTONE
         return parsed
 
