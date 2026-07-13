@@ -40,15 +40,6 @@ class SelfSustainingMeta(type):
             return super().__setattr__(name, value)
         return setattr(cls._var.get(), name, value)
 
-    @property
-    def self(cls):
-        """Back-compat alias for `cls._var.get()` — see Migration below."""
-        return cls._var.get()
-
-    @self.setter
-    def self(cls, value):
-        cls._var.set(value)
-
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
     def __init__(self, *args, **kwargs) -> None:
@@ -59,7 +50,7 @@ class SelfSustaining(metaclass=SelfSustainingMeta):
     def override(cls, *args, **kwargs):
         """Bind a fresh instance for the `with` block only. Whatever was
         bound before — prod singleton, an outer override, or nothing —
-        comes back on exit. Nests correctly, unlike `Cls.self = None`."""
+        comes back on exit, correctly nested."""
         token = cls._var.set(cls(*args, **kwargs))
         try:
             yield cls._var.get()
@@ -121,22 +112,19 @@ The one place discipline is still required, unrelated to `ContextVar` vs. class-
 - **Vault-sourced settings** (future plan: fetch `KAFKA_URI`/`RABBIT_URI`/`MONGO_URI`/`POSTGRES_DSN`-style fields from Vault before constructing `Settings`): compatible without touching this design. `load_settings(settings_cls, config_stream=...)` already accepts a flexible `config_stream`; Vault-fetched values merge into whatever produces that stream *before* `Configs(...)` is called. The one mechanical question is that Vault I/O is async while `Configs.__init__` is sync — resolve by doing the Vault fetch in a separate `async` pre-step and making `main.py`'s `app()` factory `async def` (uvicorn supports async factories with `factory=True`), not by making `Configs.__init__` itself async. Tests are unaffected either way — they already synthesize YAML directly and never touch Vault or a real `tenants.yaml`.
 - **Multi-process safety** (`iam` runs `WORKERS: 4`, `assistant` similarly multi-worker): `ContextVar`s don't cross process boundaries, and neither does today's class attribute — no behavior change, confirmed via `fastloom/launcher/main.py` (each uvicorn worker is a separate OS process, each independently importing/constructing `Configs` once).
 
-## Migration (audited, bounded)
+## Migration (audited, bounded — no back-compat shim)
 
-The `.self` back-compat property (metaclass-level) covers **class-level** access unchanged: `Configs.self`, `TC.self.general.X`, `Configs.self = None`. It does **not** cover instance-level access (`self.self` from inside a method), which needs a small explicit rewrite. Full list:
+Decided against keeping a `.self` back-compat property: it added real code (a property + setter on the metaclass) purely to avoid a small, bounded, one-time rewrite. Since the actual footprint is small and fully known from the audit, doing the direct rewrite everywhere is less code overall than shipping a permanent compatibility layer for it. Full list, all applied in this PR except the `assistant`-side items:
 
 - `fastloom/meta.py` — the metaclass itself (expected; this *is* the change).
-- `fastloom/tenant/settings.py:82` — idempotency guard `if self.self is not None: return` is instance-level, not covered by the class-level compat property. Rewrite to `if type(self)._var.get(None) is not None: return`.
-- `fastloom/tenant/settings.py:60`, `fastloom/tenant/handler.py:34` — class-level `.self` access; covered by the compat property, but worth migrating to `.override()`/`._var.get()` directly as the new codebase eventually drops the shim.
-- `fastloom/test/fixtures/settings.py:51,55` (`tc_context`) — rewrite to use `.override()` internally; external fixture behavior/name unchanged.
-- 5 fastloom test files (`test_launcher_depends.py`, `test_key_prefixes.py`, `test_lifehooks.py`, `kafka/conftest.py`) construct via `Cls.__new__(Cls)` + direct `.self =` assignment, bypassing `__init__` — covered by the compat property short-term, should migrate to `.override()` to get correct nesting/reset behavior.
-- `assistant/alembic/env.py:67-68` (`TC.self.general.POSTGRES_DSN`) — class-level, covered by compat property, no forced change.
-- `assistant/sandbox/bench_curve_batch.py`, `tests/fixtures/postgres.py`, `tests/fixtures/redis.py` — same `.self =` idiom (including on `assistant`'s own `PGManager`, if it independently follows the same naming convention) — covered by compat property where genuinely class-level.
-- `iam` production code: **nothing required** — no direct `.self` access anywhere outside its own test fixtures.
+- `fastloom/tenant/settings.py:82` — idempotency guard, instance-level: `if self.self is not None` → `if type(self)._var.get() is not None`.
+- `fastloom/tenant/settings.py:61` (`GetSettingsFrom._item_getter`) and `fastloom/tenant/handler.py:34` (`get_tenant_settings`) — class-level `.self` access, both bypassing generic-subscript/`__getitem__` conflicts: `Configs[BaseModel, V].self.get(tenant)` → `Configs[BaseModel, V]._var.get().get(tenant)`; `configs.self[tenant]` → `configs._var.get()[tenant]`.
+- `fastloom/test/fixtures/settings.py` (`tc_context`) — now uses `.override()` internally.
+- 4 fastloom test files (`test_launcher_depends.py`, `test_key_prefixes.py`, `test_lifehooks.py`, `kafka/conftest.py`) construct via `Cls.__new__(Cls)` + direct `.self = ...`/`.self = None` — rewritten to `Cls._var.set(...)`/`Cls._var.set(None)`.
+- `iam` production code: **nothing required** — confirmed via audit, no direct `.self` access anywhere outside its own test fixtures.
+- **Left for `assistant` to apply on their end** (not fastloom's repo, tracked here so it isn't lost): `alembic/env.py:67-68` (`TC.self.general.POSTGRES_DSN` → `TC._var.get().general.POSTGRES_DSN`), and their own documented `PGManager.self = None`/`CHManager.self = None` test-reset convention (`.claude/docs/conventions.md`, `tests/fixtures/postgres.py`, `tests/fixtures/redis.py`) → `PGManager._var.set(None)` / `CHManager._var.set(None)`. Each is a one-line change.
 
-Net: the back-compat `.self` property means this ships without a coordinated flag-day migration of every downstream consumer. Only `fastloom/tenant/settings.py:82` was a forced, immediate rewrite; everything else migrates to `.override()` opportunistically.
-
-**Confirmed, not just assumed**: fastloom's own 79 tests pass unchanged, including the 5 test files that construct via `Cls.__new__(Cls)` + direct `.self =` assignment — none of them needed touching. The compat shim eliminated that entire migration item in practice, not just in theory.
+**Confirmed, not just assumed**: fastloom's own 80 tests pass with all of the above applied — ruff/mypy/pre-commit clean.
 
 ## Non-goals
 
@@ -152,4 +140,4 @@ Net: the back-compat `.self` property means this ships without a coordinated fla
 
 ## Implementation
 
-Shipped in this PR: `fastloom/meta.py` (`SelfSustainingMeta`/`SelfSustaining` rewrite), `fastloom/tenant/settings.py` (idempotency-guard fix + `override_fields`), `fastloom/test/fixtures/settings.py` (`tc_context` now uses `.override()`). All 79 existing tests pass unchanged; ruff/mypy/pre-commit clean.
+Shipped in this PR: `fastloom/meta.py` (`SelfSustainingMeta`/`SelfSustaining` rewrite, no back-compat shim), `fastloom/tenant/settings.py` (idempotency-guard fix + `override_fields` + the two direct `.self` reads updated), `fastloom/tenant/handler.py` (one direct `.self` read updated), `fastloom/test/fixtures/settings.py` (`tc_context` now uses `.override()`), and 4 fastloom test files updated to `Cls._var.set(...)`. All 80 existing tests pass; ruff/mypy/pre-commit clean.
