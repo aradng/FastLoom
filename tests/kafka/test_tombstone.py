@@ -4,8 +4,6 @@ from typing import cast
 from confluent_kafka import Message
 from faststream.confluent.fastapi import KafkaMessage
 
-from fastloom.signals.kafka.depends import publish_tombstone
-
 
 async def test_publish_tombstone_sends_a_real_null_value(kafka_subscriber):
     router = kafka_subscriber.router
@@ -29,9 +27,7 @@ async def test_publish_tombstone_sends_a_real_null_value(kafka_subscriber):
         # the existing/naive approach: encode_message() turns None into b""
         await publisher.publish(None, key=b"naive-delete")
         # the fix: a genuine null value on the wire
-        await publish_tombstone(
-            router, "tombstone-test-topic", key=b"real-delete"
-        )
+        await publisher.publish_tombstone(key=b"real-delete")
         await asyncio.wait_for(received.wait(), timeout=15)
     finally:
         await router.broker.stop()
