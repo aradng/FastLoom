@@ -5,7 +5,7 @@ from confluent_kafka import Message
 from faststream.confluent.fastapi import KafkaMessage
 from pydantic import BaseModel
 
-from fastloom.signals.kafka.depends import TOMBSTONE, _Tombstone
+from fastloom.signals.kafka.depends import TOMBSTONE, Tombstone
 
 
 async def test_publish_none_sends_a_real_null_value(kafka_subscriber):
@@ -46,7 +46,7 @@ async def test_typed_body_param_resolves_to_tombstone_sentinel(
     kafka_subscriber,
 ):
     router = kafka_subscriber.router
-    received: list[_Foo | _Tombstone] = []
+    received: list[_Foo | Tombstone] = []
     done = asyncio.Event()
 
     @router.subscriber(
@@ -54,7 +54,7 @@ async def test_typed_body_param_resolves_to_tombstone_sentinel(
         group_id="consumer-tombstone-test",
         auto_offset_reset="earliest",
     )
-    async def handler(msg: _Foo | _Tombstone) -> None:
+    async def handler(msg: _Foo | Tombstone) -> None:
         received.append(msg)
         if len(received) == 2:
             done.set()

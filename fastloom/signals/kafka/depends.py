@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from faststream.confluent.response import KafkaPublishCommand
 
 
-class _Tombstone:
+class Tombstone:
     """Sentinel marking a message body as a genuine null value - not a byte
     pattern (`b"null"`, `b""`), so it can never collide with real content."""
 
@@ -37,7 +37,7 @@ class _Tombstone:
         return {"const": "TOMBSTONE"}
 
 
-TOMBSTONE = _Tombstone()
+TOMBSTONE = Tombstone()
 
 
 def get_kafka_router(settings: KafkaSettings) -> KafkaRouter:
@@ -185,7 +185,7 @@ def _patch_fastapi_body_wrapping() -> None:
         async def parsed_consumer(message: Any) -> Any:
             body = await message.decode()
 
-            fastapi_body: dict[str, Any] | list[Any] | None | _Tombstone
+            fastapi_body: dict[str, Any] | list[Any] | None | Tombstone
             if first_arg is not None:
                 if isinstance(body, dict):
                     path = fastapi_body = body or {}
