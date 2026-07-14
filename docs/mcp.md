@@ -4,7 +4,7 @@ Fastloom can mount a FastMCP ASGI app inside your FastAPI service when the optio
 
 **Symbols at a glance**
 
-- `fastloom.mcp.settings.MCPSettings` — `MCP_ENABLED`, `MCP_OPENAPI`.
+- `fastloom.mcp.settings.MCPSettings` — `MCP_ENABLED`, `MCP_OPENAPI`, `MCP_SESSION_STORE_ENABLED`.
 - `fastloom.mcp.lifehooks.get_mcp` — the `FastMCP` singleton (lru-cached).
 - `fastloom.mcp.lifehooks.get_mcp_asgi` — its ASGI app, mounted at `/mcp` inside the MCP root.
 - `fastloom.mcp.lifehooks.mcp_register_app` — registers your FastAPI's OpenAPI spec as an MCP provider.
@@ -58,9 +58,23 @@ Setting `MCP_OPENAPI=True` triggers `mcp_register_app(app)` during the MCP lifes
 
 `ForwardBearerAuth` copies the `Authorization` header from the inbound MCP request onto the outbound ASGI request, so auth dependencies on your routes still resolve correctly.
 
+## Session state store (Redis-backed, automatic)
+
+`get_mcp()`'s `FastMCP` singleton is built with `session_state_store=` set automatically — no wiring required. It's an optional feature, not a requirement: with no redis extra installed, it's exactly `None` (FastMCP's own default, an in-process `MemoryStore()`), same as before this existed.
+
+When the consuming service **inherits `RedisSettings`** (has `redis` in the mix, per [cache.md](cache.md)) **and** the connection is live (`RedisHandler.enabled`), `get_mcp()` reuses that same connection — `RedisStore(client=RedisHandler.redis)` — for FastMCP's session state, instead of the default in-memory store. This is what makes tool-level `ctx.get_state()`/`set_state()` survive a restart and stay consistent across multiple workers/replicas, instead of being silently per-process.
+
+Detection is fully automatic and never a hard dependency:
+
+- No `redis` extra installed → `None` (in-memory), regardless of `MCPSettings`.
+- `redis` extra installed but this service's `Settings` doesn't inherit `RedisSettings`, or the connection is down → `None` (in-memory) — `RedisHandler` being unbound or disabled is caught, never raised.
+- `redis` extra installed, inherited, and live → `RedisStore` backed by the existing connection.
+
+Set `MCP_SESSION_STORE_ENABLED: false` to opt out explicitly (e.g. a service that has `redis` for caching but wants MCP session state to stay per-process/ephemeral) without removing the `redis` extra.
+
 ## Custom MCP composition
 
-If you need a richer MCP setup (custom session state store, additional providers), construct your own `FastMCP` and mount its `.http_app(...)` via `App.mounts`:
+If you need something the automatic wiring doesn't cover (a non-default `RedisStore` — TTL, key prefix — or additional providers), construct your own `FastMCP` and mount its `.http_app(...)` via `App.mounts`:
 
 ```python
 from fastmcp import FastMCP
@@ -104,3 +118,4 @@ When you do this manually, **do not also set `MCP_ENABLED=True`** — the launch
 
 - [Launcher](launcher.md) — `combine_lifespans` and the startup order.
 - [Auth](auth.md) — `ForwardBearerAuth` reuses the bearer flow.
+- [Cache](cache.md) — `RedisHandler`, the connection the session store reuses.
