@@ -20,7 +20,9 @@ class SelfSustainingMeta(type):
         return instance
 
     def __getattr__(cls, name):
-        return getattr(cls.self, name)
+        if (instance := cls._self.get()) is None:
+            raise AttributeError(f"{cls.__name__} is not bound")
+        return getattr(instance, name)
 
     def __setattr__(cls, name, value):
         if (instance := cls._self.get()) is None:
