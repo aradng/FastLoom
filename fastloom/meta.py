@@ -1,6 +1,6 @@
 import inspect
 import tomllib
-from contextvars import ContextVar, Token
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self, cast
 
@@ -8,24 +8,29 @@ from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 
 
+@dataclass(frozen=True, slots=True)
+class Token[T]:
+    previous: T
+
+
 class SelfSustainingMeta(type):
     def __new__(mcls, name, bases, namespace):
-        namespace["_self"] = ContextVar(f"{name}.instance", default=None)
+        namespace["_self"] = None
         return super().__new__(mcls, name, bases, namespace)
 
     @property
     def self(cls):
-        if (instance := cls._self.get()) is None:
+        if (instance := cls._self) is None:
             raise AttributeError(f"{cls.__name__} is not bound")
         return instance
 
     def __getattr__(cls, name):
-        if (instance := cls._self.get()) is None:
+        if (instance := cls._self) is None:
             raise AttributeError(f"{cls.__name__} is not bound")
         return getattr(instance, name)
 
     def __setattr__(cls, name, value):
-        if (instance := cls._self.get()) is None:
+        if (instance := cls._self) is None:
             return super().__setattr__(name, value)
         return setattr(instance, name, value)
 
@@ -36,15 +41,19 @@ class SelfSustaining(metaclass=SelfSustainingMeta):
 
     @classmethod
     def bind(cls, instance: Self) -> Token[Self | None]:
-        return cls._self.set(instance)
+        token = Token(cls._self)
+        type.__setattr__(cls, "_self", instance)
+        return token
 
     @classmethod
     def unbind(cls) -> Token[Self | None]:
-        return cls._self.set(None)
+        token = Token(cls._self)
+        type.__setattr__(cls, "_self", None)
+        return token
 
     @classmethod
     def reset(cls, token: Token[Self | None]) -> None:
-        cls._self.reset(token)
+        type.__setattr__(cls, "_self", token.previous)
 
 
 def optional_fieldinfo(

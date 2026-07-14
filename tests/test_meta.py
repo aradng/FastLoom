@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+import asyncio
 
 import pytest
 
@@ -26,16 +26,16 @@ def test_bound_attr_reads_through() -> None:
     assert Widget.name == "widget"
 
 
-def test_unbound_in_other_thread_raises_attribute_error() -> None:
-    # NOTE: binding lives in a ContextVar, which threads spawned via a plain
-    # ThreadPoolExecutor (e.g. loop.run_in_executor) don't inherit.
-    Widget()
+async def test_bound_in_task_visible_to_sibling_task() -> None:
+    # Mirrors uvicorn's LifespanOn: the ASGI lifespan (where production code
+    # binds Configs/PGManager/etc.) runs in its own forked task, while
+    # request-handling tasks are siblings of the root task, not descendants
+    # of the lifespan task. The binding must be visible there too.
+    async def bind_it() -> None:
+        Widget()
 
-    def read_from_thread():
+    async def read_it() -> str:
         return Widget.name
 
-    with (
-        ThreadPoolExecutor() as executor,
-        pytest.raises(AttributeError, match="not bound"),
-    ):
-        executor.submit(read_from_thread).result()
+    await asyncio.create_task(bind_it())
+    assert await asyncio.create_task(read_it()) == "widget"
