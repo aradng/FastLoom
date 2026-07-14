@@ -79,7 +79,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         service_cls: type[T],
         tenant_cls: type[V],
     ) -> None:
-        if type(self)._self.get() is not None:
+        if type(self)._self is not None:
             return
         super().__init__()
         self.cache_enabled = False
