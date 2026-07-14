@@ -1,8 +1,7 @@
-import copy
-from collections.abc import Generator, MutableMapping
-from contextlib import contextmanager, suppress
+from collections.abc import MutableMapping
+from contextlib import suppress
 from types import new_class
-from typing import TYPE_CHECKING, Annotated, Self, TypeVar
+from typing import TYPE_CHECKING, Annotated, TypeVar
 
 from pydantic import BaseModel, StringConstraints
 
@@ -95,25 +94,6 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         self.optional_auth = self._optional_auth()
         self._setup_mongo()
         self._setup_redis()
-
-    @classmethod
-    @contextmanager
-    def override_fields(cls, **field_updates: object) -> Generator[Self]:
-        """Patch `general` fields only, for the `with` block — cheaper than
-        `.override(...)` since it skips re-running Mongo/Redis setup.
-
-        Only safe for fields nothing else derives from. `PROJECT_NAME` (and
-        anything `_setup_mongo`/`_setup_redis` fan out to `BaseDocumentSignal`
-        or `BaseCache.Meta`) needs a full `.override(...)` instead, or those
-        stay stale. See docs/conventions.md.
-        """
-        patched = copy.copy(cls.self)
-        patched.general = patched.general.model_copy(update=field_updates)
-        token = cls.bind(patched)
-        try:
-            yield patched
-        finally:
-            cls.reset(token)
 
     def _setup_mongo(self):
         if not issubclass(self.service_cls, MongoSettings):

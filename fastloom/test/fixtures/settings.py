@@ -1,3 +1,4 @@
+import copy
 from collections.abc import Generator, MutableMapping
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -53,6 +54,29 @@ def tc_context[V: BaseModel, T: BaseModel](
             yield Configs.self
         finally:
             Configs.reset(token)
+
+
+@contextmanager
+def override_fields(
+    **field_updates: object,
+) -> "Generator[Configs[BaseModel, BaseModel]]":
+    """Patch `general` fields only, for the `with` block — cheaper than
+    rebuilding via `tc_context` since it skips re-running Mongo/Redis setup.
+
+    Only safe for fields nothing else derives from. `PROJECT_NAME` (and
+    anything `Configs._setup_mongo`/`_setup_redis` fan out to
+    `BaseDocumentSignal` or `BaseCache.Meta`) needs a full rebuild instead,
+    or those stay stale. See docs/conventions.md.
+    """
+    from fastloom.tenant.settings import Configs
+
+    patched = copy.copy(Configs.self)
+    patched.general = patched.general.model_copy(update=field_updates)
+    token = Configs.bind(patched)
+    try:
+        yield patched
+    finally:
+        Configs.reset(token)
 
 
 @pytest.fixture
