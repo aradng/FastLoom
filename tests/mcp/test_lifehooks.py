@@ -48,22 +48,24 @@ def test_none_without_aredis_om_installed():
         assert _mcp_session_state_store() is None
 
 
-def test_returns_redis_store_when_enabled():
+def test_returns_redis_store_when_enabled(redis_container):
     from key_value.aio.stores.redis import RedisStore
 
+    _, host, port = redis_container
     _bind_configs()
-    RedisHandler(RedisSettings())
+    RedisHandler(RedisSettings(REDIS_URL=f"redis://{host}:{port}/0"))
 
     store = _mcp_session_state_store()
 
     assert isinstance(store, RedisStore)
 
 
-def test_get_mcp_wires_redis_backed_state_store():
+def test_get_mcp_wires_redis_backed_state_store(redis_container):
     from key_value.aio.stores.redis import RedisStore
 
+    _, host, port = redis_container
     _bind_configs()
-    RedisHandler(RedisSettings())
+    RedisHandler(RedisSettings(REDIS_URL=f"redis://{host}:{port}/0"))
     get_mcp.cache_clear()
 
     try:

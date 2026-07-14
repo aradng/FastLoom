@@ -19,15 +19,17 @@ else:
 
 
 def _mcp_session_state_store():
-    if not AREDIS_OM_INSTALLED:
-        return None
-    if not Configs[MCPSettings].general.MCP_SESSION_STORE_ENABLED:
+    if (
+        not AREDIS_OM_INSTALLED
+        or not Configs[MCPSettings].general.MCP_SESSION_STORE_ENABLED
+    ):
         return None
 
     with suppress(AttributeError):
         handler = RedisHandler.self
-        if handler.enabled:
-            return RedisStore(client=handler.redis)
+        if not handler.enabled:
+            return None
+        return RedisStore(client=handler.redis)
     return None
 
 
