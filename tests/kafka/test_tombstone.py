@@ -71,3 +71,34 @@ async def test_typed_body_param_resolves_to_tombstone_sentinel(
     regular, tombstone = received
     assert regular == _Foo(x=5)
     assert tombstone is TOMBSTONE
+
+
+async def test_optional_body_param_still_resolves_to_plain_none(
+    kafka_subscriber,
+):
+    """A handler that doesn't opt into Tombstone keeps upstream #2933's
+    exact Optional[Model] = None behavior - unaffected by the sentinel."""
+    router = kafka_subscriber.router
+    received: list[_Foo | None] = []
+    done = asyncio.Event()
+
+    @router.subscriber(
+        "consumer-optional-none-test-topic",
+        group_id="consumer-optional-none-test",
+        auto_offset_reset="earliest",
+    )
+    async def handler(msg: _Foo | None = None) -> None:
+        received.append(msg)
+        if len(received) == 2:
+            done.set()
+
+    publisher = router.publisher("consumer-optional-none-test-topic")
+    await router.broker.start()
+    try:
+        await publisher.publish({"x": 5}, key=b"regular-message")
+        await publisher.publish(None, key=b"real-delete")
+        await asyncio.wait_for(done.wait(), timeout=15)
+    finally:
+        await router.broker.stop()
+
+    assert received == [_Foo(x=5), None]

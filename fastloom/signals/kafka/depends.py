@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from types import UnionType
+from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
 from fastloom.meta import SelfSustaining
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
@@ -100,14 +101,14 @@ def _patch_tombstone_consumption(
     parser_cls: type[AsyncConfluentParser],
 ) -> None:
     # NOTE: consumer-side half of the same gap - a real tombstone decodes to
-    # b"" (parse_message()'s own `or b""`), so a typed Model | TOMBSTONE body
+    # b"" (parse_message()'s own `or b""`), so a typed Optional[Model] body
     # param still crash-loops: FastAPI's body-solving flattens the model's
     # own required fields rather than ever seeing "no body at all"
     # (ag2ai/faststream#2933, open, no PyPI release either way). Tags the
-    # body with a dedicated sentinel at parse time and patches the fastapi
-    # bridge to pass it through unwrapped instead of as {param_name: TOMBSTONE}
-    # - the wrapping is what defeats FastAPI's own no-body shortcut in the
-    # first place.
+    # body with a dedicated sentinel at parse time; by default decode_message
+    # collapses it to None, matching #2933's own Optional[Model] = None
+    # behavior exactly. A handler typed Model | Tombstone opts out of that
+    # collapse instead - see _patch_fastapi_body_wrapping.
     if getattr(parser_cls, "_fastloom_tombstone_consumption", False):
         return
 
@@ -122,7 +123,7 @@ def _patch_tombstone_consumption(
 
     async def decode_message(self: AsyncConfluentParser, msg: Any):
         if msg.body is TOMBSTONE:
-            return TOMBSTONE
+            return None
         return await original_decode_message(self, msg)
 
     parser_cls.parse_message = parse_message
@@ -130,6 +131,17 @@ def _patch_tombstone_consumption(
     parser_cls._fastloom_tombstone_consumption = True
 
     _patch_fastapi_body_wrapping()
+
+
+def _accepts_tombstone(annotation: Any) -> bool:
+    """Whether a handler's declared body type opts into the raw sentinel."""
+    if annotation is Tombstone:
+        return True
+
+    if get_origin(annotation) in (Union, UnionType):
+        return any(_accepts_tombstone(arg) for arg in get_args(annotation))
+
+    return False
 
 
 _fastapi_route_patched = False
@@ -174,16 +186,21 @@ def _patch_fastapi_body_wrapping() -> None:
         )
 
         dependencies_names = tuple(i.name for i in dependent.dependencies)
+        call_params = inspect.signature(dependent.call).parameters
         first_arg = next(
-            dropwhile(
-                lambda i: i in dependencies_names,
-                inspect.signature(dependent.call).parameters,
-            ),
+            dropwhile(lambda i: i in dependencies_names, call_params),
             None,
+        )
+        first_arg_accepts_tombstone = (
+            first_arg is not None
+            and _accepts_tombstone(call_params[first_arg].annotation)
         )
 
         async def parsed_consumer(message: Any) -> Any:
-            body = await message.decode()
+            if first_arg_accepts_tombstone and message.body is TOMBSTONE:
+                body: Any = TOMBSTONE
+            else:
+                body = await message.decode()
 
             fastapi_body: dict[str, Any] | list[Any] | None | Tombstone
             if first_arg is not None:
