@@ -48,13 +48,19 @@ class SelfSustaining(metaclass=SelfSustainingMeta):
         type(self).bind(self)
 
     @classmethod
-    def bind(cls, instance: Self | None) -> Token[Self | None]:
+    def bind(cls, instance: Self) -> Token[Self | None]:
         return cls._self.set(instance)
+
+    @classmethod
+    def unbind(cls) -> Token[Self | None]:
+        return cls._self.set(None)
 
     @classmethod
     def reset(cls, token: Token[Self | None]) -> None:
         cls._self.reset(token)
 ```
+
+`bind` takes an actual instance, not `Self | None` — clearing to unbound is a conceptually different operation (`unbind()`, no args), not `bind(None)`.
 
 `Configs.general`, `TC.general.X`, `TC.from_[TokenHeaderSource]` — unchanged syntax. The only thing that moved is what backs `cls._self.get()`.
 
