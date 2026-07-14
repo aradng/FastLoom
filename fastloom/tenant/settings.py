@@ -57,7 +57,7 @@ TenantMappingWithHosts = MutableMapping[TenantName, TenantHostSchema]
 
 class GetSettingsFrom[V](BaseGetFrom):
     async def _item_getter(self, tenant: str) -> V:
-        return await Configs[BaseModel, V].self.get(tenant)  # type: ignore[type-var, misc]
+        return await Configs.self.get(tenant)
 
 
 class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
@@ -79,7 +79,7 @@ class Configs[T: BaseModel, V: BaseModel](SelfSustaining):
         service_cls: type[T],
         tenant_cls: type[V],
     ) -> None:
-        if self.self is not None:
+        if type(self)._self.get() is not None:
             return
         super().__init__()
         self.cache_enabled = False

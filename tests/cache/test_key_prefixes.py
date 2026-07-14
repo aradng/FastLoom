@@ -44,11 +44,11 @@ def test_setup_redis_scopes_all_cache_prefixes_by_project_name():
             == "tenant_settings"
         )
 
-        Configs.self = configs
+        Configs.bind(configs)
         assert RedisGuardGate("bootstrap").key == "my_service:lock:bootstrap"
         assert (
             RedisGuardGate("tick_loop", scope_to_parent=True).key
             == f"my_service:lock:{getppid()}:tick_loop"
         )
     finally:
-        Configs.self = None  # type: ignore[misc, assignment]
+        Configs.unbind()

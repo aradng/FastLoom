@@ -9,7 +9,7 @@ from fastloom.tenant.settings import Configs
 def _build_app() -> TestClient:
     configs = Configs.__new__(Configs)
     configs.general = FastAPISettings(PROJECT_NAME="my_service")
-    Configs.self = configs  # type: ignore[misc, assignment]
+    Configs.bind(configs)
 
     app = FastAPI(root_path="/api/my_service")
     router = APIRouter(dependencies=[Depends(reject_external)])
@@ -27,7 +27,7 @@ def test_reject_external_allows_bare_path():
     try:
         assert client.get("/ping").status_code == 200
     finally:
-        Configs.self = None  # type: ignore[misc, assignment]
+        Configs.unbind()
 
 
 def test_reject_external_rejects_prefixed_path():
@@ -35,4 +35,4 @@ def test_reject_external_rejects_prefixed_path():
     try:
         assert client.get("/api/my_service/ping").status_code == 404
     finally:
-        Configs.self = None  # type: ignore[misc, assignment]
+        Configs.unbind()

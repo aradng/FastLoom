@@ -1,5 +1,6 @@
 import inspect
 import tomllib
+from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Any, Self, cast
 
@@ -9,30 +10,39 @@ from pydantic.fields import FieldInfo
 
 class SelfSustainingMeta(type):
     def __new__(mcls, name, bases, namespace):
-        namespace["self"] = cast(object, None)  # reserve the slot
+        namespace["_self"] = ContextVar(f"{name}.instance", default=None)
         return super().__new__(mcls, name, bases, namespace)
 
-    def __getattr__(cls, name):
-        if cls.self is None:
-            raise AttributeError(f"{cls.__name__}.self is not initialized")
+    @property
+    def self(cls):
+        if (instance := cls._self.get()) is None:
+            raise AttributeError(f"{cls.__name__} is not bound")
+        return instance
 
+    def __getattr__(cls, name):
         return getattr(cls.self, name)
 
     def __setattr__(cls, name, value):
-        if name == "self" or name in cls.__dict__:
+        if (instance := cls._self.get()) is None:
             return super().__setattr__(name, value)
-        if name == "__parameters__":
-            return super().__setattr__(name, value)
-        if cls.self is None:
-            raise AttributeError(f"{cls.__name__}.self is not initialized")
-        return setattr(cls.self, name, value)
+        return setattr(instance, name, value)
 
 
 class SelfSustaining(metaclass=SelfSustainingMeta):
-    self: Self
-
     def __init__(self, *args, **kwargs):
-        type(self).self = self  # store the singleton
+        type(self).bind(self)  # store the singleton
+
+    @classmethod
+    def bind(cls, instance: Self) -> Token[Self | None]:
+        return cls._self.set(instance)
+
+    @classmethod
+    def unbind(cls) -> Token[Self | None]:
+        return cls._self.set(None)
+
+    @classmethod
+    def reset(cls, token: Token[Self | None]) -> None:
+        cls._self.reset(token)
 
 
 def optional_fieldinfo(
