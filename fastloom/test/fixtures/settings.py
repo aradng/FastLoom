@@ -79,6 +79,28 @@ def override_fields(
         Configs.reset(token)
 
 
+def patch_tenant_loader_at_import[V: BaseModel, T: BaseModel](
+    service_settings: T,
+    tenant_settings: MutableMapping[str, V] | None = None,
+) -> None:
+    """Conftest module scope only, never a fixture — see docs/test.md."""
+    from fastloom.tenant import settings as _tenant_settings
+    from fastloom.tenant.utils import dump_settings
+    from fastloom.tenant.utils import load_settings as _load_settings
+
+    yaml_text = dump_settings(
+        service_settings=service_settings,
+        tenant_settings=tenant_settings if tenant_settings is not None else {},
+        yaml_mode=True,
+    )
+
+    def _test_load_settings(*args, **kwargs):
+        kwargs["config_stream"] = yaml_text
+        return _load_settings(*args, **kwargs)
+
+    _tenant_settings.load_settings = _test_load_settings
+
+
 @pytest.fixture
 def settings_mock(service_settings, tenant_settings):
     with patched_settings(service_settings, tenant_settings):

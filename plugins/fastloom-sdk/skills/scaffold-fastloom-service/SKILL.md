@@ -32,7 +32,9 @@ dependencies = [
 
 ### `settings.py`
 
-Compose `Settings` from `BaseGeneralSettings + LauncherSettings` plus exactly the capability mixins the user picked. Always alias `Configs` as `TC`. Add a `TenantSettings(BaseModel)` placeholder with a `name: str` field. Reference: `docs/settings.md` in the fastloom repo.
+Compose `Settings` from `BaseGeneralSettings + LauncherSettings` plus exactly the capability mixins the user picked. Always alias `Configs` as `TC: type[Configs[Settings, TenantSettings]] = Configs` — the bare class-alias form, not an eager instantiation. Add a `TenantSettings(BaseModel)` placeholder with a `name: str` field. Reference: `docs/settings.md` in the fastloom repo.
+
+Don't offer the eager `TC = Configs(service_cls=Settings, tenant_cls=TenantSettings)` form here — it requires matching conftest.py discipline (`patch_tenant_loader_at_import`, see `docs/conventions.md#eager-vs-deferred-tcgeneral-reads`) that a fresh scaffold has no test suite to carry yet.
 
 ### `tenants.yaml`
 

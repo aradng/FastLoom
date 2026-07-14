@@ -82,6 +82,27 @@ def TC(settings_mock):
 
 The fixture nukes the class-level singleton, builds a fresh one from your stub `service_settings` + `tenant_settings`, hands it to the test, and clears it again. This is the only place outside the launcher that's allowed to mess with `Configs.self`.
 
+## `patch_tenant_loader_at_import` — eager `TC` binding
+
+Only relevant if your `settings.py` binds `TC` eagerly (`TC = Configs(service_cls=Settings, tenant_cls=TenantSettings)`) instead of the default class-alias form — see [Conventions](conventions.md#eager-vs-deferred-tcgeneral-reads) for why a service would do that.
+
+```python
+# tests/conftest.py
+from fastloom.test.fixtures.settings import patch_tenant_loader_at_import
+
+from settings import Settings, TenantSettings
+
+patch_tenant_loader_at_import(
+    Settings(ENVIRONMENT="test", PROJECT_NAME="my_service", ...),
+    {"acme": TenantSettings(name="acme")},
+)
+
+from fastloom.test.fixtures.app import *  # noqa: E402, F403
+from fastloom.test.fixtures.auth import *  # noqa: E402, F403
+```
+
+Call it as a bare statement at conftest.py **module scope** — never inside a fixture, autouse or otherwise, and before any local import that could pull in `settings.py`. pytest imports conftest.py before collecting sibling test files in that directory; that's the only point early enough to beat an eager `TC = Configs(...)` binding, which fires the moment anything first imports `settings.py`. A fixture only runs at test-execution time, after the entire collection phase — by then a test file's own top-level import (`from myservice.constants import Topic`, say) may already have triggered `settings.py`'s construction against the real loader, silently defeating the point of patching at all.
+
 ## `init_app` — TestClient with tenant routing
 
 ```python
