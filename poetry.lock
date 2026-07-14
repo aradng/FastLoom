@@ -7153,4 +7153,4 @@ test = ["deepdiff", "freezegun", "httpx2", "pytest", "pytest-asyncio", "pytest-c
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "fc49762a16f24508cdea5a43f1e52103d633dbe6f5e25dcd211726aaf62139f1"
+content-hash = "15fa8228f45019c0b756c204d17a68b03220072a297268f611437a1c2681c834"
