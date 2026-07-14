@@ -27,7 +27,7 @@ def test_reject_external_allows_bare_path():
     try:
         assert client.get("/ping").status_code == 200
     finally:
-        Configs.bind(None)
+        Configs.unbind()
 
 
 def test_reject_external_rejects_prefixed_path():
@@ -35,4 +35,4 @@ def test_reject_external_rejects_prefixed_path():
     try:
         assert client.get("/api/my_service/ping").status_code == 404
     finally:
-        Configs.bind(None)
+        Configs.unbind()

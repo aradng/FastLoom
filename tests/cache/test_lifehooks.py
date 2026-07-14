@@ -6,7 +6,7 @@ from fastloom.cache.settings import RedisSettings
 
 
 def test_redis_handler_exposes_decoded_bytes_and_cache_backend_clients():
-    RedisHandler.bind(None)
+    RedisHandler.unbind()
     try:
         handler = RedisHandler(RedisSettings())
 
@@ -16,4 +16,4 @@ def test_redis_handler_exposes_decoded_bytes_and_cache_backend_clients():
 
         assert isinstance(handler.cache_backend, CacheBackend)
     finally:
-        RedisHandler.bind(None)
+        RedisHandler.unbind()

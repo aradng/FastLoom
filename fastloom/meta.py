@@ -33,8 +33,12 @@ class SelfSustaining(metaclass=SelfSustainingMeta):
         type(self).bind(self)  # store the singleton
 
     @classmethod
-    def bind(cls, instance: Self | None) -> Token[Self | None]:
+    def bind(cls, instance: Self) -> Token[Self | None]:
         return cls._self.set(instance)
+
+    @classmethod
+    def unbind(cls) -> Token[Self | None]:
+        return cls._self.set(None)
 
     @classmethod
     def reset(cls, token: Token[Self | None]) -> None:

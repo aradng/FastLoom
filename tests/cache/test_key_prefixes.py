@@ -51,4 +51,4 @@ def test_setup_redis_scopes_all_cache_prefixes_by_project_name():
             == f"my_service:lock:{getppid()}:tick_loop"
         )
     finally:
-        Configs.bind(None)
+        Configs.unbind()
