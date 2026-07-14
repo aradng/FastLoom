@@ -7,12 +7,12 @@ from fastapi.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
 from fastloom.cache.lifehooks import RedisHandler
-from fastloom.extras import AREDIS_OM_INSTALLED
+from fastloom.extras import AREDIS_OM_INSTALLED, FASTMCP_INSTALLED
 from fastloom.mcp.auth import get_mcp_client
 from fastloom.mcp.settings import MCPSettings
 from fastloom.tenant.settings import ConfigAlias as Configs
 
-if TYPE_CHECKING or AREDIS_OM_INSTALLED:
+if TYPE_CHECKING or (AREDIS_OM_INSTALLED and FASTMCP_INSTALLED):
     from key_value.aio.stores.redis import RedisStore
 else:
     RedisStore = None
@@ -21,6 +21,7 @@ else:
 def _mcp_session_state_store():
     if (
         not AREDIS_OM_INSTALLED
+        or not FASTMCP_INSTALLED
         or not Configs[MCPSettings].general.MCP_SESSION_STORE_ENABLED
     ):
         return None

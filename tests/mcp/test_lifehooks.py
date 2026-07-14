@@ -48,6 +48,13 @@ def test_none_without_aredis_om_installed():
         assert _mcp_session_state_store() is None
 
 
+def test_none_without_fastmcp_installed():
+    _bind_configs()
+    RedisHandler(RedisSettings())
+    with patch("fastloom.mcp.lifehooks.FASTMCP_INSTALLED", False):
+        assert _mcp_session_state_store() is None
+
+
 def test_returns_redis_store_when_enabled(redis_container):
     from key_value.aio.stores.redis import RedisStore
 
