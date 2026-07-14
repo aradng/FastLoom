@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from types import UnionType
+from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
 from fastloom.meta import SelfSustaining
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     from faststream.confluent.response import KafkaPublishCommand
 
 
-class _Tombstone:
+class Tombstone:
     """Sentinel marking a message body as a genuine null value - not a byte
     pattern (`b"null"`, `b""`), so it can never collide with real content."""
 
@@ -26,8 +27,18 @@ class _Tombstone:
     def __bool__(self) -> bool:
         return False
 
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: Any):
+        from pydantic_core import core_schema
 
-TOMBSTONE = _Tombstone()
+        return core_schema.is_instance_schema(cls)
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, schema: Any, handler: Any):
+        return {"const": "TOMBSTONE"}
+
+
+TOMBSTONE = Tombstone()
 
 
 def get_kafka_router(settings: KafkaSettings) -> KafkaRouter:
@@ -94,10 +105,10 @@ def _patch_tombstone_consumption(
     # param still crash-loops: FastAPI's body-solving flattens the model's
     # own required fields rather than ever seeing "no body at all"
     # (ag2ai/faststream#2933, open, no PyPI release either way). Tags the
-    # body with a dedicated sentinel at parse time, decodes it to None, and
-    # patches the fastapi bridge to pass real None through instead of
-    # wrapping it as {param_name: None} - the wrapping is what defeats
-    # FastAPI's own no-body shortcut in the first place.
+    # body with a dedicated sentinel at parse time; by default decode_message
+    # collapses it to None, matching #2933's own Optional[Model] = None
+    # behavior exactly. A handler typed Model | Tombstone opts out of that
+    # collapse instead - see _patch_fastapi_body_wrapping.
     if getattr(parser_cls, "_fastloom_tombstone_consumption", False):
         return
 
@@ -120,6 +131,17 @@ def _patch_tombstone_consumption(
     parser_cls._fastloom_tombstone_consumption = True
 
     _patch_fastapi_body_wrapping()
+
+
+def _accepts_tombstone(annotation: Any) -> bool:
+    """Whether a handler's declared body type opts into the raw sentinel."""
+    if annotation is Tombstone:
+        return True
+
+    if get_origin(annotation) in (Union, UnionType):
+        return any(_accepts_tombstone(arg) for arg in get_args(annotation))
+
+    return False
 
 
 _fastapi_route_patched = False
@@ -164,25 +186,30 @@ def _patch_fastapi_body_wrapping() -> None:
         )
 
         dependencies_names = tuple(i.name for i in dependent.dependencies)
+        call_params = inspect.signature(dependent.call).parameters
         first_arg = next(
-            dropwhile(
-                lambda i: i in dependencies_names,
-                inspect.signature(dependent.call).parameters,
-            ),
+            dropwhile(lambda i: i in dependencies_names, call_params),
             None,
+        )
+        first_arg_accepts_tombstone = (
+            first_arg is not None
+            and _accepts_tombstone(call_params[first_arg].annotation)
         )
 
         async def parsed_consumer(message: Any) -> Any:
-            body = await message.decode()
+            if first_arg_accepts_tombstone and message.body is TOMBSTONE:
+                body: Any = TOMBSTONE
+            else:
+                body = await message.decode()
 
-            fastapi_body: dict[str, Any] | list[Any] | None
+            fastapi_body: dict[str, Any] | list[Any] | None | Tombstone
             if first_arg is not None:
                 if isinstance(body, dict):
                     path = fastapi_body = body or {}
-                elif isinstance(body, list):
+                elif (
+                    isinstance(body, list) or body is None or body is TOMBSTONE
+                ):
                     fastapi_body, path = body, {}
-                elif body is None:
-                    fastapi_body, path = None, {}
                 else:
                     path = fastapi_body = {first_arg: body}
 
