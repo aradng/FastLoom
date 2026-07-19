@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import contextlib
-import json
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
@@ -203,19 +201,6 @@ def _patch_fastapi_body_wrapping() -> None:
                 body: Any = TOMBSTONE
             else:
                 body = await message.decode()
-                # NOTE: faststream's own decoder only JSON-parses when the
-                # content-type header is absent or recognized as
-                # application/json - a producer outside the faststream
-                # ecosystem (or one tagging a bogus/foreign content-type)
-                # leaves `body` as raw bytes/str even though it's valid
-                # JSON. Without this, that valid payload gets wrapped as a
-                # single opaque positional value below instead of being
-                # matched against the handler's declared fields.
-                if isinstance(body, bytes | str):
-                    with contextlib.suppress(
-                        json.JSONDecodeError, UnicodeDecodeError
-                    ):
-                        body = json.loads(body)
 
             fastapi_body: dict[str, Any] | list[Any] | None | Tombstone
             if first_arg is not None:
