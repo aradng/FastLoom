@@ -14,7 +14,7 @@ from typing import (
 
 from fastloom.meta import SelfSustaining
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
-from fastloom.signals.utils import exponential_backoff
+from fastloom.utils import exponential_backoff
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

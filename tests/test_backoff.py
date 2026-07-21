@@ -1,4 +1,4 @@
-from fastloom.signals.utils import exponential_backoff
+from fastloom.utils import exponential_backoff
 
 
 def test_exponential_backoff_doubles_across_several_attempts():

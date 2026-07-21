@@ -12,7 +12,7 @@ from fastloom.signals.rabbit.middlewares import (
     RabbitPayloadTelemetryMiddleware,
 )
 from fastloom.signals.rabbit.settings import RabbitmqSettings
-from fastloom.signals.utils import exponential_backoff
+from fastloom.utils import exponential_backoff
 
 if TYPE_CHECKING:
     from aio_pika.robust_channel import RobustChannel

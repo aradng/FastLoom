@@ -1,6 +1,6 @@
 ---
 name: fastloom-reference
-description: Use as the canonical reference for any question about the fastloom Python library — how its launcher / settings / auth / DB / RabbitMQ / cache / MCP / i18n / file / healthcheck / observability / testing surfaces work. Triggers on phrases like "how does fastloom X", "fastloom auth/db/signals/mcp/...", "what does TC mean", "explain App / Configs / RabbitSubscriber / SelfSustaining", "fastloom convention for Y", or whenever the user asks about a fastloom symbol while editing a fastloom-based service. Also use when one of the other fastloom-sdk skills (scaffold-fastloom-service, add-fastloom-route, add-rabbit-subscriber, audit-fastloom-settings) needs to verify a detail before generating code.
+description: Use as the canonical reference for any question about the fastloom Python library — how its launcher / settings / auth / DB / RabbitMQ / Kafka / cache / MCP / i18n / file / healthcheck / observability / testing surfaces work. Triggers on phrases like "how does fastloom X", "fastloom auth/db/signals/mcp/...", "what does TC mean", "explain App / Configs / RabbitSubscriber / KafkaSubscriber / SelfSustaining", "fastloom convention for Y", or whenever the user asks about a fastloom symbol while editing a fastloom-based service. Also use when one of the other fastloom-sdk skills (scaffold-fastloom-service, add-fastloom-route, add-rabbit-subscriber, add-kafka-subscriber, audit-fastloom-settings) needs to verify a detail before generating code.
 ---
 
 # fastloom reference docs
@@ -17,7 +17,7 @@ This skill bundles the full fastloom documentation. When the user asks about a f
 | `TC[tenant]` / `TC.set`, cache→Mongo→YAML resolution, tenant dependency sources, `TenantMixin` | `docs/tenant.md` |
 | `JWTAuth` / `UserClaims`, IAM topology (Casdoor/Keycloak + sidecar), `/introspect` and `/acl` | `docs/auth.md` |
 | Beanie models, mixins (`CreatedUpdatedAtSchema`), `BasePaginationQuery`, `BaseDocumentSignal` | `docs/db.md` |
-| `RabbitSubscriber`, publishers, subscribers, retry/backoff DLX topology, `init_streams` | `docs/signals.md` |
+| `RabbitSubscriber` / `KafkaSubscriber`, publishers, subscribers, retry/backoff (DLX for Rabbit, ack_policy+jitter for Kafka), `init_streams` | `docs/signals.md` |
 | `RedisHandler`, `BaseCache` / `BaseTenantSettingCache`, `HostTenantMapping`, `RedisGuardGate` | `docs/cache.md` |
 | `init_healthcheck`, auto-registered checks, custom handlers | `docs/healthcheck.md` |
 | `InitMonitoring`, `Instruments` enum, `infer_instruments`, OTel sampling, Sentry/Logfire | `docs/observability.md` |
@@ -48,4 +48,4 @@ Fastloom moves. Field names, capability mixins, and conventions shift between ve
 
 ## Cross-referencing the scaffolding skills
 
-The other four fastloom-sdk skills (`scaffold-fastloom-service`, `add-fastloom-route`, `add-rabbit-subscriber`, `audit-fastloom-settings`) embed key rules inline, but when a user asks "why does this scaffold do X", come back here and read the matching doc.
+The other five fastloom-sdk skills (`scaffold-fastloom-service`, `add-fastloom-route`, `add-rabbit-subscriber`, `add-kafka-subscriber`, `audit-fastloom-settings`) embed key rules inline, but when a user asks "why does this scaffold do X", come back here and read the matching doc.
