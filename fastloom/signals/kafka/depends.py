@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from types import UnionType
 from typing import (
     TYPE_CHECKING,
@@ -18,8 +19,6 @@ from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 from fastloom.utils import exponential_backoff
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from faststream._internal.types import BrokerMiddleware
     from faststream.confluent.fastapi import KafkaRouter
     from faststream.confluent.message import KafkaMessage
@@ -347,7 +346,11 @@ class KafkaSubscriber(SelfSustaining):
     @staticmethod
     def _locate(message: KafkaMessage) -> _MessageKey | None:
         raw = message.raw_message
-        first = raw[0] if isinstance(raw, tuple) else raw
+        # batch messages are a tuple against a real broker but a list
+        # against FastStream's own confluent test/mock broker - a single
+        # confluent_kafka.Message is never a Sequence, so this only ever
+        # takes the batch branch.
+        first = raw[0] if isinstance(raw, Sequence) else raw
         topic, partition, offset = (
             first.topic(),
             first.partition(),

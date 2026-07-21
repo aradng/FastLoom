@@ -11,12 +11,16 @@ def _fake_message(
     partition: int | None,
     offset: int | None,
     is_manual: bool = True,
+    batch_shape: type[list] | type[tuple] | None = None,
 ):
-    raw = SimpleNamespace(
+    single = SimpleNamespace(
         topic=lambda: topic,
         partition=lambda: partition,
         offset=lambda: offset,
     )
+    raw: (
+        SimpleNamespace | list[SimpleNamespace] | tuple[SimpleNamespace, ...]
+    ) = single if batch_shape is None else batch_shape([single])
     return SimpleNamespace(raw_message=raw, is_manual=is_manual)
 
 
@@ -130,6 +134,17 @@ async def test_missing_partition_metadata_skips_backoff(subscriber):
 
     assert subscriber.slept == []
     assert subscriber._retry_state == {}
+
+
+@pytest.mark.parametrize("batch_shape", [list, tuple])
+async def test_batch_message_backs_off_regardless_of_container_type(
+    deterministic_subscriber, batch_shape
+):
+    # a batch is a tuple against a real broker but a list against
+    # FastStream's own confluent test/mock broker - both must work.
+    await _fail(deterministic_subscriber, batch_shape=batch_shape)
+
+    assert deterministic_subscriber.slept == [1]
 
 
 async def test_enable_idempotence_forces_acks_all():
