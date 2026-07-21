@@ -264,22 +264,18 @@ class RabbitSubscriber(SelfSustaining):
     ):
         from aio_pika import Message
 
-        message.headers["x-delivery-count"] = (
-            message.headers.get("x-delivery-count", 0) + 1
-        )
+        attempt = message.headers.get("x-delivery-count", 0) + 1
+        message.headers["x-delivery-count"] = attempt
         if message.raw_message.routing_key is None:
             raise exc
         if (routing_key := message.raw_message.routing_key).endswith(
             cls._dlx_suffix()
-        ) and message.headers["x-delivery-count"] > 1:
+        ) and attempt > 1:
             routing_key = routing_key[: -len(cls._dlx_suffix())]
 
         delay = int(
             exponential_backoff(
-                message.headers["x-delivery-count"],
-                cls._base_delay,
-                cls._max_delay,
-                jitter=False,
+                attempt, cls._base_delay, cls._max_delay, jitter=False
             )
         )
         queue = await cls._get_ensured_dlx_queue(routing_key, delay)
@@ -293,9 +289,7 @@ class RabbitSubscriber(SelfSustaining):
                 body=message.body,
                 headers=message.headers,
                 expiration=exponential_backoff(
-                    message.headers["x-delivery-count"],
-                    cls._base_delay,
-                    cls._max_delay,
+                    attempt, cls._base_delay, cls._max_delay
                 ),
             ),
             queue=queue,

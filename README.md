@@ -124,7 +124,7 @@ See [docs/quickstart.md](docs/quickstart.md) for a fuller walkthrough.
     - Auto model discovery for DB init via `App.models_module`
 - Signals / Messaging (Rabbit + Kafka via FastStream)
     - Rabbit: event-driven publish/subscribe with retries and DLX-based backoff
-    - Kafka: subscriber/publisher wiring for consuming topics (e.g. Debezium CDC)
+    - Kafka: subscriber/publisher wiring for consuming topics (e.g. Debezium CDC), with `NACK_ON_ERROR`-backed exponential backoff by default
     - Subscriber wiring and healthchecks
     - Auto-streamed `BaseDocumentSignal` Beanie models
 - Observability

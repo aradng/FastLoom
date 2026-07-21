@@ -16,7 +16,7 @@ A single `/healthcheck` endpoint runs every registered async handler in sequence
 | Capability | Handler | Triggered when |
 |------------|---------|----------------|
 | Mongo | `db.healthcheck.get_healthcheck(MONGO_URI)` | `App.models` (or `models_module`) is non-empty. |
-| Rabbit | `signals.healthcheck.get_healthcheck(router)` | `App.signals_module` is set. |
+| Rabbit | `signals.rabbit.healthcheck.get_healthcheck(router)` | `App.signals_module` is set. |
 | Redis | `cache.healthcheck.get_healthcheck(REDIS_URL)` | `App(cache_healthcheck=True)`. |
 | Custom | each entry in `App.healthchecks` | always. |
 

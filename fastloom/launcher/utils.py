@@ -91,11 +91,10 @@ def setup_brokers() -> None:
         Configs[KafkaSubscriptable].general,  # type: ignore[misc]
         KafkaSettings,
     ):
+        debug = Configs[LauncherSettings].general.DEBUG  # type: ignore[misc]
         KafkaSubscriber(
             Configs[KafkaSubscriptable].general,  # type: ignore[misc]
-            allow_auto_create_topics=Configs[  # type: ignore[misc]
-                LauncherSettings
-            ].general.DEBUG,
+            allow_auto_create_topics=debug,
         )
     elif CONFLUENT_KAFKA_INSTALLED:
         logging.warning("Settings Does Not Inherit from KafkaSettings")

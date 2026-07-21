@@ -7,6 +7,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Literal,
+    NamedTuple,
     Union,
     get_args,
     get_origin,
@@ -61,10 +62,14 @@ TOMBSTONE = Tombstone()
 def get_kafka_router(
     settings: KafkaSettings,
     middlewares: Sequence[BrokerMiddleware[Any, Any]] = (),
-    allow_auto_create_topics: bool = True,
-    acks: Literal[0, 1, -1, "all"] = 1,
-    enable_idempotence: bool = False,
+    *,
+    allow_auto_create_topics: bool,
+    acks: Literal[0, 1, -1, "all"],
+    enable_idempotence: bool,
 ) -> KafkaRouter:
+    if enable_idempotence:
+        acks = "all"
+
     # deferred: see docs/signals.md#ordering
     from faststream.confluent.fastapi import KafkaRouter
     from faststream.confluent.parser import AsyncConfluentParser
@@ -261,6 +266,11 @@ def _patch_fastapi_body_wrapping() -> None:
     )
 
 
+class _RetryState(NamedTuple):
+    offset: int
+    attempt: int
+
+
 class KafkaSubscriber(SelfSustaining):
     """Owns the shared FastStream KafkaRouter singleton."""
 
@@ -268,44 +278,23 @@ class KafkaSubscriber(SelfSustaining):
     _base_delay: int
     _max_delay: int
     _exceptions: tuple[type[Exception], ...]
-    _retry_state: dict[tuple[str, int], tuple[int, int]]
+    _retry_state: dict[tuple[str, int], _RetryState]
 
     def __init__(
         self,
         settings: KafkaSubscriptable,
         base_delay: int = 5,
-        max_delay: int = 1800,
+        max_delay: int = 240,
         exceptions: list[type[Exception]] | None = None,
         ack_policy: AckPolicy | None = None,
         allow_auto_create_topics: bool = True,
         acks: Literal[0, 1, -1, "all"] = 1,
         enable_idempotence: bool = False,
     ):
-        """
-        :param settings: settings object with KAFKA_URI
-        :param base_delay: base delay (seconds) before the first retry
-        :param max_delay: delay cap (seconds) for repeated retries. This
-            sleep blocks the whole subscriber's poll loop (all its
-            partitions/topics), not just the failing one - register with
-            FastStream's `max_workers>1` if other partitions need to keep
-            flowing during a backoff.
-        :param exceptions: exception types that trigger backoff (default:
-            all exceptions)
-        :param ack_policy: broker-wide default ack policy (default:
-            NACK_ON_ERROR, required for backoff to actually redeliver).
-            Individual `@subscriber(...)` calls can still override it.
-        :param allow_auto_create_topics: create a topic on subscribe if it
-            doesn't exist yet, instead of erroring. Pass `TC.general.DEBUG`
-            from the launcher to disable this outside of local dev.
-        :param acks: producer durability - `1` (leader-only ack) is the
-            default; use `"all"` for topics where losing a message on
-            leader failover is unacceptable.
-        :param enable_idempotence: dedupe producer-retried writes at the
-            broker. Forces `acks="all"` internally; off by default since
-            most producers don't need exactly-once-per-session writes.
-        """
+        """See docs/signals.md#kafka for the retry/backoff, ack_policy, and
+        producer-durability semantics of these params."""
         from faststream import BaseMiddleware
-        from faststream.middlewares import AckPolicy as _AckPolicy
+        from faststream.middlewares import AckPolicy
 
         super().__init__()
         self._base_delay = base_delay
@@ -322,6 +311,11 @@ class KafkaSubscriber(SelfSustaining):
                 except subscriber._exceptions:
                     if key_offset is not None and msg.is_manual:
                         await subscriber._backoff(*key_offset)
+                    elif key_offset is None:
+                        logger.warning(
+                            "kafka message missing topic/partition/offset, "
+                            "skipping backoff"
+                        )
                     raise
                 else:
                     if key_offset is not None:
@@ -340,7 +334,7 @@ class KafkaSubscriber(SelfSustaining):
         # it actually reads from, so setting it here becomes the default
         # for any subscriber that doesn't pass its own ack_policy=.
         self.router.broker.config.broker_config.ack_policy = (
-            ack_policy if ack_policy is not None else _AckPolicy.NACK_ON_ERROR
+            ack_policy if ack_policy is not None else AckPolicy.NACK_ON_ERROR
         )
 
     @staticmethod
@@ -360,13 +354,17 @@ class KafkaSubscriber(SelfSustaining):
 
     def _clear_retry_state(self, key: tuple[str, int], offset: int) -> None:
         last = self._retry_state.get(key)
-        if last is not None and last[0] == offset:
-            self._retry_state.pop(key, None)
+        if last is not None and last.offset == offset:
+            del self._retry_state[key]
 
     async def _backoff(self, key: tuple[str, int], offset: int) -> None:
-        last_offset, last_attempt = self._retry_state.get(key, (None, 0))
-        attempt = last_attempt + 1 if last_offset == offset else 1
-        self._retry_state[key] = (offset, attempt)
+        last = self._retry_state.get(key)
+        attempt = (
+            last.attempt + 1
+            if last is not None and last.offset == offset
+            else 1
+        )
+        self._retry_state[key] = _RetryState(offset, attempt)
 
         delay = exponential_backoff(attempt, self._base_delay, self._max_delay)
         logger.warning(

@@ -45,7 +45,11 @@ def deterministic_subscriber(subscriber, monkeypatch):
 
 
 def _middleware(subscriber):
-    factory = subscriber.router.broker.middlewares[0]
+    (factory,) = [
+        m
+        for m in subscriber.router.broker.middlewares
+        if m.__name__ == "_RetryMiddleware"
+    ]
     return factory(None, context=None)
 
 
@@ -116,13 +120,8 @@ async def test_retry_state_not_clobbered_by_a_different_offsets_success(
 async def test_ack_first_skips_backoff_but_still_raises_the_real_error(
     subscriber,
 ):
-    async def raise_boom(_):
-        raise ValueError("boom")
+    await _fail(subscriber, is_manual=False)
 
-    with pytest.raises(ValueError, match="boom"):
-        await _middleware(subscriber).consume_scope(
-            raise_boom, _fake_message("t", 0, 0, is_manual=False)
-        )
     assert subscriber.slept == []  # never got to backoff
 
 
@@ -131,3 +130,18 @@ async def test_missing_partition_metadata_skips_backoff(subscriber):
 
     assert subscriber.slept == []
     assert subscriber._retry_state == {}
+
+
+async def test_enable_idempotence_forces_acks_all():
+    settings = KafkaSubscriptable(
+        ENVIRONMENT="test", PROJECT_NAME="p", KAFKA_URI="localhost:1"
+    )
+    try:
+        sub = KafkaSubscriber(settings, acks=1, enable_idempotence=True)
+        connection_config = (
+            sub.router.broker.config.broker_config.connection_config
+        )
+        # -1 is librdkafka's resolved value for "all"
+        assert connection_config.raw_producer_config["acks"] == -1
+    finally:
+        KafkaSubscriber.unbind()
