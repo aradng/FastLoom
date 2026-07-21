@@ -266,6 +266,16 @@ def _patch_fastapi_body_wrapping() -> None:
     )
 
 
+class _MessageKey(NamedTuple):
+    topic: str
+    partition: int
+    offset: int
+
+    @property
+    def partition_key(self) -> tuple[str, int]:
+        return self.topic, self.partition
+
+
 class _RetryState(NamedTuple):
     offset: int
     attempt: int
@@ -305,21 +315,18 @@ class KafkaSubscriber(SelfSustaining):
 
         class _RetryMiddleware(BaseMiddleware):
             async def consume_scope(self, call_next, msg):
-                key_offset = subscriber._partition_key(msg)
+                key = subscriber._locate(msg)
+                if key is None:
+                    return await call_next(msg)
+
                 try:
                     result = await call_next(msg)
                 except subscriber._exceptions:
-                    if key_offset is not None and msg.is_manual:
-                        await subscriber._backoff(*key_offset)
-                    elif key_offset is None:
-                        logger.warning(
-                            "kafka message missing topic/partition/offset, "
-                            "skipping backoff"
-                        )
+                    if msg.is_manual:
+                        await subscriber._backoff(key)
                     raise
                 else:
-                    if key_offset is not None:
-                        subscriber._clear_retry_state(*key_offset)
+                    subscriber._clear_retry_state(key)
                     return result
 
         self.router = get_kafka_router(
@@ -338,9 +345,7 @@ class KafkaSubscriber(SelfSustaining):
         )
 
     @staticmethod
-    def _partition_key(
-        message: KafkaMessage,
-    ) -> tuple[tuple[str, int], int] | None:
+    def _locate(message: KafkaMessage) -> _MessageKey | None:
         raw = message.raw_message
         first = raw[0] if isinstance(raw, tuple) else raw
         topic, partition, offset = (
@@ -350,28 +355,30 @@ class KafkaSubscriber(SelfSustaining):
         )
         if topic is None or partition is None or offset is None:
             return None
-        return (topic, partition), offset
+        return _MessageKey(topic, partition, offset)
 
-    def _clear_retry_state(self, key: tuple[str, int], offset: int) -> None:
-        last = self._retry_state.get(key)
-        if last is not None and last.offset == offset:
-            del self._retry_state[key]
+    def _clear_retry_state(self, key: _MessageKey) -> None:
+        partition_key = key.partition_key
+        last = self._retry_state.get(partition_key)
+        if last is not None and last.offset == key.offset:
+            del self._retry_state[partition_key]
 
-    async def _backoff(self, key: tuple[str, int], offset: int) -> None:
-        last = self._retry_state.get(key)
+    async def _backoff(self, key: _MessageKey) -> None:
+        partition_key = key.partition_key
+        last = self._retry_state.get(partition_key)
         attempt = (
             last.attempt + 1
-            if last is not None and last.offset == offset
+            if last is not None and last.offset == key.offset
             else 1
         )
-        self._retry_state[key] = _RetryState(offset, attempt)
+        self._retry_state[partition_key] = _RetryState(key.offset, attempt)
 
         delay = exponential_backoff(attempt, self._base_delay, self._max_delay)
         logger.warning(
             "kafka consumer error, retrying %s[%s]@%s in %.2fs (attempt %s)",
-            key[0],
-            key[1],
-            offset,
+            key.topic,
+            key.partition,
+            key.offset,
             delay,
             attempt,
         )
