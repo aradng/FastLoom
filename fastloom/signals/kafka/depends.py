@@ -347,7 +347,9 @@ class KafkaSubscriber(SelfSustaining):
     @staticmethod
     def _locate(message: KafkaMessage) -> _MessageKey | None:
         raw = message.raw_message
-        first = raw[0] if isinstance(raw, tuple) else raw
+        # batch messages are a tuple against a real broker but a list
+        # against FastStream's own confluent test/mock broker - handle both.
+        first = raw[0] if isinstance(raw, (list, tuple)) else raw
         topic, partition, offset = (
             first.topic(),
             first.partition(),

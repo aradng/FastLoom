@@ -1,7 +1,7 @@
 {
     "name": "fastloom-sdk",
     "description": "Skills for services that consume the fastloom library \u2014 scaffold new services, add routes and RabbitMQ/Kafka subscribers, audit settings.",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "author": {
         "name": "aradng"
     },
