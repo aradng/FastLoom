@@ -29,7 +29,7 @@ from fastloom.mcp.settings import MCPSettings
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.cache.settings import RedisSettings
 from fastloom.settings.general import BaseGeneralSettings
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 
 
 class Settings(

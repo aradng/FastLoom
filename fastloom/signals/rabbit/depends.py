@@ -8,8 +8,11 @@ from opentelemetry import trace
 
 from fastloom.meta import SelfSustaining
 from fastloom.settings.base import MonitoringSettings
-from fastloom.signals.middlewares import RabbitPayloadTelemetryMiddleware
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.middlewares import (
+    RabbitPayloadTelemetryMiddleware,
+)
+from fastloom.signals.rabbit.settings import RabbitmqSettings
+from fastloom.utils import exponential_backoff
 
 if TYPE_CHECKING:
     from aio_pika.robust_channel import RobustChannel
@@ -261,27 +264,34 @@ class RabbitSubscriber(SelfSustaining):
     ):
         from aio_pika import Message
 
-        message.headers["x-delivery-count"] = (
-            message.headers.get("x-delivery-count", 0) + 1
-        )
+        attempt = message.headers.get("x-delivery-count", 0) + 1
+        message.headers["x-delivery-count"] = attempt
         if message.raw_message.routing_key is None:
             raise exc
         if (routing_key := message.raw_message.routing_key).endswith(
             cls._dlx_suffix()
-        ) and message.headers["x-delivery-count"] > 1:
+        ) and attempt > 1:
             routing_key = routing_key[: -len(cls._dlx_suffix())]
 
-        queue = await cls._get_ensured_dlx_queue(
-            routing_key,
-            min(
-                cls._base_delay
-                * 2 ** (message.headers["x-delivery-count"] - 1),
-                cls._max_delay,
-            ),
+        delay = int(
+            exponential_backoff(
+                attempt, cls._base_delay, cls._max_delay, jitter=False
+            )
         )
+        queue = await cls._get_ensured_dlx_queue(routing_key, delay)
 
+        # per-message expiration only takes effect when <= the queue's own
+        # x-message-ttl (RabbitMQ applies whichever is lower) - a positive
+        # jitter draw is silently clamped back down to `delay` by the queue
+        # itself, so only the negative half of the range actually shows up.
         await cls.router.broker.publish(
-            Message(body=message.body, headers=message.headers),
+            Message(
+                body=message.body,
+                headers=message.headers,
+                expiration=exponential_backoff(
+                    attempt, cls._base_delay, cls._max_delay
+                ),
+            ),
             queue=queue,
             exchange=cls.exchange,
             persist=True,

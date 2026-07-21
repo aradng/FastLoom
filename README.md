@@ -50,7 +50,7 @@ from fastloom.db.settings import MongoSettings
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.general import BaseGeneralSettings
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 
 
 class Settings(
@@ -124,7 +124,7 @@ See [docs/quickstart.md](docs/quickstart.md) for a fuller walkthrough.
     - Auto model discovery for DB init via `App.models_module`
 - Signals / Messaging (Rabbit + Kafka via FastStream)
     - Rabbit: event-driven publish/subscribe with retries and DLX-based backoff
-    - Kafka: subscriber/publisher wiring for consuming topics (e.g. Debezium CDC)
+    - Kafka: subscriber/publisher wiring for consuming topics (e.g. Debezium CDC), with `NACK_ON_ERROR`-backed exponential backoff by default
     - Subscriber wiring and healthchecks
     - Auto-streamed `BaseDocumentSignal` Beanie models
 - Observability

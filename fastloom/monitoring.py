@@ -32,7 +32,7 @@ from fastloom.extras import (
 from fastloom.observability.settings import ObservabilitySettings, OtelConfig
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.kafka.settings import KafkaSettings
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
 
 if TYPE_CHECKING:

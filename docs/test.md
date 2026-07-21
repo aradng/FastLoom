@@ -280,7 +280,7 @@ from unittest.mock import AsyncMock
 
 def test_publishes(init_app, mocker, admin_token_headers):
     pub = mocker.patch(
-        "fastloom.signals.depends.RabbitSubscriber.publisher",
+        "fastloom.signals.rabbit.depends.RabbitSubscriber.publisher",
         return_value=AsyncMock(),
     )
     init_app.post("/orders", json={...}, headers=admin_token_headers)

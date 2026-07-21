@@ -16,9 +16,9 @@ _AFFECTED_PREFIXES = (
 )
 
 _MODULES = (
-    "fastloom.signals.depends",
-    "fastloom.signals.middlewares",
-    "fastloom.signals.healthcheck",
+    "fastloom.signals.rabbit.depends",
+    "fastloom.signals.rabbit.middlewares",
+    "fastloom.signals.rabbit.healthcheck",
     "fastloom.signals.kafka.depends",
     "fastloom.signals.kafka.healthcheck",
     "fastloom.db.signals",

@@ -8,7 +8,7 @@ from fastloom.monitoring import (
 )
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.signals.kafka.settings import KafkaSettings
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 
 
 class _HybridSettings(

@@ -14,7 +14,7 @@ from fastloom.signals.kafka.healthcheck import (
 )
 from fastloom.signals.kafka.settings import KafkaSettings
 from fastloom.signals.lifehooks import init_signals
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 from fastloom.tenant.handler import init_settings_endpoints
 
 if TYPE_CHECKING:
@@ -50,8 +50,8 @@ from fastloom.db.settings import MongoSettings
 from fastloom.healthcheck.handler import init_healthcheck
 from fastloom.i18n.base import CustomI18NException
 from fastloom.i18n.handler import i18n_exception_handler
-from fastloom.signals.depends import RabbitSubscriber
-from fastloom.signals.healthcheck import (
+from fastloom.signals.rabbit.depends import RabbitSubscriber
+from fastloom.signals.rabbit.healthcheck import (
     get_healthcheck as signal_hc,
 )
 from fastloom.tenant.settings import ConfigAlias as Configs

@@ -44,7 +44,7 @@ If the payload needs alias mapping (e.g. broker uses `bucket` but the field is `
 
 ```python
 import logging
-from fastloom.signals.depends import RabbitSubscriber
+from fastloom.signals.rabbit.depends import RabbitSubscriber
 
 from <pkg>.schemas.<domain> import UserCreated
 
@@ -70,7 +70,7 @@ If `<pkg>/signals/consumer/__init__.py` doesn't exist, create it (empty file is 
 - **Subscriber name doesn't matter for FastStream**, but file location does — `init_signals` only walks subpackages, so handlers must live under a package (folder with `__init__.py`), not a sibling module.
 - **Payload type drives validation** — never accept `dict` and validate inside the body. The whole point is pydantic at the broker boundary.
 - **Idempotency is your job** — RabbitMQ DLX can redeliver. If your handler isn't idempotent, dedupe on a stable key from the payload (e.g. `payload.user_id`).
-- **Use `fastloom.signals.depends.RabbitSubscriber.publisher(...)`** to send messages back; don't construct `aio_pika` clients manually.
+- **Use `fastloom.signals.rabbit.depends.RabbitSubscriber.publisher(...)`** to send messages back; don't construct `aio_pika` clients manually.
 - **The handler can `raise`** — fastloom's exception middleware republishes to a delay queue with exponential backoff (5s → 10s → 20s → … up to 24h by default). The exception is re-raised after requeue for Sentry/OTel.
 
 ## Verify
