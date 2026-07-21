@@ -6,7 +6,7 @@ A single `/healthcheck` endpoint runs every registered async handler in sequence
 
 - `fastloom.healthcheck.handler.init_healthcheck` — registers the route.
 - `fastloom.db.healthcheck.get_healthcheck` / `check_mongo_connection` — Mongo ping.
-- `fastloom.signals.healthcheck.get_healthcheck` / `check_rabbit_connection` — broker ping.
+- `fastloom.signals.rabbit.healthcheck.get_healthcheck` / `check_rabbit_connection` — broker ping.
 - `fastloom.cache.healthcheck.get_healthcheck` / `check_redis_connection` — Redis ping.
 
 ## Auto-registered handlers

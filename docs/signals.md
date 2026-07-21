@@ -6,12 +6,12 @@ A separate, thinner singleton (`KafkaSubscriber`) wraps FastStream's confluent-k
 
 **Symbols at a glance**
 
-- `fastloom.signals.depends.RabbitSubscriber` — singleton; classmethods `subscriber`, `publisher`, `multi_subscriber`, `multi_publisher`.
-- `fastloom.signals.depends.RabbitSubscriptable` — settings composite (`MonitoringSettings + RabbitmqSettings`).
-- `fastloom.signals.depends.get_rabbit_router` — bare router factory used internally.
-- `fastloom.signals.settings.RabbitmqSettings` — `RABBIT_URI` (AMQP DSN).
-- `fastloom.signals.healthcheck.get_healthcheck`, `check_rabbit_connection`.
-- `fastloom.signals.middlewares.RabbitPayloadTelemetryMiddleware` — OTel span enrichment.
+- `fastloom.signals.rabbit.depends.RabbitSubscriber` — singleton; classmethods `subscriber`, `publisher`, `multi_subscriber`, `multi_publisher`.
+- `fastloom.signals.rabbit.depends.RabbitSubscriptable` — settings composite (`MonitoringSettings + RabbitmqSettings`).
+- `fastloom.signals.rabbit.depends.get_rabbit_router` — bare router factory used internally.
+- `fastloom.signals.rabbit.settings.RabbitmqSettings` — `RABBIT_URI` (AMQP DSN).
+- `fastloom.signals.rabbit.healthcheck.get_healthcheck`, `check_rabbit_connection`.
+- `fastloom.signals.rabbit.middlewares.RabbitPayloadTelemetryMiddleware` — OTel span enrichment.
 - `fastloom.signals.lifehooks.init_signals`, `init_streams`.
 - `fastloom.signals.kafka.depends.KafkaSubscriber` — singleton; owns `router: KafkaRouter` only.
 - `fastloom.signals.kafka.depends.get_kafka_router` — bare router factory used internally.
@@ -51,7 +51,7 @@ The launcher's `fastloom.launcher.utils.setup_brokers()` calls `instrument_broke
 ```python
 # signals/producer.py
 from pydantic import BaseModel
-from fastloom.signals.depends import RabbitSubscriber
+from fastloom.signals.rabbit.depends import RabbitSubscriber
 
 
 class NotificationOut(BaseModel):
@@ -79,7 +79,7 @@ await notification_publisher.publish(
 
 ```python
 # signals/consumer/order.py
-from fastloom.signals.depends import RabbitSubscriber
+from fastloom.signals.rabbit.depends import RabbitSubscriber
 
 from my_service.schemas import OrderSignal
 
@@ -124,7 +124,7 @@ The handler's exception is re-raised after the requeue so Sentry / OTel record t
 
 ## Healthcheck
 
-`fastloom.signals.healthcheck.get_healthcheck(router)` returns an async callable that pings the broker (timeout 5s). The launcher registers it automatically when `signals_module` is set; no manual wiring needed.
+`fastloom.signals.rabbit.healthcheck.get_healthcheck(router)` returns an async callable that pings the broker (timeout 5s). The launcher registers it automatically when `signals_module` is set; no manual wiring needed.
 
 ## Kafka
 
@@ -158,10 +158,12 @@ order_publisher = KafkaSubscriber.router.publisher("my_service.order.create")
 
 Everything FastStream's confluent router supports — `batch`, `ack_policy`, multiple topics per subscriber, etc. — is available directly; fastloom doesn't wrap it.
 
-`KafkaSubscriber(settings, base_delay=5, max_delay=1800, exceptions=None)` applies an exponential-backoff-with-jitter `asyncio.sleep` on exception, throttling `NACK_ON_ERROR` redelivery instead of the DLX-queue chain Rabbit uses (Kafka has no per-message TTL primitive to build one from). This is a **broker-level** middleware — it wraps every subscriber on `KafkaSubscriber.router`, not an opt-in per `@subscriber(...)` call like Rabbit's `retry_backoff=`. Two things to know before relying on it:
+`KafkaSubscriber(settings, base_delay=5, max_delay=1800, exceptions=None, ack_policy=None)` applies an exponential-backoff-with-jitter `asyncio.sleep` on exception, throttling `NACK_ON_ERROR` redelivery instead of the DLX-queue chain Rabbit uses (Kafka has no per-message TTL primitive to build one from). This is a **broker-level** middleware — it wraps every subscriber on `KafkaSubscriber.router`, not an opt-in per `@subscriber(...)` call like Rabbit's `retry_backoff=`. It also sets `NACK_ON_ERROR` as the broker's default `ack_policy` (reaching into `router.broker.config.broker_config.ack_policy` — the one mutable field the read-only composed `broker.config.ack_policy` property actually reads from), so redelivery works out of the box; pass `ack_policy=` to pick a different broker-wide default, or set `ack_policy=` on an individual `@subscriber(...)` call to override just that one. Two things to know before relying on it:
 
-- It requires a non-`ACK_FIRST` `ack_policy` (e.g. `NACK_ON_ERROR`) on the failing subscriber. `ACK_FIRST` (the FastStream default) commits the offset *before* the handler runs, so the message is never redelivered — the middleware raises `RuntimeError` on that combination instead of silently sleeping for nothing.
+- A subscriber that deliberately overrides back to `ACK_FIRST` (offset commits before the handler runs) just gets its backoff silently skipped — the original exception still propagates untouched, since there's no way to opt a single subscriber out of this broker-wide middleware otherwise.
 - The sleep blocks that subscriber's whole poll loop — **every** partition/topic it owns, not just the failing one, since Kafka's per-partition ordering means the offset can't be skipped ahead without holding it. If other partitions need to keep flowing while one backs off, register the handler with FastStream's `max_workers>1` (`ConcurrentDefaultSubscriber`) so failures are isolated to their own in-flight task instead of the shared loop.
+
+`auto_offset_reset` has no broker-level equivalent — unlike `ack_policy`, it isn't composed from a shared config object, it flows straight from each `@subscriber(...)` call into the raw confluent-kafka consumer config. Pass it per-subscriber (see the example above).
 
 `KafkaSubscriber` can't subclass `KafkaRouter` directly to drop the `.router.` indirection — `SelfSustainingMeta` only proxies attribute names that are *missing* from the class (via `__getattr__`); inheriting from `KafkaRouter` would make its methods present via normal MRO lookup, so `KafkaSubscriber.subscriber` would resolve to the raw unbound function instead of routing through the singleton, breaking at call time. A classmethod-forwarding wrapper (`KafkaSubscriber.subscriber(...)` delegating to `cls.router.subscriber(...)`) was tried and works, but degrades the call site's type information to `Any` for no real benefit over `KafkaSubscriber.router.subscriber(...)`, so it was dropped.
 
@@ -179,7 +181,7 @@ This split exists because `ConfluentKafkaInstrumentor` patches `confluent_kafka.
 
 Note this is about when `get_kafka_router()` actually **runs**, not the top-level `import fastloom.signals.kafka.depends` statement — `kafka.depends` defers its own `faststream.confluent` import into `get_kafka_router()`'s body specifically so the module itself can be imported eagerly without tripping the ordering constraint. This is handled for you inside the launcher — just know that if you construct `KafkaSubscriber` yourself outside the launcher (e.g. a standalone script), call `instrument_brokers` first.
 
-`fastloom.signals.depends` (Rabbit) follows the same deferred-import shape: `aio-pika`/`faststream.rabbit` symbols are only imported inside the functions/methods that actually construct them (`get_rabbit_router`, `RabbitSubscriber.__init__`, `_get_queue`, `_get_dlx_queue`, `_exc_handler`, `_get_topology_channel`), with `TYPE_CHECKING`-only imports for annotations. `fastloom.signals.middlewares` and `fastloom.signals.healthcheck` degrade the same way. This means a service that never installs the `rabbit` extra (Kafka-only, or no broker at all) can still import the launcher — only constructing `RabbitSubscriber` with `RabbitmqSettings` configured requires `aio-pika` to actually be present.
+`fastloom.signals.rabbit.depends` (Rabbit) follows the same deferred-import shape: `aio-pika`/`faststream.rabbit` symbols are only imported inside the functions/methods that actually construct them (`get_rabbit_router`, `RabbitSubscriber.__init__`, `_get_queue`, `_get_dlx_queue`, `_exc_handler`, `_get_topology_channel`), with `TYPE_CHECKING`-only imports for annotations. `fastloom.signals.rabbit.middlewares` and `fastloom.signals.rabbit.healthcheck` degrade the same way. This means a service that never installs the `rabbit` extra (Kafka-only, or no broker at all) can still import the launcher — only constructing `RabbitSubscriber` with `RabbitmqSettings` configured requires `aio-pika` to actually be present.
 
 ### Telemetry caveat
 

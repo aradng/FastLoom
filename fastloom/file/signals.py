@@ -5,7 +5,7 @@ from beanie.operators import Set
 
 from fastloom.file.models import FileReference
 from fastloom.file.schema import FileMessage
-from fastloom.signals.depends import RabbitSubscriber
+from fastloom.signals.rabbit.depends import RabbitSubscriber
 
 
 def init_file_signals(

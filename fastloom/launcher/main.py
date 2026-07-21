@@ -25,11 +25,14 @@ from fastloom.mcp.settings import MCPSettings
 from fastloom.monitoring import InitMonitoring
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
-from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
 from fastloom.signals.kafka.depends import KafkaSubscriber
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 from fastloom.signals.lifehooks import init_streams
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.depends import (
+    RabbitSubscriber,
+    RabbitSubscriptable,
+)
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 from fastloom.tenant.settings import ConfigAlias as Configs
 
 logger: Logger = logging.getLogger(__name__)

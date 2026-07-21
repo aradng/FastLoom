@@ -6,7 +6,7 @@ import fastloom.launcher.main as launcher_main
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.settings.base import FastAPISettings
 from fastloom.signals.kafka.settings import KafkaSettings
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 
 
 class _LauncherTestSettings(

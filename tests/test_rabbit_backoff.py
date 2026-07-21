@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
+from fastloom.signals.rabbit.depends import (
+    RabbitSubscriber,
+    RabbitSubscriptable,
+)
 
 
 def _fake_message(routing_key: str, delivery_count: int = 0):

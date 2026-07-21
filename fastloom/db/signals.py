@@ -44,7 +44,7 @@ else:
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 
-from fastloom.signals.depends import RabbitSubscriber
+from fastloom.signals.rabbit.depends import RabbitSubscriber
 
 logger = logging.getLogger(__name__)
 

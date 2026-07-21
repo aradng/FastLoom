@@ -64,15 +64,19 @@ def get_tenant_cls() -> SettingsCls:
 
 def setup_brokers() -> None:
     from fastloom.extras import AIO_PIKA_INSTALLED, CONFLUENT_KAFKA_INSTALLED
+    from fastloom.launcher.settings import LauncherSettings
     from fastloom.monitoring import instrument_brokers
     from fastloom.observability.settings import ObservabilitySettings
-    from fastloom.signals.depends import RabbitSubscriber, RabbitSubscriptable
     from fastloom.signals.kafka.depends import KafkaSubscriber
     from fastloom.signals.kafka.settings import (
         KafkaSettings,
         KafkaSubscriptable,
     )
-    from fastloom.signals.settings import RabbitmqSettings
+    from fastloom.signals.rabbit.depends import (
+        RabbitSubscriber,
+        RabbitSubscriptable,
+    )
+    from fastloom.signals.rabbit.settings import RabbitmqSettings
     from fastloom.tenant.settings import ConfigAlias as Configs
 
     instrument_brokers(Configs[ObservabilitySettings].general)  # type: ignore[misc]
@@ -87,7 +91,12 @@ def setup_brokers() -> None:
         Configs[KafkaSubscriptable].general,  # type: ignore[misc]
         KafkaSettings,
     ):
-        KafkaSubscriber(Configs[KafkaSubscriptable].general)  # type: ignore[misc]
+        KafkaSubscriber(
+            Configs[KafkaSubscriptable].general,  # type: ignore[misc]
+            allow_auto_create_topics=Configs[  # type: ignore[misc]
+                LauncherSettings
+            ].general.DEBUG,
+        )
     elif CONFLUENT_KAFKA_INSTALLED:
         logging.warning("Settings Does Not Inherit from KafkaSettings")
 

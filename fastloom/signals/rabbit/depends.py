@@ -8,8 +8,10 @@ from opentelemetry import trace
 
 from fastloom.meta import SelfSustaining
 from fastloom.settings.base import MonitoringSettings
-from fastloom.signals.middlewares import RabbitPayloadTelemetryMiddleware
-from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.rabbit.middlewares import (
+    RabbitPayloadTelemetryMiddleware,
+)
+from fastloom.signals.rabbit.settings import RabbitmqSettings
 from fastloom.signals.utils import exponential_backoff
 
 if TYPE_CHECKING:

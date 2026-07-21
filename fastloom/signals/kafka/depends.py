@@ -3,7 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from types import UnionType
-from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Union,
+    get_args,
+    get_origin,
+)
 
 from fastloom.meta import SelfSustaining
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
@@ -20,6 +27,7 @@ if TYPE_CHECKING:
         AsyncConfluentFastProducerImpl,
     )
     from faststream.confluent.response import KafkaPublishCommand
+    from faststream.middlewares import AckPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +61,9 @@ TOMBSTONE = Tombstone()
 def get_kafka_router(
     settings: KafkaSettings,
     middlewares: Sequence[BrokerMiddleware[Any, Any]] = (),
+    allow_auto_create_topics: bool = True,
+    acks: Literal[0, 1, -1, "all"] = 1,
+    enable_idempotence: bool = False,
 ) -> KafkaRouter:
     # deferred: see docs/signals.md#ordering
     from faststream.confluent.fastapi import KafkaRouter
@@ -67,6 +78,9 @@ def get_kafka_router(
     return KafkaRouter(
         settings.KAFKA_URI,
         schema_url="/kafkaapi",
+        acks=acks,
+        enable_idempotence=enable_idempotence,
+        allow_auto_create_topics=allow_auto_create_topics,
         middlewares=middlewares,
     )
 
@@ -262,6 +276,10 @@ class KafkaSubscriber(SelfSustaining):
         base_delay: int = 5,
         max_delay: int = 1800,
         exceptions: list[type[Exception]] | None = None,
+        ack_policy: AckPolicy | None = None,
+        allow_auto_create_topics: bool = True,
+        acks: Literal[0, 1, -1, "all"] = 1,
+        enable_idempotence: bool = False,
     ):
         """
         :param settings: settings object with KAFKA_URI
@@ -273,8 +291,21 @@ class KafkaSubscriber(SelfSustaining):
             flowing during a backoff.
         :param exceptions: exception types that trigger backoff (default:
             all exceptions)
+        :param ack_policy: broker-wide default ack policy (default:
+            NACK_ON_ERROR, required for backoff to actually redeliver).
+            Individual `@subscriber(...)` calls can still override it.
+        :param allow_auto_create_topics: create a topic on subscribe if it
+            doesn't exist yet, instead of erroring. Pass `TC.general.DEBUG`
+            from the launcher to disable this outside of local dev.
+        :param acks: producer durability - `1` (leader-only ack) is the
+            default; use `"all"` for topics where losing a message on
+            leader failover is unacceptable.
+        :param enable_idempotence: dedupe producer-retried writes at the
+            broker. Forces `acks="all"` internally; off by default since
+            most producers don't need exactly-once-per-session writes.
         """
         from faststream import BaseMiddleware
+        from faststream.middlewares import AckPolicy as _AckPolicy
 
         super().__init__()
         self._base_delay = base_delay
@@ -289,15 +320,7 @@ class KafkaSubscriber(SelfSustaining):
                 try:
                     result = await call_next(msg)
                 except subscriber._exceptions:
-                    if not msg.is_manual:
-                        raise RuntimeError(
-                            "KafkaSubscriber retry backoff requires a "
-                            "non-ACK_FIRST ack_policy (e.g. NACK_ON_ERROR) "
-                            "- ACK_FIRST commits the offset before the "
-                            "handler runs, so failed messages are never "
-                            "redelivered and backoff never fires."
-                        ) from None
-                    if key_offset is not None:
+                    if key_offset is not None and msg.is_manual:
                         await subscriber._backoff(*key_offset)
                     raise
                 else:
@@ -306,7 +329,18 @@ class KafkaSubscriber(SelfSustaining):
                     return result
 
         self.router = get_kafka_router(
-            settings, middlewares=[_RetryMiddleware]
+            settings,
+            middlewares=[_RetryMiddleware],
+            allow_auto_create_topics=allow_auto_create_topics,
+            acks=acks,
+            enable_idempotence=enable_idempotence,
+        )
+        # broker.config.ack_policy is a read-only composition of every
+        # subscriber's own config - this is the one underlying dataclass
+        # it actually reads from, so setting it here becomes the default
+        # for any subscriber that doesn't pass its own ack_policy=.
+        self.router.broker.config.broker_config.ack_policy = (
+            ack_policy if ack_policy is not None else _AckPolicy.NACK_ON_ERROR
         )
 
     @staticmethod

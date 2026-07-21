@@ -95,7 +95,7 @@ class FileMessage(Filename, FileContentData):
 Subscribe with the standard `RabbitSubscriber` decorator: insert the canonical `FileObject`, then upgrade any matching domain record to `MatchedFile`:
 
 ```python
-from fastloom.signals.depends import RabbitSubscriber
+from fastloom.signals.rabbit.depends import RabbitSubscriber
 from fastloom.file.schema import FileMessage, MatchedFile
 from fastloom.file.models import FileObject
 

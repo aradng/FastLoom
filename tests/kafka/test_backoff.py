@@ -113,11 +113,13 @@ async def test_retry_state_not_clobbered_by_a_different_offsets_success(
     assert deterministic_subscriber._retry_state[("t", 0)] == (1, 1)
 
 
-async def test_ack_first_raises_instead_of_silently_no_op(subscriber):
+async def test_ack_first_skips_backoff_but_still_raises_the_real_error(
+    subscriber,
+):
     async def raise_boom(_):
         raise ValueError("boom")
 
-    with pytest.raises(RuntimeError, match="ACK_FIRST"):
+    with pytest.raises(ValueError, match="boom"):
         await _middleware(subscriber).consume_scope(
             raise_boom, _fake_message("t", 0, 0, is_manual=False)
         )
