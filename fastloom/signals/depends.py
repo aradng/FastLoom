@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
@@ -271,17 +272,18 @@ class RabbitSubscriber(SelfSustaining):
         ) and message.headers["x-delivery-count"] > 1:
             routing_key = routing_key[: -len(cls._dlx_suffix())]
 
-        queue = await cls._get_ensured_dlx_queue(
-            routing_key,
-            min(
-                cls._base_delay
-                * 2 ** (message.headers["x-delivery-count"] - 1),
-                cls._max_delay,
-            ),
+        delay = min(
+            cls._base_delay * 2 ** (message.headers["x-delivery-count"] - 1),
+            cls._max_delay,
         )
+        queue = await cls._get_ensured_dlx_queue(routing_key, delay)
 
         await cls.router.broker.publish(
-            Message(body=message.body, headers=message.headers),
+            Message(
+                body=message.body,
+                headers=message.headers,
+                expiration=random.uniform(0, delay),
+            ),
             queue=queue,
             exchange=cls.exchange,
             persist=True,

@@ -156,7 +156,12 @@ async def on_order_create(payload: OrderSignal) -> None:
 order_publisher = KafkaSubscriber.router.publisher("my_service.order.create")
 ```
 
-Everything FastStream's confluent router supports — `batch`, `ack_policy`, multiple topics per subscriber, etc. — is available directly; fastloom doesn't wrap it. There's no DLX-style retry/backoff (Kafka's append-only log with consumer-group offsets doesn't map onto Rabbit's per-message delay-queue model, and no real consumer has needed it — they NACK-and-move-on via FastStream's own `ack_policy`).
+Everything FastStream's confluent router supports — `batch`, `ack_policy`, multiple topics per subscriber, etc. — is available directly; fastloom doesn't wrap it.
+
+`KafkaSubscriber(settings, base_delay=5, max_delay=1800, exceptions=None)` applies an exponential-backoff-with-jitter `asyncio.sleep` on exception, throttling `NACK_ON_ERROR` redelivery instead of the DLX-queue chain Rabbit uses (Kafka has no per-message TTL primitive to build one from). This is a **broker-level** middleware — it wraps every subscriber on `KafkaSubscriber.router`, not an opt-in per `@subscriber(...)` call like Rabbit's `retry_backoff=`. Two things to know before relying on it:
+
+- It requires a non-`ACK_FIRST` `ack_policy` (e.g. `NACK_ON_ERROR`) on the failing subscriber. `ACK_FIRST` (the FastStream default) commits the offset *before* the handler runs, so the message is never redelivered — the middleware raises `RuntimeError` on that combination instead of silently sleeping for nothing.
+- The sleep blocks that subscriber's whole poll loop — **every** partition/topic it owns, not just the failing one, since Kafka's per-partition ordering means the offset can't be skipped ahead without holding it. If other partitions need to keep flowing while one backs off, register the handler with FastStream's `max_workers>1` (`ConcurrentDefaultSubscriber`) so failures are isolated to their own in-flight task instead of the shared loop.
 
 `KafkaSubscriber` can't subclass `KafkaRouter` directly to drop the `.router.` indirection — `SelfSustainingMeta` only proxies attribute names that are *missing* from the class (via `__getattr__`); inheriting from `KafkaRouter` would make its methods present via normal MRO lookup, so `KafkaSubscriber.subscriber` would resolve to the raw unbound function instead of routing through the singleton, breaking at call time. A classmethod-forwarding wrapper (`KafkaSubscriber.subscriber(...)` delegating to `cls.router.subscriber(...)`) was tried and works, but degrades the call site's type information to `Any` for no real benefit over `KafkaSubscriber.router.subscriber(...)`, so it was dropped.
 

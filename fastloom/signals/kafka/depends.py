@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
@@ -259,13 +260,17 @@ class KafkaSubscriber(SelfSustaining):
         self,
         settings: KafkaSubscriptable,
         base_delay: int = 5,
-        max_delay: int = 3600 * 24,
+        max_delay: int = 1800,
         exceptions: list[type[Exception]] | None = None,
     ):
         """
         :param settings: settings object with KAFKA_URI
         :param base_delay: base delay (seconds) before the first retry
-        :param max_delay: delay cap (seconds) for repeated retries
+        :param max_delay: delay cap (seconds) for repeated retries. This
+            sleep blocks the whole subscriber's poll loop (all its
+            partitions/topics), not just the failing one - register with
+            FastStream's `max_workers>1` if other partitions need to keep
+            flowing during a backoff.
         :param exceptions: exception types that trigger backoff (default:
             all exceptions)
         """
@@ -280,14 +285,24 @@ class KafkaSubscriber(SelfSustaining):
 
         class _RetryMiddleware(BaseMiddleware):
             async def consume_scope(self, call_next, msg):
-                key, offset = subscriber._partition_key(msg)
+                key_offset = subscriber._partition_key(msg)
                 try:
                     result = await call_next(msg)
                 except subscriber._exceptions:
-                    await subscriber._backoff(key, offset)
+                    if not msg.is_manual:
+                        raise RuntimeError(
+                            "KafkaSubscriber retry backoff requires a "
+                            "non-ACK_FIRST ack_policy (e.g. NACK_ON_ERROR) "
+                            "- ACK_FIRST commits the offset before the "
+                            "handler runs, so failed messages are never "
+                            "redelivered and backoff never fires."
+                        ) from None
+                    if key_offset is not None:
+                        await subscriber._backoff(*key_offset)
                     raise
                 else:
-                    subscriber._retry_state.pop(key, None)
+                    if key_offset is not None:
+                        subscriber._clear_retry_state(*key_offset)
                     return result
 
         self.router = get_kafka_router(
@@ -295,7 +310,9 @@ class KafkaSubscriber(SelfSustaining):
         )
 
     @staticmethod
-    def _partition_key(message: KafkaMessage) -> tuple[tuple[str, int], int]:
+    def _partition_key(
+        message: KafkaMessage,
+    ) -> tuple[tuple[str, int], int] | None:
         raw = message.raw_message
         first = raw[0] if isinstance(raw, tuple) else raw
         topic, partition, offset = (
@@ -303,10 +320,14 @@ class KafkaSubscriber(SelfSustaining):
             first.partition(),
             first.offset(),
         )
-        assert topic is not None
-        assert partition is not None
-        assert offset is not None
+        if topic is None or partition is None or offset is None:
+            return None
         return (topic, partition), offset
+
+    def _clear_retry_state(self, key: tuple[str, int], offset: int) -> None:
+        last = self._retry_state.get(key)
+        if last is not None and last[0] == offset:
+            self._retry_state.pop(key, None)
 
     async def _backoff(self, key: tuple[str, int], offset: int) -> None:
         last_offset, last_attempt = self._retry_state.get(key, (None, 0))
@@ -314,8 +335,9 @@ class KafkaSubscriber(SelfSustaining):
         self._retry_state[key] = (offset, attempt)
 
         delay = min(self._base_delay * 2 ** (attempt - 1), self._max_delay)
+        delay = random.uniform(0, delay)
         logger.warning(
-            "kafka consumer error, retrying %s[%s]@%s in %ss (attempt %s)",
+            "kafka consumer error, retrying %s[%s]@%s in %.2fs (attempt %s)",
             key[0],
             key[1],
             offset,
