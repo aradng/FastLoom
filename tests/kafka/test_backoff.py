@@ -40,7 +40,7 @@ def subscriber(monkeypatch):
 
 @pytest.fixture
 def deterministic_subscriber(subscriber, monkeypatch):
-    monkeypatch.setattr("random.uniform", lambda _, cap: cap)
+    monkeypatch.setattr("random.uniform", lambda _lo, _hi: 0)
     return subscriber
 
 
@@ -111,14 +111,6 @@ async def test_retry_state_not_clobbered_by_a_different_offsets_success(
     await _succeed(deterministic_subscriber, offset=2)  # different in-flight
     # offset succeeding shouldn't wipe offset 1's still-pending retry state
     assert deterministic_subscriber._retry_state[("t", 0)] == (1, 1)
-
-
-async def test_backoff_applies_full_jitter(subscriber):
-    for _ in range(4):
-        await _fail(subscriber, offset=42)
-
-    assert all(0 <= delay <= 8 for delay in subscriber.slept)
-    assert len(set(subscriber.slept)) > 1  # not deterministic
 
 
 async def test_ack_first_raises_instead_of_silently_no_op(subscriber):

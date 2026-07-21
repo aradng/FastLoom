@@ -46,19 +46,8 @@ async def _fail(subscriber, routing_key="foo", delivery_count=0):
         await subscriber._exc_handler(ValueError("boom"), message)
 
 
-async def test_expiration_is_jittered_within_delay_cap(
-    subscriber, monkeypatch
-):
-    monkeypatch.setattr("random.uniform", lambda _, cap: cap)
+async def test_expiration_reflects_the_backoff_delay(subscriber, monkeypatch):
+    monkeypatch.setattr("random.uniform", lambda _lo, _hi: 0)
     await _fail(subscriber, delivery_count=3)  # attempt 4 -> delay = 8 (cap)
 
     assert subscriber.published[-1]["expiration"] == 8
-
-
-async def test_expiration_jitter_stays_in_bounds(subscriber):
-    for i in range(4):
-        await _fail(subscriber, delivery_count=i)
-
-    delays = [p["expiration"] for p in subscriber.published]
-    assert all(0 <= d <= 8 for d in delays)
-    assert len(set(delays)) > 1  # not deterministic

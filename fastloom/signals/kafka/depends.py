@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import random
 from types import UnionType
 from typing import TYPE_CHECKING, Any, Union, get_args, get_origin
 
 from fastloom.meta import SelfSustaining
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
+from fastloom.signals.utils import backoff_delay, with_jitter
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -334,8 +334,9 @@ class KafkaSubscriber(SelfSustaining):
         attempt = last_attempt + 1 if last_offset == offset else 1
         self._retry_state[key] = (offset, attempt)
 
-        delay = min(self._base_delay * 2 ** (attempt - 1), self._max_delay)
-        delay = random.uniform(0, delay)
+        delay = with_jitter(
+            backoff_delay(attempt, self._base_delay, self._max_delay)
+        )
         logger.warning(
             "kafka consumer error, retrying %s[%s]@%s in %.2fs (attempt %s)",
             key[0],

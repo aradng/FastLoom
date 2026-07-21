@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import random
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
@@ -11,6 +10,7 @@ from fastloom.meta import SelfSustaining
 from fastloom.settings.base import MonitoringSettings
 from fastloom.signals.middlewares import RabbitPayloadTelemetryMiddleware
 from fastloom.signals.settings import RabbitmqSettings
+from fastloom.signals.utils import backoff_delay, with_jitter
 
 if TYPE_CHECKING:
     from aio_pika.robust_channel import RobustChannel
@@ -272,17 +272,22 @@ class RabbitSubscriber(SelfSustaining):
         ) and message.headers["x-delivery-count"] > 1:
             routing_key = routing_key[: -len(cls._dlx_suffix())]
 
-        delay = min(
-            cls._base_delay * 2 ** (message.headers["x-delivery-count"] - 1),
+        delay = backoff_delay(
+            message.headers["x-delivery-count"],
+            cls._base_delay,
             cls._max_delay,
         )
         queue = await cls._get_ensured_dlx_queue(routing_key, delay)
 
+        # per-message expiration only takes effect when <= the queue's own
+        # x-message-ttl (RabbitMQ applies whichever is lower) - a positive
+        # jitter draw is silently clamped back down to `delay` by the queue
+        # itself, so only the negative half of the range actually shows up.
         await cls.router.broker.publish(
             Message(
                 body=message.body,
                 headers=message.headers,
-                expiration=random.uniform(0, delay),
+                expiration=with_jitter(delay),
             ),
             queue=queue,
             exchange=cls.exchange,
