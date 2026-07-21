@@ -33,11 +33,28 @@ def subscriber(monkeypatch):
     KafkaSubscriber.unbind()
 
 
+def _middleware(subscriber):
+    factory = subscriber.router.broker.middlewares[0]
+    return factory(None, context=None)
+
+
 async def _fail(subscriber, topic="t", partition=0, offset=0):
+    async def raise_boom(_):
+        raise ValueError("boom")
+
     with pytest.raises(ValueError):
-        await subscriber._exc_handler(
-            ValueError("boom"), _fake_message(topic, partition, offset)
+        await _middleware(subscriber).consume_scope(
+            raise_boom, _fake_message(topic, partition, offset)
         )
+
+
+async def _succeed(subscriber, topic="t", partition=0, offset=0):
+    async def ok(_):
+        return "ok"
+
+    await _middleware(subscriber).consume_scope(
+        ok, _fake_message(topic, partition, offset)
+    )
 
 
 async def test_backoff_doubles_on_repeated_failures_of_same_offset(
@@ -62,3 +79,11 @@ async def test_backoff_tracks_partitions_independently(subscriber):
     await _fail(subscriber, partition=1, offset=1)
 
     assert subscriber.slept == [1, 1]  # different partitions, both attempt 1
+
+
+async def test_retry_state_cleared_on_success(subscriber):
+    await _fail(subscriber, offset=1)
+    assert ("t", 0) in subscriber._retry_state
+
+    await _succeed(subscriber, offset=2)
+    assert ("t", 0) not in subscriber._retry_state

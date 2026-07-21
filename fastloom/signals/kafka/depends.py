@@ -9,7 +9,9 @@ from fastloom.meta import SelfSustaining
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 
 if TYPE_CHECKING:
-    from faststream import ExceptionMiddleware
+    from collections.abc import Sequence
+
+    from faststream._internal.types import BrokerMiddleware
     from faststream.confluent.fastapi import KafkaRouter
     from faststream.confluent.message import KafkaMessage
     from faststream.confluent.parser import AsyncConfluentParser
@@ -47,7 +49,10 @@ class Tombstone:
 TOMBSTONE = Tombstone()
 
 
-def get_kafka_router(settings: KafkaSettings) -> KafkaRouter:
+def get_kafka_router(
+    settings: KafkaSettings,
+    middlewares: Sequence[BrokerMiddleware[Any, Any]] = (),
+) -> KafkaRouter:
     # deferred: see docs/signals.md#ordering
     from faststream.confluent.fastapi import KafkaRouter
     from faststream.confluent.parser import AsyncConfluentParser
@@ -61,6 +66,7 @@ def get_kafka_router(settings: KafkaSettings) -> KafkaRouter:
     return KafkaRouter(
         settings.KAFKA_URI,
         schema_url="/kafkaapi",
+        middlewares=middlewares,
     )
 
 
@@ -244,15 +250,9 @@ class KafkaSubscriber(SelfSustaining):
     """Owns the shared FastStream KafkaRouter singleton."""
 
     router: KafkaRouter
-    exc_middleware: ExceptionMiddleware
     _base_delay: int
     _max_delay: int
-    # (topic, partition) -> (offset, attempt) of the most recent failure.
-    # Kafka delivers one partition's messages strictly in order, so a
-    # partition can only ever be stuck retrying one offset at a time -
-    # tracking per-partition instead of per-offset keeps this bounded by
-    # the consumer's own partition assignment, not by how many distinct
-    # messages have ever failed.
+    _exceptions: tuple[type[Exception], ...]
     _retry_state: dict[tuple[str, int], tuple[int, int]]
 
     def __init__(
@@ -268,50 +268,47 @@ class KafkaSubscriber(SelfSustaining):
         :param max_delay: delay cap (seconds) for repeated retries
         :param exceptions: exception types that trigger backoff (default:
             all exceptions)
-
-        A caught exception sleeps for `base_delay * 2 ** (attempt - 1)`
-        seconds (capped at `max_delay`) before re-raising, so
-        `AckPolicy.NACK_ON_ERROR`'s redelivery is throttled instead of
-        spinning at the consumer's max poll rate. Unlike RabbitSubscriber,
-        this doesn't move the message to a separate delay queue - Kafka has
-        no per-message TTL primitive to build one from - it just blocks the
-        stuck partition's own consumption for the delay, which is the same
-        thing a dead-letter-and-redeliver cycle costs anyway since Kafka
-        won't reorder around a stuck offset.
         """
-        from faststream import ExceptionMiddleware
+        from faststream import BaseMiddleware
 
         super().__init__()
-        self.router = get_kafka_router(settings)
-        if exceptions is None:
-            exceptions = [Exception]
-        self.exc_middleware = ExceptionMiddleware(
-            handlers={exc: self._exc_handler for exc in exceptions}
-        )
-        self.router.broker.add_middleware(self.exc_middleware)
         self._base_delay = base_delay
         self._max_delay = max_delay
+        self._exceptions = tuple(exceptions or [Exception])
         self._retry_state = {}
+        subscriber = self
 
-    async def _exc_handler(
-        self, exc: Exception, message: KafkaMessage
-    ) -> None:
+        class _RetryMiddleware(BaseMiddleware):
+            async def consume_scope(self, call_next, msg):
+                key, offset = subscriber._partition_key(msg)
+                try:
+                    result = await call_next(msg)
+                except subscriber._exceptions:
+                    await subscriber._backoff(key, offset)
+                    raise
+                else:
+                    subscriber._retry_state.pop(key, None)
+                    return result
+
+        self.router = get_kafka_router(
+            settings, middlewares=[_RetryMiddleware]
+        )
+
+    @staticmethod
+    def _partition_key(message: KafkaMessage) -> tuple[tuple[str, int], int]:
         raw = message.raw_message
-        # batch consumers get a tuple of raw messages - they're all from the
-        # same topic-partition assignment, so the first is representative
-        # for tracking purposes.
         first = raw[0] if isinstance(raw, tuple) else raw
         topic, partition, offset = (
             first.topic(),
             first.partition(),
             first.offset(),
         )
-        # a message that reached this handler was genuinely delivered, so
-        # these are never actually None despite the Optional stubs
         assert topic is not None
         assert partition is not None
         assert offset is not None
-        key = (topic, partition)
+        return (topic, partition), offset
+
+    async def _backoff(self, key: tuple[str, int], offset: int) -> None:
         last_offset, last_attempt = self._retry_state.get(key, (None, 0))
         attempt = last_attempt + 1 if last_offset == offset else 1
         self._retry_state[key] = (offset, attempt)
@@ -326,5 +323,3 @@ class KafkaSubscriber(SelfSustaining):
             attempt,
         )
         await asyncio.sleep(delay)
-        # re-raise for observability in sentry/otel, same as RabbitSubscriber
-        raise exc
