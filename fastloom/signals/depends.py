@@ -10,7 +10,7 @@ from fastloom.meta import SelfSustaining
 from fastloom.settings.base import MonitoringSettings
 from fastloom.signals.middlewares import RabbitPayloadTelemetryMiddleware
 from fastloom.signals.settings import RabbitmqSettings
-from fastloom.signals.utils import backoff_delay, with_jitter
+from fastloom.signals.utils import exponential_backoff
 
 if TYPE_CHECKING:
     from aio_pika.robust_channel import RobustChannel
@@ -272,10 +272,13 @@ class RabbitSubscriber(SelfSustaining):
         ) and message.headers["x-delivery-count"] > 1:
             routing_key = routing_key[: -len(cls._dlx_suffix())]
 
-        delay = backoff_delay(
-            message.headers["x-delivery-count"],
-            cls._base_delay,
-            cls._max_delay,
+        delay = int(
+            exponential_backoff(
+                message.headers["x-delivery-count"],
+                cls._base_delay,
+                cls._max_delay,
+                jitter=False,
+            )
         )
         queue = await cls._get_ensured_dlx_queue(routing_key, delay)
 
@@ -287,7 +290,11 @@ class RabbitSubscriber(SelfSustaining):
             Message(
                 body=message.body,
                 headers=message.headers,
-                expiration=with_jitter(delay),
+                expiration=exponential_backoff(
+                    message.headers["x-delivery-count"],
+                    cls._base_delay,
+                    cls._max_delay,
+                ),
             ),
             queue=queue,
             exchange=cls.exchange,

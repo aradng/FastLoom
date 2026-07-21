@@ -1,9 +1,13 @@
 import random
 
 
-def backoff_delay(attempt: int, base_delay: int, max_delay: int) -> int:
-    return min(base_delay * 2 ** (attempt - 1), max_delay)
-
-
-def with_jitter(delay: float, spread: float = 0.1) -> float:
-    return delay + random.uniform(-spread * delay, spread * delay)
+def exponential_backoff(
+    attempt: int,
+    base_delay: int,
+    max_delay: int,
+    jitter: bool = True,
+) -> float:
+    delay = min(base_delay * 2 ** (attempt - 1), max_delay)
+    if jitter:
+        delay += random.uniform(-0.1 * delay, 0.1 * delay)
+    return delay
