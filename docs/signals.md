@@ -168,7 +168,7 @@ How the backoff actually waits depends on whether the message carries a Kafka ke
 Things to know before relying on it:
 
 - A subscriber that deliberately overrides back to `ACK_FIRST` (offset commits before the handler runs) just gets its backoff silently skipped — the original exception still propagates untouched, since there's no way to opt a single subscriber out of this broker-wide middleware otherwise.
-- See [docs/adr/01-kafka-non-keyed-retry-backoff.md](adr/01-kafka-non-keyed-retry-backoff.md) for why the keyed/non-keyed split exists, and why numbered retry topics, an external delay store, and `max_workers` concurrency were all considered and rejected in favor of pause/resume.
+- See [docs/adr/01-kafka-retry-backoff.md](adr/01-kafka-retry-backoff.md) for why the keyed/non-keyed split exists, and why numbered retry topics, an external delay store, and `max_workers` concurrency were all considered and rejected in favor of pause/resume.
 
 `auto_offset_reset` has no broker-level equivalent — unlike `ack_policy`, it isn't composed from a shared config object, it flows straight from each `@subscriber(...)` call into the raw confluent-kafka consumer config. Pass it per-subscriber (see the example above).
 
@@ -201,4 +201,4 @@ There's no Kafka equivalent of `RabbitPayloadTelemetryMiddleware` — Kafka span
 - [db.md](db.md) — `BaseDocumentSignal` auto-publishes to the same broker.
 - [Observability](observability.md) — Rabbit/Kafka instrumentation and queue-name filtering.
 - [Healthcheck](healthcheck.md) — broker ping registration.
-- [docs/adr/01-kafka-non-keyed-retry-backoff.md](adr/01-kafka-non-keyed-retry-backoff.md) — why Kafka backoff branches on keyed vs. non-keyed messages.
+- [docs/adr/01-kafka-retry-backoff.md](adr/01-kafka-retry-backoff.md) — why Kafka backoff branches on keyed vs. non-keyed messages.

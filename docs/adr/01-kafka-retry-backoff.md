@@ -102,3 +102,17 @@ assigned the same partition reads normally right away, no stuck state.
   inline on the event loop.
 - No ack-policy change, no new infrastructure, no loss of at-least-once
   delivery.
+
+## 5. Implementation notes
+
+- `message.consumer` is typed `ConsumerProtocol` (only `commit()`/`seek()`);
+  pause/resume reach past it to the concrete `AsyncConfluentConsumer`
+  FastStream actually constructs, via `# type: ignore[attr-defined]`.
+- A batch mixing keyed and non-keyed records is classified `any()`-wise:
+  one keyed record in the batch is enough to take the safe (blocking) path,
+  since a batch is acked/committed as one unit.
+- `pause()` failing must not propagate out of `_backoff` - it would replace
+  the caller's original exception instead of letting it re-raise for
+  redelivery. Falls back to inline `asyncio.sleep` on that failure.
+- `resume()` retries a few times with backoff before giving up, instead of
+  stranding a partition paused forever on the first failure.

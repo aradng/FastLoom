@@ -385,10 +385,7 @@ class KafkaSubscriber(SelfSustaining):
     @classmethod
     def _is_keyed(cls, message: KafkaMessage) -> bool:
         raw = message.raw_message
-        # a batch mixing keyed and non-keyed records has to pick one
-        # answer for the whole batch (Kafka acks/commits it as one unit)
-        # - any() defaults to the safe (blocking) choice instead of
-        # picking arbitrarily off the first record.
+        # mixed-keyedness batch defaults to the safe path - docs/adr/01
         records = raw if isinstance(raw, Sequence) else (raw,)
         return any(record.key() is not None for record in records)
 
@@ -413,8 +410,7 @@ class KafkaSubscriber(SelfSustaining):
         )
 
         if self._is_keyed(message):
-            # keyed: the partition is already one ordered stream, so
-            # blocking it here costs nothing extra - see docs/adr/01.
+            # keyed: blocking costs nothing extra - see docs/adr/01
             await asyncio.sleep(delay)
             return
 
@@ -422,9 +418,8 @@ class KafkaSubscriber(SelfSustaining):
         try:
             await self._set_partition_paused(key, consumer, paused=True)
         except Exception:
-            # pause() itself failing must not propagate here - it would
-            # replace the caller's original exception in consume_scope's
-            # except block instead of letting it re-raise for redelivery.
+            # must not propagate - would replace the caller's exception,
+            # see docs/adr/01.
             logger.warning(
                 "failed to pause %s[%s] - falling back to inline backoff",
                 key.topic,
@@ -446,11 +441,7 @@ class KafkaSubscriber(SelfSustaining):
         from confluent_kafka import TopicPartition
         from faststream._internal.utils.functions import run_in_executor
 
-        # librdkafka's client isn't thread-safe - pause/resume must run
-        # through the same single-thread executor FastStream already
-        # serializes every other consumer call on. ConsumerProtocol only
-        # declares commit()/seek() - this reaches past it to the concrete
-        # AsyncConfluentConsumer FastStream actually constructs.
+        # not thread-safe, reaches past ConsumerProtocol - see docs/adr/01
         raw_consumer = consumer.consumer  # type: ignore[attr-defined]
         op = raw_consumer.pause if paused else raw_consumer.resume
         await run_in_executor(
