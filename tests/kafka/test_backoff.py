@@ -1,9 +1,30 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
+from confluent_kafka import TopicPartition
 
 from fastloom.signals.kafka.depends import KafkaSubscriber
 from fastloom.signals.kafka.settings import KafkaSubscriptable
+
+
+class _FakeRawConsumer:
+    def __init__(self):
+        self.paused: list[list[TopicPartition]] = []
+        self.resumed: list[list[TopicPartition]] = []
+
+    def pause(self, partitions: list[TopicPartition]) -> None:
+        self.paused.append(partitions)
+
+    def resume(self, partitions: list[TopicPartition]) -> None:
+        self.resumed.append(partitions)
+
+
+class _FakeConsumer:
+    def __init__(self):
+        self.consumer = _FakeRawConsumer()
+        self._thread_pool = ThreadPoolExecutor(max_workers=1)
 
 
 def _fake_message(
@@ -12,16 +33,21 @@ def _fake_message(
     offset: int | None,
     is_manual: bool = True,
     batch_shape: type[list] | type[tuple] | None = None,
+    key: bytes | None = b"k",
+    consumer: _FakeConsumer | None = None,
 ):
     single = SimpleNamespace(
         topic=lambda: topic,
         partition=lambda: partition,
         offset=lambda: offset,
+        key=lambda: key,
     )
     raw: (
         SimpleNamespace | list[SimpleNamespace] | tuple[SimpleNamespace, ...]
     ) = single if batch_shape is None else batch_shape([single])
-    return SimpleNamespace(raw_message=raw, is_manual=is_manual)
+    return SimpleNamespace(
+        raw_message=raw, is_manual=is_manual, consumer=consumer
+    )
 
 
 @pytest.fixture
@@ -145,6 +171,62 @@ async def test_batch_message_backs_off_regardless_of_container_type(
     await _fail(deterministic_subscriber, batch_shape=batch_shape)
 
     assert deterministic_subscriber.slept == [1]
+
+
+async def _drain_resumes(subscriber):
+    while subscriber._pending_resumes:
+        await asyncio.gather(*list(subscriber._pending_resumes))
+
+
+async def test_keyed_message_never_touches_the_consumer(
+    deterministic_subscriber,
+):
+    fake_consumer = _FakeConsumer()
+
+    await _fail(deterministic_subscriber, key=b"k", consumer=fake_consumer)
+
+    assert deterministic_subscriber.slept == [1]  # blocked inline, as before
+    assert fake_consumer.consumer.paused == []
+    assert fake_consumer.consumer.resumed == []
+
+
+async def test_non_keyed_message_pauses_instead_of_blocking(
+    deterministic_subscriber,
+):
+    fake_consumer = _FakeConsumer()
+
+    await _fail(
+        deterministic_subscriber, key=None, consumer=fake_consumer, offset=1
+    )
+
+    # backoff returns immediately - no inline sleep, no resume yet either
+    assert deterministic_subscriber.slept == []
+    assert fake_consumer.consumer.paused == [[TopicPartition("t", 0)]]
+    assert fake_consumer.consumer.resumed == []
+
+    await _drain_resumes(deterministic_subscriber)
+
+    assert deterministic_subscriber.slept == [1]
+    assert fake_consumer.consumer.resumed == [[TopicPartition("t", 0)]]
+
+
+async def test_non_keyed_backoff_still_doubles_on_repeated_failures(
+    deterministic_subscriber,
+):
+    fake_consumer = _FakeConsumer()
+
+    for _ in range(4):
+        await _fail(
+            deterministic_subscriber,
+            key=None,
+            consumer=fake_consumer,
+            offset=42,
+        )
+        await _drain_resumes(deterministic_subscriber)
+
+    assert deterministic_subscriber.slept == [1, 2, 4, 8]
+    assert len(fake_consumer.consumer.paused) == 4
+    assert len(fake_consumer.consumer.resumed) == 4
 
 
 async def test_enable_idempotence_forces_acks_all():

@@ -19,6 +19,7 @@ from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 from fastloom.utils import exponential_backoff
 
 if TYPE_CHECKING:
+    from confluent_kafka import Message
     from faststream._internal.types import BrokerMiddleware
     from faststream.confluent.fastapi import KafkaRouter
     from faststream.confluent.message import KafkaMessage
@@ -288,6 +289,7 @@ class KafkaSubscriber(SelfSustaining):
     _max_delay: int
     _exceptions: tuple[type[Exception], ...]
     _retry_state: dict[tuple[str, int], _RetryState]
+    _pending_resumes: set[asyncio.Task[None]]
 
     def __init__(
         self,
@@ -310,6 +312,7 @@ class KafkaSubscriber(SelfSustaining):
         self._max_delay = max_delay
         self._exceptions = tuple(exceptions or [Exception])
         self._retry_state = {}
+        self._pending_resumes = set()
         subscriber = self
 
         class _RetryMiddleware(BaseMiddleware):
@@ -322,7 +325,7 @@ class KafkaSubscriber(SelfSustaining):
                     result = await call_next(msg)
                 except subscriber._exceptions:
                     if msg.is_manual:
-                        await subscriber._backoff(key)
+                        await subscriber._backoff(key, msg)
                     raise
                 else:
                     subscriber._clear_retry_state(key)
@@ -344,13 +347,17 @@ class KafkaSubscriber(SelfSustaining):
         )
 
     @staticmethod
-    def _locate(message: KafkaMessage) -> _MessageKey | None:
+    def _first_record(message: KafkaMessage) -> Message:
         raw = message.raw_message
         # batch messages are a tuple against a real broker but a list
         # against FastStream's own confluent test/mock broker - a single
         # confluent_kafka.Message is never a Sequence, so this only ever
         # takes the batch branch.
-        first = raw[0] if isinstance(raw, Sequence) else raw
+        return raw[0] if isinstance(raw, Sequence) else raw
+
+    @classmethod
+    def _locate(cls, message: KafkaMessage) -> _MessageKey | None:
+        first = cls._first_record(message)
         topic, partition, offset = (
             first.topic(),
             first.partition(),
@@ -366,7 +373,11 @@ class KafkaSubscriber(SelfSustaining):
         if last is not None and last.offset == key.offset:
             del self._retry_state[partition_key]
 
-    async def _backoff(self, key: _MessageKey) -> None:
+    @classmethod
+    def _is_keyed(cls, message: KafkaMessage) -> bool:
+        return cls._first_record(message).key() is not None
+
+    async def _backoff(self, key: _MessageKey, message: KafkaMessage) -> None:
         partition_key = key.partition_key
         last = self._retry_state.get(partition_key)
         attempt = (
@@ -385,4 +396,56 @@ class KafkaSubscriber(SelfSustaining):
             delay,
             attempt,
         )
+
+        if self._is_keyed(message):
+            # keyed: the partition is already one ordered stream, so
+            # blocking it here costs nothing extra - see docs/adr/01.
+            await asyncio.sleep(delay)
+            return
+
+        await self._pause_partition(key, message)
+        self._schedule_resume(key, message, delay)
+
+    async def _pause_partition(
+        self, key: _MessageKey, message: KafkaMessage
+    ) -> None:
+        from confluent_kafka import TopicPartition
+
+        # librdkafka's client isn't thread-safe - pause/resume must run
+        # through the same single-thread executor FastStream already
+        # serializes every other consumer call on.
+        consumer = message.consumer
+        await asyncio.get_running_loop().run_in_executor(
+            consumer._thread_pool,  # type: ignore[attr-defined]
+            consumer.consumer.pause,  # type: ignore[attr-defined]
+            [TopicPartition(key.topic, key.partition)],
+        )
+
+    def _schedule_resume(
+        self, key: _MessageKey, message: KafkaMessage, delay: float
+    ) -> None:
+        task = asyncio.create_task(self._resume_partition(key, message, delay))
+        self._pending_resumes.add(task)
+        task.add_done_callback(self._pending_resumes.discard)
+
+    async def _resume_partition(
+        self, key: _MessageKey, message: KafkaMessage, delay: float
+    ) -> None:
+        from confluent_kafka import TopicPartition
+
         await asyncio.sleep(delay)
+        consumer = message.consumer
+        try:
+            await asyncio.get_running_loop().run_in_executor(
+                consumer._thread_pool,  # type: ignore[attr-defined]
+                consumer.consumer.resume,  # type: ignore[attr-defined]
+                [TopicPartition(key.topic, key.partition)],
+            )
+        except Exception:
+            logger.warning(
+                "failed to resume %s[%s] after backoff - consumer is "
+                "likely shutting down",
+                key.topic,
+                key.partition,
+                exc_info=True,
+            )
