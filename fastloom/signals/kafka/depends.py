@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from confluent_kafka import Message
     from faststream._internal.types import BrokerMiddleware
     from faststream.confluent.fastapi import KafkaRouter
-    from faststream.confluent.message import KafkaMessage
+    from faststream.confluent.message import ConsumerProtocol, KafkaMessage
     from faststream.confluent.parser import AsyncConfluentParser
     from faststream.confluent.publisher.producer import (
         AsyncConfluentFastProducerImpl,
@@ -346,6 +346,15 @@ class KafkaSubscriber(SelfSustaining):
             ack_policy if ack_policy is not None else AckPolicy.NACK_ON_ERROR
         )
 
+        original_stop = self.router.broker.stop
+
+        async def _stop_and_cancel_pending_resumes(*args, **kwargs):
+            for task in list(self._pending_resumes):
+                task.cancel()
+            await original_stop(*args, **kwargs)
+
+        self.router.broker.stop = _stop_and_cancel_pending_resumes
+
     @staticmethod
     def _first_record(message: KafkaMessage) -> Message:
         raw = message.raw_message
@@ -375,7 +384,13 @@ class KafkaSubscriber(SelfSustaining):
 
     @classmethod
     def _is_keyed(cls, message: KafkaMessage) -> bool:
-        return cls._first_record(message).key() is not None
+        raw = message.raw_message
+        # a batch mixing keyed and non-keyed records has to pick one
+        # answer for the whole batch (Kafka acks/commits it as one unit)
+        # - any() defaults to the safe (blocking) choice instead of
+        # picking arbitrarily off the first record.
+        records = raw if isinstance(raw, Sequence) else (raw,)
+        return any(record.key() is not None for record in records)
 
     async def _backoff(self, key: _MessageKey, message: KafkaMessage) -> None:
         partition_key = key.partition_key
@@ -403,49 +418,77 @@ class KafkaSubscriber(SelfSustaining):
             await asyncio.sleep(delay)
             return
 
-        await self._pause_partition(key, message)
-        self._schedule_resume(key, message, delay)
-
-    async def _pause_partition(
-        self, key: _MessageKey, message: KafkaMessage
-    ) -> None:
-        from confluent_kafka import TopicPartition
-
-        # librdkafka's client isn't thread-safe - pause/resume must run
-        # through the same single-thread executor FastStream already
-        # serializes every other consumer call on.
-        consumer = message.consumer
-        await asyncio.get_running_loop().run_in_executor(
-            consumer._thread_pool,  # type: ignore[attr-defined]
-            consumer.consumer.pause,  # type: ignore[attr-defined]
-            [TopicPartition(key.topic, key.partition)],
-        )
-
-    def _schedule_resume(
-        self, key: _MessageKey, message: KafkaMessage, delay: float
-    ) -> None:
-        task = asyncio.create_task(self._resume_partition(key, message, delay))
-        self._pending_resumes.add(task)
-        task.add_done_callback(self._pending_resumes.discard)
-
-    async def _resume_partition(
-        self, key: _MessageKey, message: KafkaMessage, delay: float
-    ) -> None:
-        from confluent_kafka import TopicPartition
-
-        await asyncio.sleep(delay)
         consumer = message.consumer
         try:
-            await asyncio.get_running_loop().run_in_executor(
-                consumer._thread_pool,  # type: ignore[attr-defined]
-                consumer.consumer.resume,  # type: ignore[attr-defined]
-                [TopicPartition(key.topic, key.partition)],
-            )
+            await self._set_partition_paused(key, consumer, paused=True)
         except Exception:
+            # pause() itself failing must not propagate here - it would
+            # replace the caller's original exception in consume_scope's
+            # except block instead of letting it re-raise for redelivery.
             logger.warning(
-                "failed to resume %s[%s] after backoff - consumer is "
-                "likely shutting down",
+                "failed to pause %s[%s] - falling back to inline backoff",
                 key.topic,
                 key.partition,
                 exc_info=True,
             )
+            await asyncio.sleep(delay)
+            return
+
+        self._schedule_resume(key, consumer, delay)
+
+    async def _set_partition_paused(
+        self,
+        key: _MessageKey,
+        consumer: ConsumerProtocol,
+        *,
+        paused: bool,
+    ) -> None:
+        from confluent_kafka import TopicPartition
+        from faststream._internal.utils.functions import run_in_executor
+
+        # librdkafka's client isn't thread-safe - pause/resume must run
+        # through the same single-thread executor FastStream already
+        # serializes every other consumer call on. ConsumerProtocol only
+        # declares commit()/seek() - this reaches past it to the concrete
+        # AsyncConfluentConsumer FastStream actually constructs.
+        raw_consumer = consumer.consumer  # type: ignore[attr-defined]
+        op = raw_consumer.pause if paused else raw_consumer.resume
+        await run_in_executor(
+            consumer._thread_pool,  # type: ignore[attr-defined]
+            op,
+            [TopicPartition(key.topic, key.partition)],
+        )
+
+    def _schedule_resume(
+        self, key: _MessageKey, consumer: ConsumerProtocol, delay: float
+    ) -> None:
+        task = asyncio.create_task(
+            self._resume_partition(key, consumer, delay)
+        )
+        self._pending_resumes.add(task)
+        task.add_done_callback(self._pending_resumes.discard)
+
+    async def _resume_partition(
+        self, key: _MessageKey, consumer: ConsumerProtocol, delay: float
+    ) -> None:
+        await asyncio.sleep(delay)
+        for attempt in range(1, 4):
+            try:
+                await self._set_partition_paused(key, consumer, paused=False)
+                return
+            except Exception:
+                logger.warning(
+                    "failed to resume %s[%s] (attempt %s/3)",
+                    key.topic,
+                    key.partition,
+                    attempt,
+                    exc_info=True,
+                )
+                if attempt < 3:
+                    await asyncio.sleep(self._base_delay)
+        logger.error(
+            "giving up resuming %s[%s] after 3 attempts - it stays "
+            "paused until the consumer restarts",
+            key.topic,
+            key.partition,
+        )

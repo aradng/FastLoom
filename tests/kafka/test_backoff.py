@@ -10,21 +10,34 @@ from fastloom.signals.kafka.settings import KafkaSubscriptable
 
 
 class _FakeRawConsumer:
-    def __init__(self):
+    def __init__(self, fail_pause: bool = False, fail_resume: bool = False):
         self.paused: list[list[TopicPartition]] = []
         self.resumed: list[list[TopicPartition]] = []
+        self._fail_pause = fail_pause
+        self._fail_resume = fail_resume
 
     def pause(self, partitions: list[TopicPartition]) -> None:
+        if self._fail_pause:
+            raise RuntimeError("pause boom")
         self.paused.append(partitions)
 
     def resume(self, partitions: list[TopicPartition]) -> None:
+        if self._fail_resume:
+            raise RuntimeError("resume boom")
         self.resumed.append(partitions)
 
 
 class _FakeConsumer:
-    def __init__(self):
-        self.consumer = _FakeRawConsumer()
+    def __init__(self, fail_pause: bool = False, fail_resume: bool = False):
+        self.consumer = _FakeRawConsumer(fail_pause, fail_resume)
         self._thread_pool = ThreadPoolExecutor(max_workers=1)
+
+
+@pytest.fixture
+def fake_consumer():
+    consumer = _FakeConsumer()
+    yield consumer
+    consumer._thread_pool.shutdown()
 
 
 def _fake_message(
@@ -179,10 +192,8 @@ async def _drain_resumes(subscriber):
 
 
 async def test_keyed_message_never_touches_the_consumer(
-    deterministic_subscriber,
+    deterministic_subscriber, fake_consumer
 ):
-    fake_consumer = _FakeConsumer()
-
     await _fail(deterministic_subscriber, key=b"k", consumer=fake_consumer)
 
     assert deterministic_subscriber.slept == [1]  # blocked inline, as before
@@ -191,10 +202,8 @@ async def test_keyed_message_never_touches_the_consumer(
 
 
 async def test_non_keyed_message_pauses_instead_of_blocking(
-    deterministic_subscriber,
+    deterministic_subscriber, fake_consumer
 ):
-    fake_consumer = _FakeConsumer()
-
     await _fail(
         deterministic_subscriber, key=None, consumer=fake_consumer, offset=1
     )
@@ -211,10 +220,8 @@ async def test_non_keyed_message_pauses_instead_of_blocking(
 
 
 async def test_non_keyed_backoff_still_doubles_on_repeated_failures(
-    deterministic_subscriber,
+    deterministic_subscriber, fake_consumer
 ):
-    fake_consumer = _FakeConsumer()
-
     for _ in range(4):
         await _fail(
             deterministic_subscriber,
@@ -227,6 +234,37 @@ async def test_non_keyed_backoff_still_doubles_on_repeated_failures(
     assert deterministic_subscriber.slept == [1, 2, 4, 8]
     assert len(fake_consumer.consumer.paused) == 4
     assert len(fake_consumer.consumer.resumed) == 4
+
+
+async def test_pause_failure_falls_back_to_inline_backoff(
+    deterministic_subscriber,
+):
+    fake_consumer = _FakeConsumer(fail_pause=True)
+
+    await _fail(deterministic_subscriber, key=None, consumer=fake_consumer)
+
+    # pause() blew up - the original ValueError still had to propagate,
+    # and backoff must fall back to blocking instead of losing the retry
+    assert deterministic_subscriber.slept == [1]
+    assert fake_consumer.consumer.paused == []
+    assert deterministic_subscriber._pending_resumes == set()
+
+    fake_consumer._thread_pool.shutdown()
+
+
+async def test_resume_failure_retries_then_gives_up(deterministic_subscriber):
+    fake_consumer = _FakeConsumer(fail_resume=True)
+
+    await _fail(deterministic_subscriber, key=None, consumer=fake_consumer)
+    await _drain_resumes(deterministic_subscriber)
+
+    # 1 initial backoff sleep + 2 retry sleeps between the 3 failed
+    # resume attempts (base_delay=1 for every retry, not exponential)
+    assert deterministic_subscriber.slept == [1, 1, 1]
+    assert fake_consumer.consumer.paused == [[TopicPartition("t", 0)]]
+    assert fake_consumer.consumer.resumed == []  # every attempt raised
+
+    fake_consumer._thread_pool.shutdown()
 
 
 async def test_enable_idempotence_forces_acks_all():
