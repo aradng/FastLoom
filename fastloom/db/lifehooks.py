@@ -1,5 +1,6 @@
 import pkgutil
 from collections.abc import Sequence
+from decimal import Decimal
 from importlib import import_module
 from itertools import chain
 from types import ModuleType
@@ -23,13 +24,22 @@ else:
 
 
 async def get_mongo_client(mongo_uri: str):
+    from bson.codec_options import TypeDecoder, TypeRegistry
+    from bson.decimal128 import Decimal128
     from pymongo import AsyncMongoClient
+
+    class DecimalDecoder(TypeDecoder):
+        bson_type = Decimal128
+
+        def transform_bson(self, value: Decimal128) -> Decimal:
+            return value.to_decimal()
 
     return AsyncMongoClient(
         mongo_uri,
         tz_aware=True,
         connectTimeoutMS=1000,
         serverSelectionTimeoutMS=5000,
+        type_registry=TypeRegistry([DecimalDecoder()]),
     )
 
 
