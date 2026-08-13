@@ -1,8 +1,15 @@
+from collections.abc import Callable
+from decimal import Decimal
+from typing import Any
+
 import orjson
 from bson import (
     DBRef,
     Decimal128,
+    MaxKey,
+    MinKey,
     ObjectId,
+    Regex,
 )
 from bson.binary import (
     ALL_UUID_SUBTYPES,
@@ -16,33 +23,44 @@ from opentelemetry.trace import Span
 from pymongo import monitoring
 
 
-def _parse_mongo_types(obj):
-    if isinstance(obj, RawBSONDocument):
-        return dict(obj)
-    if isinstance(obj, Decimal128):
-        return str(obj.to_decimal())
-    if isinstance(obj, ObjectId):
-        return str(obj)
-    if isinstance(obj, DBRef):
-        return {
-            "$ref": obj.collection,
-            "$id": str(obj.id),
-            "$db": obj.database,
-        }
-    if isinstance(obj, Binary) and obj.subtype in ALL_UUID_SUBTYPES:
+def _parse_binary(obj: Binary):
+    if obj.subtype in ALL_UUID_SUBTYPES:
         return obj.as_uuid()
-    if isinstance(obj, Binary) and obj.subtype == VECTOR_SUBTYPE:
+    if obj.subtype == VECTOR_SUBTYPE:
         return repr(obj.as_vector())
-    if isinstance(obj, BinaryVector):
-        return repr(obj)
-    if isinstance(obj, Binary | bytes):
-        return obj.hex()
-    if isinstance(obj, Timestamp):
-        return {
-            "timestamp": obj.time,
-            "increment": obj.inc,
-            "datetime": obj.as_datetime(),
-        }
+    return obj.hex()
+
+
+_CONVERTERS: tuple[tuple[type, Callable[[Any], Any]], ...] = (
+    (RawBSONDocument, dict),
+    (Decimal128, lambda o: str(o.to_decimal())),
+    (Decimal, str),
+    (ObjectId, str),
+    (
+        DBRef,
+        lambda o: {"$ref": o.collection, "$id": str(o.id), "$db": o.database},
+    ),
+    (Binary, _parse_binary),
+    (BinaryVector, repr),
+    (bytes, lambda o: o.hex()),
+    (Regex, lambda o: {"$regex": o.pattern, "$options": str(o.flags)}),
+    (MinKey, lambda o: {"$minKey": 1}),
+    (MaxKey, lambda o: {"$maxKey": 1}),
+    (
+        Timestamp,
+        lambda o: {
+            "timestamp": o.time,
+            "increment": o.inc,
+            "datetime": o.as_datetime(),
+        },
+    ),
+)
+
+
+def _parse_mongo_types(obj):
+    for kind, convert in _CONVERTERS:
+        if isinstance(obj, kind):
+            return convert(obj)
     raise TypeError(obj)
 
 
