@@ -10,12 +10,15 @@ from bson.binary import (
     Binary,
     BinaryVector,
 )
+from bson.raw_bson import RawBSONDocument
 from bson.timestamp import Timestamp
 from opentelemetry.trace import Span
 from pymongo import monitoring
 
 
 def _parse_mongo_types(obj):
+    if isinstance(obj, RawBSONDocument):
+        return dict(obj)
     if isinstance(obj, Decimal128):
         return str(obj.to_decimal())
     if isinstance(obj, ObjectId):
