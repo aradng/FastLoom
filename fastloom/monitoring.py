@@ -46,8 +46,28 @@ if not TYPE_CHECKING:
         from typing import Any as FastAPI
 
 
+def drop_mcp_client_errors(
+    event: dict[str, Any], hint: dict[str, Any]
+) -> dict[str, Any] | None:
+    if event.get("logger") != "fastmcp.server.server":
+        return event
+    exc_info = hint.get("exc_info")
+    if exc_info is None:
+        return event
+
+    from httpx import HTTPStatusError
+
+    logged: BaseException = exc_info[1]
+    for exc in (logged, logged.__cause__):
+        if isinstance(exc, HTTPStatusError):
+            code = exc.response.status_code
+            return None if 400 <= code < 500 else event
+    return event
+
+
 def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
     integrations = []
+    before_send = None
     if PYDANTIC_AI_INSTALLED:
         from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
 
@@ -57,6 +77,7 @@ def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
         from sentry_sdk.integrations.mcp import MCPIntegration
 
         integrations.append(MCPIntegration())
+        before_send = drop_mcp_client_errors
     if dsn is None:
         return
     if isinstance(dsn, AnyHttpUrl):
@@ -74,6 +95,7 @@ def init_sentry(dsn: AnyHttpUrl | str | None, environment: str):
         environment=environment,
         send_default_pii=True,
         integrations=integrations,
+        before_send=before_send,
     )
 
 
