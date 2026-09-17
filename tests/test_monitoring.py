@@ -60,7 +60,7 @@ def test_infer_instruments_no_longer_includes_broker_instruments():
     # docs/signals.md#ordering
     instruments = infer_instruments(_hybrid_settings())
     assert Instruments.RABBIT not in instruments
-    assert Instruments.KAFKA not in instruments
+    assert not hasattr(Instruments, "KAFKA")
 
 
 def test_instrument_brokers_noop_when_otel_disabled(monkeypatch):

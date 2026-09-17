@@ -237,16 +237,6 @@ def instrument_celery():
     )
 
 
-def instrument_confluent_kafka():
-    from opentelemetry.instrumentation.confluent_kafka import (
-        ConfluentKafkaInstrumentor,
-    )
-
-    ConfluentKafkaInstrumentor().instrument(
-        tracer_provider=trace.get_tracer_provider()
-    )
-
-
 def instrument_rabbit():
     from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 
@@ -286,7 +276,6 @@ class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
     RABBIT = instrument_rabbit
-    KAFKA = instrument_confluent_kafka
     HTTPX = instrument_httpx
     REQUESTS = instrument_requests
     METRICS = instrument_metrics
