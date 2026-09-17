@@ -52,7 +52,7 @@ def _middleware(subscriber):
     (factory,) = [
         m
         for m in subscriber.router.broker.middlewares
-        if m.__name__ == "_RetryMiddleware"
+        if getattr(m, "__name__", type(m).__name__) == "_RetryMiddleware"
     ]
     return factory(None, context=None)
 

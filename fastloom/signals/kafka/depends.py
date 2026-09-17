@@ -15,6 +15,7 @@ from typing import (
 )
 
 from fastloom.meta import SelfSustaining
+from fastloom.observability.settings import ObservabilitySettings
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
 from fastloom.utils import exponential_backoff
 
@@ -44,6 +45,9 @@ class Tombstone:
     def __bool__(self) -> bool:
         return False
 
+    def __len__(self) -> int:
+        return 0
+
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type: Any, handler: Any):
         from pydantic_core import core_schema
@@ -56,6 +60,12 @@ class Tombstone:
 
 
 TOMBSTONE = Tombstone()
+
+
+def _telemetry_enabled(settings: KafkaSettings) -> bool:
+    return isinstance(settings, ObservabilitySettings) and bool(
+        settings.OTEL_ENABLED
+    )
 
 
 def get_kafka_router(
@@ -71,6 +81,7 @@ def get_kafka_router(
 
     # deferred: see docs/signals.md#ordering
     from faststream.confluent.fastapi import KafkaRouter
+    from faststream.confluent.opentelemetry import KafkaTelemetryMiddleware
     from faststream.confluent.parser import AsyncConfluentParser
     from faststream.confluent.publisher.producer import (
         AsyncConfluentFastProducerImpl,
@@ -85,7 +96,11 @@ def get_kafka_router(
         acks=acks,
         enable_idempotence=enable_idempotence,
         allow_auto_create_topics=allow_auto_create_topics,
-        middlewares=middlewares,
+        middlewares=(
+            (KafkaTelemetryMiddleware(), *middlewares)
+            if _telemetry_enabled(settings)
+            else tuple(middlewares)
+        ),
     )
 
 

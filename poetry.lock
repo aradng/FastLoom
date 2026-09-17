@@ -3861,28 +3861,6 @@ opentelemetry-semantic-conventions = "0.63b1"
 instruments = ["celery (>=4.0,<6.0)"]
 
 [[package]]
-name = "opentelemetry-instrumentation-confluent-kafka"
-version = "0.63b1"
-description = "OpenTelemetry Confluent Kafka instrumentation"
-optional = true
-python-versions = ">=3.10"
-groups = ["main"]
-markers = "extra == \"kafka\""
-files = [
-    {file = "opentelemetry_instrumentation_confluent_kafka-0.63b1-py3-none-any.whl", hash = "sha256:d5acc47afb90f2e2cd3a35732acfde049963f5a22b16f0b5ea9e37dd694cdbae"},
-    {file = "opentelemetry_instrumentation_confluent_kafka-0.63b1.tar.gz", hash = "sha256:bd10c489380ea0ae227fa05cc5fc58ca20f3667d33ec550e1d809bffae2cc02d"},
-]
-
-[package.dependencies]
-opentelemetry-api = ">=1.12,<2.0"
-opentelemetry-instrumentation = "0.63b1"
-opentelemetry-semantic-conventions = "0.63b1"
-wrapt = ">=1.0.0,<3.0.0"
-
-[package.extras]
-instruments = ["confluent-kafka (>=1.8.2,<3.0.0)"]
-
-[[package]]
 name = "opentelemetry-instrumentation-fastapi"
 version = "0.63b1"
 description = "OpenTelemetry FastAPI Instrumentation"
@@ -7141,7 +7119,7 @@ celery = ["celery"]
 dev = ["ipykernel", "mypy", "pre-commit", "ruff"]
 fastapi = ["fastapi", "python-multipart", "uvicorn"]
 httpx = ["httpx"]
-kafka = ["faststream", "opentelemetry-instrumentation-confluent-kafka", "uvicorn"]
+kafka = ["faststream", "uvicorn"]
 mcp = ["fastmcp"]
 mongo = ["beanie"]
 openai = ["openai"]
@@ -7153,4 +7131,4 @@ test = ["deepdiff", "freezegun", "httpx2", "pytest", "pytest-asyncio", "pytest-c
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "15fa8228f45019c0b756c204d17a68b03220072a297268f611437a1c2681c834"
+content-hash = "93e78d2268227e05fab9d639786c1b72607a245eb029c344f1de5915357cf7dc"

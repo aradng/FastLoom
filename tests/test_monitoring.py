@@ -35,16 +35,13 @@ def _observability_settings(**overrides) -> ObservabilitySettings:
     )
 
 
-def test_infer_broker_instruments_detects_rabbit_and_kafka():
-    assert infer_broker_instruments(_hybrid_settings()) == [
-        Instruments.RABBIT,
-        Instruments.KAFKA,
-    ]
+def test_infer_broker_instruments_detects_rabbit_only_of_the_two():
+    assert infer_broker_instruments(_hybrid_settings()) == [Instruments.RABBIT]
 
 
-def test_infer_broker_instruments_kafka_only():
+def test_kafka_is_traced_by_faststream_not_the_otel_instrumentor():
     settings = KafkaSettings(KAFKA_URI="broker:9092")
-    assert infer_broker_instruments(settings) == [Instruments.KAFKA]
+    assert infer_broker_instruments(settings) == []
 
 
 def test_infer_broker_instruments_rabbit_only():
@@ -63,7 +60,7 @@ def test_infer_instruments_no_longer_includes_broker_instruments():
     # docs/signals.md#ordering
     instruments = infer_instruments(_hybrid_settings())
     assert Instruments.RABBIT not in instruments
-    assert Instruments.KAFKA not in instruments
+    assert not hasattr(Instruments, "KAFKA")
 
 
 def test_instrument_brokers_noop_when_otel_disabled(monkeypatch):

@@ -31,7 +31,6 @@ from fastloom.extras import (
 )
 from fastloom.observability.settings import ObservabilitySettings, OtelConfig
 from fastloom.settings.base import FastAPISettings
-from fastloom.signals.kafka.settings import KafkaSettings
 from fastloom.signals.rabbit.settings import RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
 
@@ -238,16 +237,6 @@ def instrument_celery():
     )
 
 
-def instrument_confluent_kafka():
-    from opentelemetry.instrumentation.confluent_kafka import (
-        ConfluentKafkaInstrumentor,
-    )
-
-    ConfluentKafkaInstrumentor().instrument(
-        tracer_provider=trace.get_tracer_provider()
-    )
-
-
 def instrument_rabbit():
     from opentelemetry.instrumentation.aio_pika import AioPikaInstrumentor
 
@@ -287,7 +276,6 @@ class Instruments(Enum):
     REDIS = instrument_redis
     CELERY = instrument_celery
     RABBIT = instrument_rabbit
-    KAFKA = instrument_confluent_kafka
     HTTPX = instrument_httpx
     REQUESTS = instrument_requests
     METRICS = instrument_metrics
@@ -337,8 +325,6 @@ def infer_broker_instruments(settings: BaseModel) -> list[Instruments]:
     instruments: list[Instruments] = []
     if isinstance(settings, RabbitmqSettings):
         instruments.append(Instruments.RABBIT)
-    if isinstance(settings, KafkaSettings):
-        instruments.append(Instruments.KAFKA)
     return instruments
 
 
