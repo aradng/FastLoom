@@ -31,7 +31,6 @@ from fastloom.extras import (
 )
 from fastloom.observability.settings import ObservabilitySettings, OtelConfig
 from fastloom.settings.base import FastAPISettings
-from fastloom.signals.kafka.settings import KafkaSettings
 from fastloom.signals.rabbit.settings import RabbitmqSettings
 from fastloom.tenant.protocols import TenantMonitoringSchema
 
@@ -337,8 +336,6 @@ def infer_broker_instruments(settings: BaseModel) -> list[Instruments]:
     instruments: list[Instruments] = []
     if isinstance(settings, RabbitmqSettings):
         instruments.append(Instruments.RABBIT)
-    if isinstance(settings, KafkaSettings):
-        instruments.append(Instruments.KAFKA)
     return instruments
 
 
