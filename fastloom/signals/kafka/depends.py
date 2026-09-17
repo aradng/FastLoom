@@ -15,7 +15,11 @@ from typing import (
 )
 
 from fastloom.meta import SelfSustaining
-from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
+from fastloom.signals.kafka.settings import (
+    KafkaSettings,
+    KafkaSubscriptable,
+    TelemetryConfigurable,
+)
 from fastloom.utils import exponential_backoff
 
 if TYPE_CHECKING:
@@ -61,6 +65,12 @@ class Tombstone:
 TOMBSTONE = Tombstone()
 
 
+def _telemetry_enabled(settings: KafkaSettings) -> bool:
+    return isinstance(settings, TelemetryConfigurable) and bool(
+        settings.OTEL_ENABLED
+    )
+
+
 def get_kafka_router(
     settings: KafkaSettings,
     middlewares: Sequence[BrokerMiddleware[Any, Any]] = (),
@@ -89,7 +99,11 @@ def get_kafka_router(
         acks=acks,
         enable_idempotence=enable_idempotence,
         allow_auto_create_topics=allow_auto_create_topics,
-        middlewares=(KafkaTelemetryMiddleware(), *middlewares),
+        middlewares=(
+            (KafkaTelemetryMiddleware(), *middlewares)
+            if _telemetry_enabled(settings)
+            else tuple(middlewares)
+        ),
     )
 
 
