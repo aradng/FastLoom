@@ -10,24 +10,23 @@ with their own `conftest.py` — mirrors the `fastloom/<capability>/` layout.
 
 ## Kafka
 
-`tests/kafka/conftest.py` instruments `confluent-kafka` at **module import
-time**, before any fixture or test body runs:
+`tests/kafka/conftest.py` sets a `TracerProvider` with an in-memory exporter
+at **module import time**:
 
 ```python
-ConfluentKafkaInstrumentor().instrument(tracer_provider=_provider)
+trace.set_tracer_provider(_provider)
 ```
 
-This has to happen before the first *construction* of a `KafkaSubscriber` (or
-call to `get_kafka_router()`) anywhere in the process — not before importing
-`fastloom.signals.kafka` itself, which is import-order-safe (see
-[signals.md](signals.md#ordering)). `KafkaSubscriber`
-construction is what triggers `faststream.confluent`'s internal
-`from confluent_kafka import Producer` — `ConfluentKafkaInstrumentor` patches
-those classes at the class level, so a construction that happens before
-instrumentation binds the unpatched ones, and instrumenting after that point
-is a permanent no-op for the rest of the process.
+`trace.set_tracer_provider` is one-shot — OpenTelemetry keeps the first
+provider set and only logs a warning on any later call. Nothing else in the
+suite sets one today, but a test that exercises `InitMonitoring` or
+`instrument_otel` for real would race this, and the loser's exporter goes
+silent without failing anything.
 
-Every `KafkaSubscriber(...)` construction in `tests/kafka/` is deferred into
-a fixture or test body for exactly this reason — conftest's module-level
-instrumentation always runs first in pytest's collection order, regardless
-of which test file happens to execute first.
+There is no import-order constraint any more. Kafka spans come from
+FastStream's `KafkaTelemetryMiddleware`, attached inside `get_kafka_router()`
+and resolving its tracer when a span starts, so a `KafkaSubscriber` may be
+constructed whenever it suits the test. The shared `kafka_subscriber` fixture
+passes settings with `OTEL_ENABLED=1`, which means every Kafka test exercises
+the middleware — that is deliberate, and is how a tombstone regression inside
+it was caught.

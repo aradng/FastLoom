@@ -1,5 +1,3 @@
-from typing import Protocol, runtime_checkable
-
 from pydantic import BaseModel
 
 from fastloom.settings.base import MonitoringSettings
@@ -11,8 +9,3 @@ class KafkaSettings(BaseModel):
 
 
 class KafkaSubscriptable(MonitoringSettings, KafkaSettings): ...
-
-
-@runtime_checkable
-class TelemetryConfigurable(Protocol):
-    OTEL_ENABLED: int
