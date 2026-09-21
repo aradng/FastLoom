@@ -12,16 +12,18 @@ def _fake_message(
     offset: int | None,
     is_manual: bool = True,
     batch_shape: type[list] | type[tuple] | None = None,
+    key: bytes | None = b"k",
 ):
     single = SimpleNamespace(
         topic=lambda: topic,
         partition=lambda: partition,
         offset=lambda: offset,
+        key=lambda: key,
     )
     raw: (
         SimpleNamespace | list[SimpleNamespace] | tuple[SimpleNamespace, ...]
     ) = single if batch_shape is None else batch_shape([single])
-    return SimpleNamespace(raw_message=raw, is_manual=is_manual)
+    return SimpleNamespace(raw_message=raw, is_manual=is_manual, consumer=None)
 
 
 @pytest.fixture
