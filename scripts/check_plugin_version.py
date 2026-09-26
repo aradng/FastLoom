@@ -2,7 +2,7 @@
 
 pyproject.toml is the source of truth. When the two diverge, this script
 rewrites plugin.json to match and exits non-zero so the pre-commit run
-fails — re-stage the file and commit again (same shape as poetry-lock).
+fails — re-stage the file and commit again (same shape as uv-lock).
 """
 
 import json

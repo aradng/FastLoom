@@ -15,7 +15,7 @@ Ground rules so CI passes on the first try.
   - `__init__.py` — ignores `F` and `E402` (re-exports and conditional imports allowed).
   - `tests/`, `docs/`, `tools/` — ignore `E402`.
 - Notebooks (`*.ipynb`) are excluded from `lint`.
-- Run: `poetry run ruff check .` and `poetry run ruff format .`.
+- Run: `uv run ruff check .` and `uv run ruff format .`.
 
 ## mypy
 
@@ -25,14 +25,14 @@ Ground rules so CI passes on the first try.
   - `init_typed = false` — `__init__`'s synthesized signature doesn't require the field's exact declared type. Turned off because custom validator types (`Str[T]`, `HostPort`, `KafkaBootstrapServers`) accept a wider *input* type (e.g. plain `str`) than their declared field type, and `init_typed = true` doesn't distinguish that from a real mismatch.
   - `warn_required_dynamic_aliases = true`.
   - `RootModel` subclasses aren't fully covered by this setting either way — construct via `.model_validate(v)` instead of `Cls(v)` when `v` isn't already the declared root shape (see `fastloom.types.HostPort`).
-- Run: `poetry run mypy fastloom`.
+- Run: `uv run mypy fastloom`.
 
-## Pre-commit
+## prek
 
 Always before pushing:
 
 ```bash
-poetry run pre-commit run --all-files --show-diff-on-failure
+uv run prek run --all-files --show-diff-on-failure
 ```
 
 Hooks (in `.pre-commit-config.yaml`):
@@ -40,7 +40,7 @@ Hooks (in `.pre-commit-config.yaml`):
 1. `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-added-large-files`.
 2. `mypy` — with bundled `mypy-extensions`, `typing-extensions`, `pydantic`, `returns`, `types-pyyaml`.
 3. `ruff` (check, `--fix`) and `ruff-format`.
-4. `poetry-check`, `poetry-lock` — runs on `pyproject.toml` changes.
+4. `uv-lock` — runs on `pyproject.toml` changes.
 
 If a hook fails: fix the underlying issue, re-stage, and create a **new** commit. Don't `--amend` (the failed commit didn't happen; `--amend` would modify the previous one).
 

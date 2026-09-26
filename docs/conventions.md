@@ -228,15 +228,15 @@ Note: `RootModel` subclasses aren't fully covered by the `init_typed` pydantic-m
 - `mypy` with `pydantic.mypy` and `returns.contrib.mypy.returns_plugin`.
 - Pydantic `init_forbid_extra = true`, `init_typed = true`, `warn_required_dynamic_aliases = true`. New code must satisfy these.
 
-## Pre-commit
+## prek
 
 Always before pushing:
 
 ```bash
-poetry run pre-commit run --all-files --show-diff-on-failure
+uv run prek run --all-files --show-diff-on-failure
 ```
 
-Hooks: ruff (check + format), mypy, basic file fixers, `poetry-check`, `poetry-lock`.
+Hooks: ruff (check + format), mypy, basic file fixers, `uv-lock`.
 
 ## Minimalism
 

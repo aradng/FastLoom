@@ -39,7 +39,7 @@ Each service is:
 
 ```bash
 # Install fastloom with the extras you need
-poetry add fastloom -E fastapi -E mongo -E rabbit
+uv add "fastloom[fastapi,mongo,rabbit]"
 ```
 
 A minimal service is two files at the project root — `settings.py` and `app.py` — plus a `tenants.yaml` for defaults:

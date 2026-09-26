@@ -18,9 +18,7 @@ Fastloom ships with a batteries-included test helper package: pytest fixtures th
 ## Install
 
 ```bash
-poetry add fastloom -E fastapi -E mongo -E rabbit --group test
-# Or via pyproject:
-# fastloom = { version = "...", extras = ["test"] }
+uv add --group test "fastloom[test]"
 ```
 
 The `test` extra pulls in `pytest`, `pytest-asyncio`, `pytest-mock`, `pytest-cov`, `pytest-xdist`, `pytest-lazy-fixtures`, `testcontainers`, `deepdiff`, `freezegun`.
@@ -232,19 +230,19 @@ def service_settings(kafka_container) -> Settings:
 
 ```bash
 # Full suite
-poetry run pytest
+uv run pytest
 
 # Single test
-poetry run pytest tests/api/test_users.py::test_create_user
+uv run pytest tests/api/test_users.py::test_create_user
 
 # Parallel (xdist) — testcontainers fixtures must be session-scoped
-poetry run pytest -n auto
+uv run pytest -n auto
 
 # With coverage
-poetry run pytest --cov=my_service --cov-report=term-missing
+uv run pytest --cov=my_service --cov-report=term-missing
 
 # Verbose, no capture
-poetry run pytest -vv -s
+uv run pytest -vv -s
 
 # Time-freeze a test
 @freezegun.freeze_time("2024-01-01")

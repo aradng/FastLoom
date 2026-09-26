@@ -16,7 +16,7 @@ jobs:
 
       - name: Run pre-commit
         run: |
-          poetry run pre-commit run --all-files --show-diff-on-failure
+          uv run prek run --all-files --show-diff-on-failure
           git diff --quiet || (echo "Code formatting failed"; git --no-pager diff; exit 1)
 
   test:
@@ -27,7 +27,7 @@ jobs:
       - uses: ./.github/actions/setup-env
 
       - name: Run pytest
-        run: poetry run pytest
+        run: uv run pytest
 
   publish:
     name: Build & Publish
@@ -39,12 +39,10 @@ jobs:
       - uses: ./.github/actions/setup-env
 
       - name: Build
-        run: poetry build
+        run: uv build
         shell: bash
 
       - name: Publish to PyPI
         env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: |
-          poetry config pypi-token.pypi $PYPI_TOKEN
-          poetry publish
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish

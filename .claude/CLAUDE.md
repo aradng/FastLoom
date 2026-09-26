@@ -10,32 +10,32 @@ Note: the README and `docs/` still refer to the package as `core_bluprint` — t
 
 ## Commands
 
-Poetry-managed, Python 3.12+ (CI builds with 3.13). All dev tooling runs through pre-commit.
+uv-managed, Python 3.12+ (CI builds with 3.13). All dev tooling runs through prek.
 
 ```bash
-# Install with all optional groups you need (mongo, rabbit, kafka, redis, fastapi, mcp, openai, celery, httpx, requests)
-poetry install -E fastapi -E mongo -E rabbit --with dev,test
+# Install every extra plus the dev/test dependency groups
+uv sync --all-extras
 
-# Lint + format + type-check + poetry-check + poetry-lock (full pre-commit suite)
-poetry run pre-commit run --all-files --show-diff-on-failure
+# Lint + format + type-check + uv-lock (full prek suite)
+uv run prek run --all-files --show-diff-on-failure
 
 # Individual tools
-poetry run ruff check .
-poetry run ruff format .
-poetry run mypy fastloom
+uv run ruff check .
+uv run ruff format .
+uv run mypy fastloom
 
 # Tests (pytest with asyncio + xdist + testcontainers)
-poetry run pytest                       # full suite
-poetry run pytest path/to/test_file.py::test_name  # single test
-poetry run pytest -n auto               # parallel
-poetry run pytest --cov=fastloom        # with coverage
+uv run pytest                       # full suite
+uv run pytest path/to/test_file.py::test_name  # single test
+uv run pytest -n auto               # parallel
+uv run pytest --cov=fastloom        # with coverage
 
 # Build / publish (CI does this on main)
-poetry build
-poetry publish
+uv build
+uv publish
 ```
 
-CI (`.github/workflows/ci.yaml`) runs pre-commit on every PR and publishes to PyPI on push to `main`. GitLab CI (`.gitlab-ci.yml`) publishes to an internal Nexus registry instead — both pipelines coexist.
+CI (`.github/workflows/ci.yaml`) runs prek on every PR and publishes to PyPI on push to `main`. GitLab CI (`.gitlab-ci.yml`) only runs prek.
 
 ## Architecture
 

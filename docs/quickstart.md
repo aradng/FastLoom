@@ -13,7 +13,7 @@ The launcher imports these three files dynamically from the current working dire
 Add fastloom with only the extras you actually need:
 
 ```bash
-poetry add fastloom -E fastapi -E mongo -E rabbit -E redis -E mcp
+uv add "fastloom[fastapi,mongo,rabbit,redis,mcp]"
 ```
 
 Available extras: `fastapi`, `rabbit`, `kafka`, `mongo`, `redis`, `celery`, `httpx`, `requests`, `openai`, `mcp`, plus dev groups `dev` and `test`.

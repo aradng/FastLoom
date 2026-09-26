@@ -14,7 +14,7 @@ Fastloom can mount a FastMCP ASGI app inside your FastAPI service when the optio
 ## Install + enable
 
 ```bash
-poetry add fastloom -E mcp -E fastapi
+uv add "fastloom[mcp,fastapi]"
 ```
 
 ```python

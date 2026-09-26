@@ -8,7 +8,6 @@ workflow:
 stages:
   - analysis-build
   - static-analysis
-  - build
 
 variables:
   DOCKER_HOST: tcp://docker:2375
@@ -28,9 +27,7 @@ pre-commit-build:
     GIT_STRATEGY: clone
   script:
     - docker build -t $PRECOMMIT_TAG --push
-      --target=builder-dev
-      --build-arg USERNAME=$NEXUS_USERNAME
-      --build-arg PASSWORD=$NEXUS_PASSWORD .
+      --target=builder-dev .
   rules:
     - changes:
         paths:
@@ -47,25 +44,10 @@ pre-commit:
     GIT_STRATEGY: clone
   services: []
   script:
-    - poetry config http-basic.nexus-registry "$NEXUS_USERNAME" "$NEXUS_PASSWORD"
-    - pre-commit run --all-files --show-diff-on-failure
+    - prek run --all-files --show-diff-on-failure
     - git diff --quiet
   after_script:
     - >
       if [ $CI_JOB_STATUS == 'failed' ]; then
         echo $(git --no-pager diff)
       fi
-
-build-core:
-  stage: build
-  tags:
-    - docker
-  image: $PRECOMMIT_TAG
-  services: []
-  script:
-    - poetry build
-    - poetry config repositories.nexus-registry "https://nexus.bluprint.ir/repository/private-package-registry/"
-    - poetry config http-basic.nexus-registry $NEXUS_USERNAME $NEXUS_PASSWORD
-    - poetry publish --repository nexus-registry
-  only:
-    - main

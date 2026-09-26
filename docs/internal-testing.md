@@ -1,7 +1,7 @@
 # Internal testing
 
 This is about testing **fastloom itself** — the `tests/` directory at the
-repo root, run via `poetry run pytest` in CI. It's a different thing from
+repo root, run via `uv run pytest` in CI. It's a different thing from
 [test.md](test.md), which documents the fixture package fastloom *ships* for
 consuming services to test *their own* code.
 
