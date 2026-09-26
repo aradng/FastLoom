@@ -1,5 +1,5 @@
-name: "Install Python + Poetry"
-description: "Sets up Python, caches venv/.local, installs deps"
+name: "Install Python + uv"
+description: "Sets up Python and uv, installs deps"
 inputs:
   python-version:
     description: "Python version to use"
@@ -7,36 +7,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up Python
-      id: setup-python
-      uses: actions/setup-python@v5
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
       with:
+        version: "0.12.19"
         python-version: ${{ inputs.python-version }}
-
-    - name: Load cached venv
-      id: cached-poetry-dependencies
-      uses: actions/cache@v4
-      with:
-        path: .venv
-        key: venv-${{ runner.os }}-${{ hashFiles('poetry.lock') }}-${{ hashFiles('.github/actions/install-env/action.yml') }}-${{ steps.setup-python.outputs.python-version }}
-
-    - name: Load cached .local
-      id: cached-dotlocal
-      uses: actions/cache@v4
-      with:
-        path: ~/.local
-        key: dotlocal-${{ runner.os }}-${{ hashFiles('.github/actions/install-env/action.yml') }}-${{ steps.setup-python.outputs.python-version }}
-
-    - name: Install Python poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: 2.3.2
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-        installer-parallel: true
-        virtualenvs-path: .venv
+        enable-cache: true
 
     - name: Install dependencies
       shell: bash
-      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-      run: poetry install --no-interaction --all-extras --with=dev
+      run: uv sync --locked --all-extras

@@ -65,7 +65,7 @@ If the user said they want a fully working starter, also create:
 Tell the user what to do next:
 
 ```sh
-poetry install
-launch
+uv sync
+uv run launch
 # Then visit http://localhost:8000/api/<service-name>/docs
 ```

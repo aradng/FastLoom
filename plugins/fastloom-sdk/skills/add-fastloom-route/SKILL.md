@@ -105,6 +105,6 @@ If `app.py` doesn't have an explicit `routes` list and uses a different shape, f
 
 After writing files:
 
-1. Run the project's linter (`poetry run ruff check .` or whatever is configured).
+1. Run the project's linter (`uv run ruff check .` or whatever is configured).
 2. Run mypy if available.
 3. Smoke-test with `launch` and `curl <prefix>/<resource>s`.
