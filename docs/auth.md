@@ -136,6 +136,25 @@ class UserClaims(BaseModel):
 - `is_admin` matches `ADMIN` (constant `fastloom.auth.schemas.ADMIN_ROLE`).
 - JSON serialization uses claim aliases (`sub`, `preferred_username`) and re-joins `scope` into a space-delimited string.
 
+## Declaring a role guard
+
+Declare a dependency that requires a role with `Security(..., scopes=[ROLE])`, not `Depends(...)`. The check itself is unchanged; the scope is what makes the role visible in the OpenAPI schema, which is what [`fastloom-policy`](policy.md) reads.
+
+```python
+from fastapi import HTTPException, Security, status
+from fastloom.auth.schemas import ADMIN_ROLE, UserClaims
+
+
+async def admin_claims(
+    claims: Annotated[
+        UserClaims, Security(TC.auth.get_claims, scopes=[ADMIN_ROLE])
+    ],
+) -> UserClaims:
+    if not claims.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    return claims
+```
+
 ## Reading claims outside of a request
 
 `Claims` is set on every successful `_validate_token` call. Use it from FastStream subscribers, background tasks, or domain code that shouldn't take a FastAPI dependency:

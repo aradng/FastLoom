@@ -98,6 +98,7 @@ dev = [
 
 [project.scripts]
 launch = "fastloom.launcher.main:main"
+fastloom-policy = "fastloom.policy.routes:main"
 
 [tool.uv.build-backend]
 module-root = ""
