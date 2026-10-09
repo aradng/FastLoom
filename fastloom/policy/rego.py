@@ -1,32 +1,39 @@
 import json
 import re
 
-from fastloom.policy.source import Route
+from fastloom.policy.schemas import Route
+
+ROUTES_FILE = "routes.rego"
+COVERAGE_FILE = "routes_test.rego"
 
 PATH_PARAMETER = re.compile(r"\{[^/}]+\}")
-ROUTE_ENTRY = re.compile(r'^\t(\["[A-Z*]+", ".*"\]),$')
+LISTED_ROUTE = re.compile(r'^\t(\["[A-Z*]+", ".*"\]): `', re.MULTILINE)
 
 PREAMBLE = """package policy
 
 http := input.attributes.request.http
-
 path := split(http.path, "?")[0]
+bearer := substring(http.headers.authorization, count("Bearer "), -1) if \
+startswith(http.headers.authorization, "Bearer ")
+claims := payload if [_, payload, _] := io.jwt.decode(bearer)
 
-bearer := substring(http.headers.authorization, count("Bearer "), -1) if {
-\tstartswith(http.headers.authorization, "Bearer ")
+authenticated if {
+\tis_string(claims.sub)
+\tclaims.sub != ""
+\tclaims.exp * 1000000000 > time.now_ns()
 }
-
-claims := payload if {
-\t[_, payload, _] := io.jwt.decode(bearer)
-}
-
-authenticated if claims.sub
 
 roles := object.get(claims, "roles", [])
+routes := {route | some route, _ in route_patterns}
 
 requested(route) if {
 \troute[0] in {http.method, "*"}
 \tregex.match(route_patterns[route], path)
+}
+
+requested_group(group) if {
+\tsome route in ruled_routes[group]
+\trequested(route)
 }"""
 
 COVERAGE = """package policy_test
@@ -52,10 +59,6 @@ test_every_ruled_route_still_exists if {
 """
 
 
-def route_key(route: Route) -> str:
-    return json.dumps([route.method, route.path])
-
-
 def pattern(template: str) -> str:
     trimmed = template.rstrip("/")
     pieces: list[str] = []
@@ -73,30 +76,17 @@ def pattern(template: str) -> str:
             pieces += [re.escape(literal), ".*" if catch_all else "[^/]+"]
         position = parameter.end()
     pieces.append(re.escape(trimmed[position:]))
-    regex = "".join(pieces)
-    return f"^{regex}$" if regex.endswith((".*", ".*)?")) else f"^{regex}/?$"
+    return f"^{''.join(pieces)}/?$"
 
 
 def render(routes: list[Route]) -> str:
-    keys = "".join(f"\t{route_key(r)},\n" for r in routes)
     patterns = "".join(
-        f"\t{route_key(r)}: `{pattern(r.path)}`,\n" for r in routes
+        f"\t{json.dumps(r, ensure_ascii=False)}: `{pattern(r.path)}`,\n"
+        for r in routes
     )
-    sections = [
-        PREAMBLE,
-        f"routes := {{\n{keys}}}" if routes else "routes := set()",
-        f"route_patterns := {{\n{patterns}}}"
-        if routes
-        else "route_patterns := {}",
-    ]
-    return "\n\n".join(sections) + "\n"
+    listing = f"{{\n{patterns}}}" if routes else "{}"
+    return f"{PREAMBLE}\n\nroute_patterns := {listing}\n"
 
 
-def read_routes(rego: str) -> set[tuple[str, str]]:
-    found: set[tuple[str, str]] = set()
-    for line in rego.split("\nroute_patterns := ", 1)[0].splitlines():
-        match = ROUTE_ENTRY.match(line)
-        if match is not None:
-            method, path = json.loads(match.group(1))
-            found.add((method, path))
-    return found
+def listed_routes(rego: str) -> set[Route]:
+    return {Route(*json.loads(r)) for r in LISTED_ROUTE.findall(rego)}

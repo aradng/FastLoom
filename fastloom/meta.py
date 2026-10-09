@@ -102,14 +102,12 @@ def infer_project_name():
 
 def read_project_name(file: Path) -> str:
     if not file.exists():
-        raise FileNotFoundError(
-            "Could not find pyproject.toml to infer project name"
-        )
+        raise FileNotFoundError(f"Could not find {file} to infer project name")
     data = tomllib.loads(file.read_text())
     project_name = (
         data.get("project", {}).get("name")  # PEP 621
         or data.get("tool", {}).get("poetry", {}).get("name")  # Poetry
     )
     if not isinstance(project_name, str):
-        raise ValueError("Could not infer project name in pyproject.toml")
+        raise ValueError(f"Could not infer project name in {file}")
     return project_name

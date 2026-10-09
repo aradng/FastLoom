@@ -16,7 +16,7 @@ Add fastloom with only the extras you actually need:
 uv add "fastloom[fastapi,mongo,rabbit,redis,mcp]"
 ```
 
-Available extras: `fastapi`, `rabbit`, `kafka`, `mongo`, `redis`, `celery`, `httpx`, `requests`, `openai`, `mcp`, plus dev groups `dev` and `test`.
+Available extras: `fastapi`, `rabbit`, `kafka`, `mongo`, `redis`, `celery`, `httpx`, `requests`, `openai`, `mcp`, `policy`, plus dev groups `dev` and `test`.
 
 ## 2. `settings.py`
 

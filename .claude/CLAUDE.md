@@ -90,6 +90,10 @@ Beanie ODM. Models live in a module registered via `App.models_module`; `get_mod
 
 When `MCPSettings.MCP_ENABLED` is set, a FastMCP ASGI app is mounted at `API_PREFIX` and its lifespan is composed into the FastAPI lifespan. Bearer auth is forwarded via a connector header proxy (see commit `358cd57`).
 
+### Policy (`fastloom/policy/`)
+
+`fastloom-policy` (extra `policy`, libcst) statically reads a service's routes — `App(routes=, mounts=)` → `APIRouter` definitions → every route/`include_router` call on them repo-wide — and writes `policy/routes.rego` (`route_patterns`, `routes`, `requested`, `requested_group`, token helpers) plus `routes_test.rego` (every route is in the service's `ruled_routes`). `source.py` is the reader: anything it can't read without running the code raises `PolicySourceError`, never a guess. `rego.py` renders; its output must stay `opa fmt`-stable. Contract and limits: `docs/policy.md`.
+
 ## Conventions
 
 - **Ruff:** `line-length = 79`, double-quoted strings, magic trailing commas preserved. Selected rule families: `E,W,F,C90,UP,B,SIM,INT,I,FAST`. `F401` is never auto-fixed (unused imports are flagged but not removed). `__init__.py` ignores `F` and `E402`; `tests/`, `docs/`, `tools/` ignore `E402`.

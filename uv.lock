@@ -857,7 +857,6 @@ dependencies = [
     { name = "babel" },
     { name = "jdatetime" },
     { name = "jinja2" },
-    { name = "libcst" },
     { name = "logfire", extra = ["asgi", "celery", "fastapi", "httpx", "pymongo", "redis", "requests", "system-metrics"] },
     { name = "opentelemetry-distro" },
     { name = "opentelemetry-exporter-otlp" },
@@ -899,6 +898,9 @@ mongo = [
 ]
 openai = [
     { name = "openai" },
+]
+policy = [
+    { name = "libcst" },
 ]
 rabbit = [
     { name = "faststream", extra = ["otel", "rabbit"] },
@@ -968,7 +970,7 @@ requires-dist = [
     { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.30.0,<8.0.0" },
     { name = "jdatetime", specifier = ">=4.1.1,<6.0.0" },
     { name = "jinja2", specifier = ">=3.1.6,<4.0.0" },
-    { name = "libcst", specifier = ">=1.9.0,<2.0.0" },
+    { name = "libcst", marker = "extra == 'policy'", specifier = ">=1.9.0,<2.0.0" },
     { name = "logfire", extras = ["system-metrics", "asgi", "fastapi", "celery", "httpx", "requests", "redis", "pymongo", "openai"], specifier = ">=4.0.0,<5.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19,<3.0.0" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1,<3" },
@@ -997,7 +999,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'kafka'" },
     { name = "uvicorn", marker = "extra == 'rabbit'" },
 ]
-provides-extras = ["rabbit", "kafka", "redis", "fastapi", "mongo", "celery", "httpx", "requests", "openai", "mcp", "dev", "test"]
+provides-extras = ["rabbit", "kafka", "redis", "fastapi", "mongo", "celery", "httpx", "requests", "openai", "mcp", "policy", "dev", "test"]
 
 [package.metadata.requires-dev]
 dev = [
