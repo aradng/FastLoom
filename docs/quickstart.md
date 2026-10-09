@@ -34,7 +34,7 @@ from fastloom.signals.rabbit.settings import RabbitmqSettings
 
 class Settings(
     BaseGeneralSettings,    # PROJECT_NAME + ENVIRONMENT + IAM + Logging + FastAPI
-    LauncherSettings,       # APP_PORT, DEBUG, WORKERS, SETTINGS_PUBLIC
+    LauncherSettings,       # APP_HOST, APP_PORT, DEBUG, WORKERS, SETTINGS_PUBLIC
     MongoSettings,          # MONGO_URI, MONGO_DATABASE
     RabbitmqSettings,       # RABBIT_URI
     RedisSettings,          # REDIS_URL

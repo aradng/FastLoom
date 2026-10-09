@@ -94,11 +94,14 @@ It accepts both FastAPI-style lifespans (yield `None`) and FastMCP-style (yield 
 
 ```python
 class LauncherSettings(BaseModel):
-    APP_PORT: int = 8000
+    APP_HOST: EnvBackend[str] = EnvDefault("0.0.0.0")  # uvicorn bind host
+    APP_PORT: EnvBackend[int] = EnvDefault(8000)
     DEBUG: bool = True       # enables uvicorn --reload
     WORKERS: int = 4
     SETTINGS_PUBLIC: bool = False  # when True, /tenant_* is reachable through API_PREFIX too
 ```
+
+`APP_HOST` and `APP_PORT` read the environment variable of the same name when it is set (the `EnvBackend` idiom from [settings.md](settings.md)), so a container can rebind without touching `tenants.yaml`.
 
 The system endpoints (`/tenant_schema`, `/tenant_settings`, `/reload`) are registered bare, so `root_path` alone would make them reachable both directly and through the `API_PREFIX`-prefixed path a gateway like Envoy forwards — the same as any other route. Unless `SETTINGS_PUBLIC=True`, `fastloom.tenant.handler.init_settings_endpoints` attaches `Depends(reject_external)` to these routes, which inspects the raw (unstripped) `request.url.path` and 404s any request arriving through the prefixed path. Keep `SETTINGS_PUBLIC` off in production unless you front the service with an auth layer.
 

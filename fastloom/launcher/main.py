@@ -121,7 +121,7 @@ def main():
     Configs(get_settings_cls(), get_tenant_cls())
     uvicorn.run(
         app=f"{__name__}:app",
-        host="0.0.0.0",
+        host=Configs[LauncherSettings].general.APP_HOST,
         port=Configs[LauncherSettings].general.APP_PORT,
         reload=Configs[LauncherSettings].general.DEBUG,
         workers=Configs[LauncherSettings].general.WORKERS,
