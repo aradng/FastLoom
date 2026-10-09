@@ -136,29 +136,6 @@ class UserClaims(BaseModel):
 - `is_admin` matches `ADMIN` (constant `fastloom.auth.schemas.ADMIN_ROLE`).
 - JSON serialization uses claim aliases (`sub`, `preferred_username`) and re-joins `scope` into a space-delimited string.
 
-## Requiring roles
-
-`TC.auth.require_roles(expression)` is a dependency that answers `403` unless the caller's `roles` satisfy the expression, and returns their `UserClaims`:
-
-```python
-from fastloom.auth.roles import and_role, or_role
-
-router = APIRouter(dependencies=[Depends(TC.auth.require_roles("ADMIN"))])
-
-
-@router.post(
-    "/seed",
-    dependencies=[
-        Depends(TC.auth.require_roles(or_role(and_role(Role.ADMIN, Role.SEED), Role.MEMBER)))
-    ],
-)
-async def seed(): ...
-```
-
-The expression language is `|` (or), `&` (and), `!` (not) and parentheses, binding in that order from loosest to tightest: `ADMIN|MEMBER`, `(ADMIN&SEED)|MEMBER`, `CHART:READ&!CHART:TRIAL`. `and_role`, `or_role` and `not_role` build the same strings from roles or other expressions. The expression is parsed when the route is declared, so a malformed one fails at startup.
-
-Guards on a router and on a route combine with `&`. Write the expression as a literal, a module constant, an enum member or a helper call: [`fastloom-policy`](policy.md) reads it without running the code, and rejects an f-string.
-
 ## Reading claims outside of a request
 
 `Claims` is set on every successful `_validate_token` call. Use it from FastStream subscribers, background tasks, or domain code that shouldn't take a FastAPI dependency:

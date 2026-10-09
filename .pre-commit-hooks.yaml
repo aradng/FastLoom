@@ -1,7 +1,7 @@
 - id: fastloom-policy
   name: fastloom policy
-  description: Generate policy/routes.rego from the service's routes and role guards.
+  description: Generate policy/routes.rego and the tests that make the policy rule every route.
   entry: fastloom-policy
   language: python
-  files: \.py$|^pyproject\.toml$|^policy/routes\.rego$
+  files: \.py$|^pyproject\.toml$|^policy/routes(_test)?\.rego$
   pass_filenames: false
