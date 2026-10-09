@@ -97,6 +97,10 @@ def infer_project_name():
         ).parent
         / "pyproject.toml"
     )
+    return read_project_name(file)
+
+
+def read_project_name(file: Path) -> str:
     if not file.exists():
         raise FileNotFoundError(
             "Could not find pyproject.toml to infer project name"

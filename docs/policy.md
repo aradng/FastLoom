@@ -1,49 +1,48 @@
-# Policy (OPA route coverage)
+# Policy (OPA route rules)
 
-A service that authorizes requests with Open Policy Agent keeps its rego in a `policy/` directory. `fastloom-policy` keeps that policy in step with the service's routes: a commit that adds a guarded route, removes one, or changes the role it needs fails until the rego says the same thing.
+A service that authorizes requests with Open Policy Agent keeps its rego in a `policy/` directory. `fastloom-policy` generates the role part of that rego from the service's own route guards, so the rules OPA enforces are the ones the code declares.
 
 **Symbols at a glance**
 
-- `fastloom-policy` — console script (`fastloom.policy.routes:main`).
-- `.pre-commit-hooks.yaml` — `fastloom-policy-routes`, `opa-fmt`, `opa-check`, `opa-test`.
+- `fastloom-policy` — console script (`fastloom.policy.main:main`).
+- `.pre-commit-hooks.yaml` — the `fastloom-policy` hook.
+- `TC.auth.require_roles` and the role expression language — see [auth.md](auth.md#requiring-roles).
 
 ## What it generates
 
-`fastloom-policy --package <rego package>`, run from the service root, builds the service's FastAPI app through the launcher factory — reading `tenants.yaml` exactly as `launch` does — without starting it, and reads its OpenAPI schema. It writes two files into `policy/` (`--policy-dir` to change it):
+Run from a service root, `fastloom-policy` reads the service's source — it never imports it, so it needs none of the service's dependencies — and writes `policy/routes.rego` (`--policy-dir` to change the directory), in `package policy`:
 
-- `routes.json` — every operation as `{method, path, access}`. OPA loads it as `data.app_routes`.
-- `fastloom_routes_test.rego` — coverage tests in the service's own package.
+- `route_access` — every route and the access it needs: `open`, `user`, or its role expression.
+- `granted` — the routes the request's caller may use. Each role expression is compiled to rule bodies: `|` becomes separate bodies, `&` conditions in one body, `!` a `not`. Every guarded body also requires `authenticated`.
+- `requested(route)` — whether the request is for that route, matched on method and on a pattern built from the path template (`{id}` is one segment, `{rest:path}` any number).
+- `http`, `path`, `bearer`, `claims`, `authenticated`, `roles` — the request and its token, decoded once. `roles` is `[]` for a token with no `roles` claim, the same default `UserClaims` has, so `!TRIAL` admits it.
 
-It exits `1` when either file changed, printing each route whose access changed, so a pre-commit run fails until the regenerated files are staged.
-
-`access` comes from the operation's security requirement:
-
-| OpenAPI `security` | `access` |
-|---|---|
-| none | `open` |
-| OpenID Connect, no scopes | `user` |
-| OpenID Connect with scopes | the scopes, e.g. `ADMIN` |
-
-Role guards therefore have to be declared with `Security(..., scopes=[ROLE])` — see [auth.md](auth.md#declaring-a-role-guard). A role checked inside a plain `Depends` shows up as `user`.
-
-Nothing connects to the services `tenants.yaml` points at; the app is built, never started. In CI, where `tenants.yaml` is not checked in, write it from the same variable the deploy job uses before running the command.
-
-## What the service's rego provides
-
-One rule, in the package passed as `--package`:
+The file is generated: don't edit it. The service's own rego in the same package holds `allow` and anything the code can't express:
 
 ```rego
-ruled_routes := {
-	"user": {["GET", "/api/notify/notification"]},
-	"ADMIN": {["GET", "/api/notify/admin/email/deliveries"]},
+package policy
+
+default allow := false
+
+allow if {
+	some route in granted
+	requested(route)
+	not route in refused
 }
 ```
 
-Keys are `access` values, members are `[method, path]` with the path exactly as the manifest spells it, path parameters included (`/api/x/{item_id}`). `open` routes need no entry. The generated tests fail when:
+## What it reads
 
-- a guarded route has no entry under its access,
-- a role route is also under `user`,
-- an entry names a route the app no longer has, or no longer guards that way.
+Starting from `app.py`'s `App(routes=[(router, prefix, ...), ...])`, it follows each router into its module, resolving imports within the repo. A route's access combines:
+
+- the router's `APIRouter(prefix=..., dependencies=[...])`,
+- the decorator's `dependencies=[...]`,
+- the endpoint's `Depends(...)` / `Security(...)` parameters,
+- and, through them, the service's own dependency functions.
+
+`TC.auth.get_claims` or `get_token` makes a route `user` (`TC.optional_auth` does not); `TC.auth.require_roles(expression)` adds the expression. Paths are prefixed with `/api/<project name>`, the name read from `pyproject.toml` as `PROJECT_NAME` defaults to.
+
+What it can't read without running the code fails the hook instead of being guessed: `include_router`, `add_api_route`, a dependency returned by one of the service's own functions, a non-literal `dependencies` list, and role expressions built with f-strings.
 
 ## Pre-commit
 
@@ -51,11 +50,7 @@ Keys are `access` values, members are `[method, path]` with the path exactly as 
 - repo: https://github.com/aradng/FastLoom
   rev: <fastloom version>
   hooks:
-    - id: fastloom-policy-routes
-      args: [--package, qubit.notify]
-    - id: opa-fmt
-    - id: opa-check
-    - id: opa-test
+    - id: fastloom-policy
 ```
 
-`fastloom-policy-routes` is a `system` hook: it runs the `fastloom-policy` installed in the service's own environment, because it has to import the service. The `opa-*` hooks run the OPA image through Docker. In a CI job without Docker or the service's dependencies, skip them there and run `fastloom-policy` in the built service image and `opa test policy` in the OPA image instead.
+It exits `1` when `routes.rego` changed, printing each route whose access changed (`PUT /api/notify/notification/read: user -> ADMIN`), so the commit fails until the regenerated file is staged and reviewed against the service's own rules. It runs in pre-commit's own environment, so it works the same locally and in CI. Formatting, `opa check` and `opa test` are each service's own hooks.

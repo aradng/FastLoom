@@ -7,6 +7,7 @@ from fastapi.security import OAuth2, OpenIdConnect
 from jose.jwt import get_unverified_claims
 
 from fastloom.auth import Claims
+from fastloom.auth.roles import parse_roles
 from fastloom.auth.schemas import UserClaims
 from fastloom.auth.settings import IAMSettings, IntrospectionResponse
 
@@ -138,5 +139,19 @@ class JWTAuth(OptionalJWTAuth):
             token: Annotated[str, Depends(self._security_scheme)],
         ) -> str:
             return self._transform_bearer(token)
+
+        return _inner
+
+    def require_roles(
+        self, expression: str
+    ) -> Callable[..., Coroutine[Any, Any, UserClaims]]:
+        rule = parse_roles(expression)
+
+        async def _inner(
+            claims: Annotated[UserClaims, Depends(self.get_claims)],
+        ) -> UserClaims:
+            if not rule.evaluate(claims.roles):
+                raise HTTPException(status_code=403)
+            return claims
 
         return _inner

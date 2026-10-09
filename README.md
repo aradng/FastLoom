@@ -151,7 +151,7 @@ Dive deeper in the docs below.
 - Settings & Configs → [docs/settings.md](docs/settings.md)
 - Tenant → [docs/tenant.md](docs/tenant.md)
 - Auth → [docs/auth.md](docs/auth.md)
-- Policy (OPA route coverage) → [docs/policy.md](docs/policy.md)
+- Policy (OPA route rules) → [docs/policy.md](docs/policy.md)
 - DB (Mongo/Beanie) → [docs/db.md](docs/db.md)
 - Signals (Rabbit / Kafka) → [docs/signals.md](docs/signals.md)
 - Cache (Redis) → [docs/cache.md](docs/cache.md)

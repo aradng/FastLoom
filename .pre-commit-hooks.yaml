@@ -1,26 +1,7 @@
-- id: fastloom-policy-routes
-  name: fastloom policy routes
-  description: Regenerate the OPA route manifest and coverage tests from the service's OpenAPI.
+- id: fastloom-policy
+  name: fastloom policy
+  description: Generate policy/routes.rego from the service's routes and role guards.
   entry: fastloom-policy
-  language: system
-  files: \.py$|^policy/
-  pass_filenames: false
-- id: opa-fmt
-  name: opa fmt
-  entry: openpolicyagent/opa:1.21.0 fmt --write
-  language: docker_image
-  files: \.rego$
-- id: opa-check
-  name: opa check
-  entry: openpolicyagent/opa:1.21.0 check --strict
-  language: docker_image
-  args: [policy]
-  files: \.rego$
-  pass_filenames: false
-- id: opa-test
-  name: opa test
-  entry: openpolicyagent/opa:1.21.0 test
-  language: docker_image
-  args: [policy]
-  files: \.rego$|routes\.json$
+  language: python
+  files: \.py$|^pyproject\.toml$|^policy/routes\.rego$
   pass_filenames: false
