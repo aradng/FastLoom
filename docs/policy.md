@@ -13,8 +13,8 @@ Run from a service root, `fastloom-policy` reads the service's source with [libc
 
 `routes.rego`, in `package policy`:
 
-- `routes` — every route as `[method, path]`, the path spelled as the route declares it (`/api/notify/notification/{notification_id}`).
-- `route_patterns` and `requested(route)` — whether the request is for a route: the method, and the path against an escaped pattern where `{id}` is one segment and `{rest:path}` any number.
+- `routes` — every route as `[method, path]`, the path spelled as the route declares it (`/api/notify/notification/{notification_id}`). A mount from `App(mounts=...)` is `["*", "<mount>/{path:path}"]`: it answers any method on any sub-path.
+- `route_patterns` and `requested(route)` — whether the request is for a route: the method (any, for `*`), and the path against an escaped pattern where `{id}` is one segment and `{rest:path}` any number, including none. A trailing slash is optional either way, because FastAPI redirects `/x/` and `/x` to whichever the route declares and that redirect has to get through.
 - `http`, `path`, `claims`, `authenticated`, `roles` — the request and its token, decoded once. `roles` is `[]` for a token with no `roles` claim, the default `UserClaims` has.
 
 `routes_test.rego`, in `package policy_test`: two tests over the service's `ruled_routes`. They fail when a route has no group, or when a group lists a route the app no longer has.
@@ -51,7 +51,7 @@ Data-level checks — ownership, rows a caller may see, anything that depends on
 
 ## What it reads
 
-Starting from `app.py`'s `App(routes=[(router, prefix, ...), ...])`, it follows each router into its module, resolving names across the repo with libcst's `FullyQualifiedNameProvider`, and each `router.include_router(child, prefix=...)` into the child router. Prefixes add up the way FastAPI adds them: the `App` entry, `include_router`, then `APIRouter(prefix=...)`. Paths start with `/api/<project name>`, the name read from `pyproject.toml` as `PROJECT_NAME` defaults to, except under a router or route depending on [`reject_external`](launcher.md#reject_external): those are only reachable on the bare path, so that is the path generated (`/internal/trade/chat/map`).
+Starting from `app.py`'s `App(routes=[(router, prefix, ...), ...], mounts=[...])` — a service without `routes` has none — it follows each router into its module, resolving names across the repo with libcst's `FullyQualifiedNameProvider`, and each `router.include_router(child, prefix=...)` into the child router. Prefixes add up the way FastAPI adds them: the `App` entry, `include_router`, then `APIRouter(prefix=...)`. Paths start with `/api/<project name>`, the name read from `pyproject.toml` as `PROJECT_NAME` defaults to, except under a router or route depending on [`reject_external`](launcher.md#reject_external): those are only reachable on the bare path, so that is the path generated (`/internal/trade/chat/map`).
 
 Prefixes, paths and methods may be literals or module constants. What it can't read without running the code fails the hook instead of being guessed: f-strings, `add_api_route` and the other imperative registrations, a router that isn't an `APIRouter(...)` the repo defines, and a non-literal `dependencies` list.
 

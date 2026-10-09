@@ -26,7 +26,10 @@ FILES = {
             (hooks.router, "", "Hooks"),
         ]
 
-        app = App(routes=routes)
+        app = App(
+            routes=routes,
+            mounts=[("/files/", object())],
+        )
     """,
     "shop/__init__.py": "",
     "shop/constants.py": """
@@ -102,6 +105,10 @@ FILES = {
 
         @router.post("/webhook")
         async def webhook(): ...
+
+
+        @router.post("/agent/")
+        async def agent(): ...
     """,
 }
 
@@ -132,6 +139,8 @@ def test_every_route_is_read_with_its_full_path(service: Path):
         ("GET", "/api/shop/chart/dashboard/boards/{board_id}"),
         ("POST", "/internal/shop/map"),
         ("POST", "/api/shop/webhook"),
+        ("POST", "/api/shop/agent/"),
+        ("*", "/api/shop/files/{path:path}"),
     }
 
 
@@ -182,13 +191,30 @@ def test_what_cannot_be_read_without_running_the_code_fails(
 @pytest.mark.parametrize(
     ("template", "expected"),
     [
-        ("/api/shop/openapi.json", r"^/api/shop/openapi\.json$"),
-        ("/api/shop/items/{item_id}", "^/api/shop/items/[^/]+$"),
-        ("/api/iam/check/{rest:path}", "^/api/iam/check/.+$"),
+        ("/api/shop/openapi.json", r"^/api/shop/openapi\.json/?$"),
+        ("/api/shop/items/{item_id}", "^/api/shop/items/[^/]+/?$"),
+        ("/api/shop/agent/", "^/api/shop/agent/?$"),
+        ("/api/iam/check/{rest:path}", "^/api/iam/check(?:/.*)?$"),
+        (
+            "/api/iam/oidc/.well-known/oauth-authorization-server{path:path}",
+            r"^/api/iam/oidc/\.well\-known/oauth\-authorization\-server.*$",
+        ),
     ],
 )
 def test_a_route_template_becomes_an_escaped_pattern(template, expected):
     assert pattern(template) == expected
+
+
+def test_an_app_without_routes_has_none(service: Path):
+    (service / "app.py").write_text(
+        "from fastloom.launcher.schemas import App\n\napp = App()\n"
+    )
+
+    assert read_service_routes(service) == []
+
+
+def test_a_relative_root_reads_the_same_routes(service: Path):
+    assert _routes(Path(".")) == _routes(service)
 
 
 def test_the_rendered_route_list_reads_back(service: Path):
@@ -216,3 +242,79 @@ def test_the_command_writes_the_routes_and_tests_then_reports_changes(
     out = capsys.readouterr().out
     assert "+ PUT /api/shop/webhook" in out
     assert "- POST /api/shop/webhook" in out
+
+
+EDGE_FILES = {
+    "pyproject.toml": """
+        [tool.poetry]
+        name = "edge"
+    """,
+    "app.py": """
+        from fastloom.launcher.schemas import App
+
+        from edge.routing import listing
+
+        app = App(routes=listing)
+    """,
+    "edge/__init__.py": "",
+    "edge/paths.py": """
+        from enum import StrEnum
+
+
+        class Path(StrEnum):
+            REPORTS = "/reports"
+    """,
+    "edge/routing.py": """
+        from .api import reports
+        from .api.users import router as users_router
+        from .paths import Path
+
+        listing = [
+            (users_router, "/users", "Users"),
+            (reports.router, Path.REPORTS, "Reports"),
+        ]
+    """,
+    "edge/api/__init__.py": "",
+    "edge/api/users.py": """
+        from fastapi import APIRouter
+
+        router = APIRouter()
+        sessions = APIRouter(prefix="/sessions")
+        router.include_router(sessions)
+
+
+        @router.get(path="/me")
+        @router.get("/self")
+        async def me(): ...
+
+
+        @sessions.delete("/{session_id}")
+        async def end_session(session_id: str): ...
+    """,
+    "edge/api/reports.py": """
+        from fastapi import APIRouter
+
+        router = APIRouter()
+
+
+        @router.websocket("/live")
+        async def live(): ...
+    """,
+}
+
+
+def test_imports_aliases_and_nesting_resolve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    for name, content in EDGE_FILES.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(dedent(content))
+    monkeypatch.chdir(tmp_path)
+
+    assert _routes(tmp_path) == {
+        ("GET", "/api/edge/users/me"),
+        ("GET", "/api/edge/users/self"),
+        ("DELETE", "/api/edge/users/sessions/{session_id}"),
+        ("GET", "/api/edge/reports/live"),
+    }

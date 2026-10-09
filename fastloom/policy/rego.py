@@ -4,7 +4,7 @@ import re
 from fastloom.policy.source import Route
 
 PATH_PARAMETER = re.compile(r"\{[^/}]+\}")
-ROUTE_ENTRY = re.compile(r'^\t(\["[A-Z]+", ".*"\]),$')
+ROUTE_ENTRY = re.compile(r'^\t(\["[A-Z*]+", ".*"\]),$')
 
 PREAMBLE = """package policy
 
@@ -25,7 +25,7 @@ authenticated if claims.sub
 roles := object.get(claims, "roles", [])
 
 requested(route) if {
-\thttp.method == route[0]
+\troute[0] in {http.method, "*"}
 \tregex.match(route_patterns[route], path)
 }"""
 
@@ -57,16 +57,24 @@ def route_key(route: Route) -> str:
 
 
 def pattern(template: str) -> str:
+    trimmed = template.rstrip("/")
     pieces: list[str] = []
     position = 0
-    for parameter in PATH_PARAMETER.finditer(template):
-        pieces.append(re.escape(template[position : parameter.start()]))
-        pieces.append(
-            ".+" if parameter.group().endswith(":path}") else "[^/]+"
-        )
+    for parameter in PATH_PARAMETER.finditer(trimmed):
+        literal = trimmed[position : parameter.start()]
+        catch_all = parameter.group().endswith(":path}")
+        if (
+            catch_all
+            and parameter.end() == len(trimmed)
+            and literal.endswith("/")
+        ):
+            pieces += [re.escape(literal[:-1]), "(?:/.*)?"]
+        else:
+            pieces += [re.escape(literal), ".*" if catch_all else "[^/]+"]
         position = parameter.end()
-    pieces.append(re.escape(template[position:]))
-    return f"^{''.join(pieces)}$"
+    pieces.append(re.escape(trimmed[position:]))
+    regex = "".join(pieces)
+    return f"^{regex}$" if regex.endswith((".*", ".*)?")) else f"^{regex}/?$"
 
 
 def render(routes: list[Route]) -> str:

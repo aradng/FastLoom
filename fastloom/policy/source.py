@@ -126,10 +126,14 @@ type Resolved = Definition | External
 
 class ServiceSource:
     def __init__(self, root: Path):
-        self.root = root
-        self.api_prefix = f"/api/{read_project_name(root / 'pyproject.toml')}"
+        self.root = root.resolve()
+        self.api_prefix = (
+            f"/api/{read_project_name(self.root / 'pyproject.toml')}"
+        )
         self.manager = FullRepoManager(
-            str(root), list(python_files(root)), {FullyQualifiedNameProvider}
+            str(self.root),
+            list(python_files(self.root)),
+            {FullyQualifiedNameProvider},
         )
         self.wrappers: dict[str, cst.MetadataWrapper] = {}
 
@@ -360,20 +364,12 @@ class ServiceSource:
                 internal or self.internal(module, included),
             )
 
-    def routes(self) -> list[Route]:
-        owner = "app"
-        listing = next(
-            (
-                routes
-                for call in m.findall(
-                    self.tree(owner), m.Call(func=named("App"))
-                )
-                if (routes := extracted(call, keyword("routes"))) is not None
-            ),
-            None,
-        )
+    def app_listing(
+        self, call: cst.Call, name: str
+    ) -> tuple[str, Sequence[cst.Element]]:
+        owner, listing = "app", extracted(call, keyword(name))
         if listing is None:
-            raise PolicySourceError("app.py has no App(routes=...)")
+            return owner, ()
         if isinstance(listing, cst.Name):
             match self.resolve(owner, listing):
                 case Definition(
@@ -381,9 +377,24 @@ class ServiceSource:
                 ):
                     owner, listing = module, value
         if not isinstance(listing, cst.List | cst.Tuple):
-            raise PolicySourceError("App(routes=...) must be a literal list")
+            raise PolicySourceError(f"App({name}=...) must be a literal list")
+        return owner, listing.elements
+
+    def mount_path(self, module: str, node: cst.CSTNode) -> str:
+        path = self.string(module, node).rstrip("/")
+        if not path.startswith(self.api_prefix):
+            path = self.api_prefix + path
+        return f"{path}/{{path:path}}"
+
+    def routes(self) -> list[Route]:
+        app = next(
+            iter(m.findall(self.tree("app"), m.Call(func=named("App")))), None
+        )
+        if not isinstance(app, cst.Call):
+            raise PolicySourceError("app.py has no App(...)")
         found: set[Route] = set()
-        for element in listing.elements:
+        owner, entries = self.app_listing(app, "routes")
+        for element in entries:
             entry = m.extract(element.value, ROUTE_ENTRY)
             if entry is None:
                 raise PolicySourceError(
@@ -399,6 +410,17 @@ class ServiceSource:
                     False,
                 )
             )
+        owner, mounts = self.app_listing(app, "mounts")
+        for element in mounts:
+            path = extracted(
+                element.value,
+                m.Tuple(elements=[m.Element(saved()), m.ZeroOrMore()]),
+            )
+            if path is None:
+                raise PolicySourceError(
+                    f"{owner}: each mount must be a (path, app, ...) tuple"
+                )
+            found.add(Route(method="*", path=self.mount_path(owner, path)))
         return sorted(found, key=lambda r: (r.path, r.method))
 
 
