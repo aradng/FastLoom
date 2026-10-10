@@ -7,6 +7,7 @@ from fastapi.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 
 from fastloom.cache.lifehooks import RedisHandler
+from fastloom.constants import MCP_PATH
 from fastloom.extras import AREDIS_OM_INSTALLED, FASTMCP_INSTALLED
 from fastloom.mcp.auth import get_mcp_client
 from fastloom.mcp.settings import MCPSettings
@@ -47,7 +48,7 @@ def get_mcp():
 @lru_cache
 def get_mcp_asgi():
     return get_mcp().http_app(
-        "/mcp",
+        MCP_PATH,
         stateless_http=True,
         middleware=[
             Middleware(

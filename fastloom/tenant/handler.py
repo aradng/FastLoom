@@ -5,6 +5,11 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from fastloom.constants import (
+    RELOAD_PATH,
+    TENANT_SCHEMA_PATH,
+    TENANT_SETTINGS_PATH,
+)
 from fastloom.i18n.base import DoesNotExist
 from fastloom.launcher.depends import reject_external
 from fastloom.launcher.settings import LauncherSettings
@@ -24,18 +29,18 @@ def init_settings_endpoints(
     )
     router = APIRouter(dependencies=dependencies)
 
-    @router.get("/tenant_schema")
+    @router.get(TENANT_SCHEMA_PATH)
     async def get_tenant_schema() -> dict[str, Any]:
         return configs.tenant_schema.get_schema()
 
-    @router.get("/tenant_settings")
+    @router.get(TENANT_SETTINGS_PATH)
     async def get_tenant_settings(tenant: str):
         try:
             return await configs.self[tenant]
         except TenantNotFound as e:
             raise DoesNotExist(_("Tenant")) from e
 
-    @router.post("/tenant_settings")
+    @router.post(TENANT_SETTINGS_PATH)
     async def set_tenant_settings(setting: dict[str, Any], tenant: str):
         old_doc = (
             old_doc.model_dump()
@@ -61,7 +66,7 @@ def init_settings_endpoints(
         await configs.tenant_schema.cache.delete(tenant)
         # ^invalidate cache
 
-    @router.get("/reload")
+    @router.get(RELOAD_PATH)
     async def reload_endpoint() -> JSONResponse:
         reload_app()
         return JSONResponse(content={"status": "ok"})

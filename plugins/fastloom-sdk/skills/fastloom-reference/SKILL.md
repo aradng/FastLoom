@@ -24,6 +24,7 @@ This skill bundles the full fastloom documentation. When the user asks about a f
 | `CustomI18NException`, `i18n_exception_handler`, `get_template`, `lang_dict` | `docs/i18n.md` |
 | `FileIn` / `FileObject` / `FileMessage` / `FileField`, outbox-matching pattern | `docs/file.md` |
 | `MCPSettings`, FastMCP mount, bearer-forwarding auth | `docs/mcp.md` |
+| `fastloom-policy` hook (`policy` extra), generated `policy/routes.rego`, `route_rules` / `prefix_rules`, fail-closed `allow` | `docs/policy.md` |
 | `init_app` / `TC` / auth fixtures, `assert_deep_diff`, testcontainers `create_container` | `docs/test.md` |
 | Cross-cutting conventions: typing rules, `SelfSustaining`, optional-import idiom, validators, naming, dedupe | `docs/conventions.md` |
 

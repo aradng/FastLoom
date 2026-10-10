@@ -16,7 +16,7 @@ Add fastloom with only the extras you actually need:
 uv add "fastloom[fastapi,mongo,rabbit,redis,mcp]"
 ```
 
-Available extras: `fastapi`, `rabbit`, `kafka`, `mongo`, `redis`, `celery`, `httpx`, `requests`, `openai`, `mcp`, plus dev groups `dev` and `test`.
+Available extras: `fastapi`, `rabbit`, `kafka`, `mongo`, `redis`, `celery`, `httpx`, `requests`, `openai`, `mcp`, `policy`, plus dev groups `dev` and `test`.
 
 ## 2. `settings.py`
 
@@ -34,7 +34,7 @@ from fastloom.signals.rabbit.settings import RabbitmqSettings
 
 class Settings(
     BaseGeneralSettings,    # PROJECT_NAME + ENVIRONMENT + IAM + Logging + FastAPI
-    LauncherSettings,       # APP_PORT, DEBUG, WORKERS, SETTINGS_PUBLIC
+    LauncherSettings,       # APP_HOST, APP_PORT, DEBUG, WORKERS, SETTINGS_PUBLIC
     MongoSettings,          # MONGO_URI, MONGO_DATABASE
     RabbitmqSettings,       # RABBIT_URI
     RedisSettings,          # REDIS_URL
@@ -115,10 +115,10 @@ Route triples are `(router, prefix, openapi_tag)`, registered bare. The FastAPI 
 ## 5. Run it
 
 ```bash
-# dev (uvicorn --reload when LauncherSettings.DEBUG=true)
+# dev (uvicorn --reload when LauncherSettings.DEBUG=true); binds APP_HOST:APP_PORT
 launch
 
-# or directly
+# or directly, where --host/--port replace APP_HOST/APP_PORT
 uvicorn fastloom.launcher.main:app --factory --host 0.0.0.0 --port 8000
 ```
 

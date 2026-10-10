@@ -17,7 +17,7 @@ paths: ["**/*.py"]
 
   FIELD: Annotated[str, BeforeValidator(pydantic_env_or_default)] = "default"
   ```
-- `EnvBackend[T]` / `EnvDefault` in `fastloom.observability.settings` are the canonical idiom for OTel-style env-backed fields — copy that pattern.
+- `EnvBackend[T]` / `EnvDefault` in `fastloom.settings.utils` are the canonical idiom for env-backed fields (`OtelConfig`, `LauncherSettings.APP_HOST`) — copy that pattern.
 
 ## Datetime
 

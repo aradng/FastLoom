@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
 
+from fastloom.constants import RABBIT_SCHEMA_URL
 from fastloom.meta import SelfSustaining
 from fastloom.settings.base import MonitoringSettings
 from fastloom.signals.rabbit.middlewares import (
@@ -40,7 +41,7 @@ def get_rabbit_router(settings: RabbitmqSettings) -> RabbitRouter:
 
     return RabbitRouter(
         settings.RABBIT_URI,
-        schema_url="/rabbitapi",
+        schema_url=RABBIT_SCHEMA_URL,
         middlewares=(
             RabbitPayloadTelemetryMiddleware(
                 tracer_provider=trace.get_tracer_provider()

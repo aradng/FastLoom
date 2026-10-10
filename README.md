@@ -9,7 +9,7 @@ Think of it as the glue for your stack: web, messaging, caching, DB, observabili
 ## Why Fastloom
 
 - No boilerplate: minimal scaffolding/templating; most wiring is handled inside the library.
-- Composable: opt into only what you need via extras (`fastapi`, `rabbit`, `kafka`, `mongo`, `redis`, `mcp`, `celery`, `openai`).
+- Composable: opt into only what you need via extras (`fastapi`, `rabbit`, `kafka`, `mongo`, `redis`, `mcp`, `celery`, `openai`, `policy`).
 - Pydantic-first: type-safe models, validators, and clear input/output contracts.
 - Multi-tenant by design: tenant context flows through DI and storage.
 - AuthN/Z via DI: OIDC token introspection and pluggable PDP (ABAC/RBAC/ReBAC) hooks.
@@ -151,6 +151,7 @@ Dive deeper in the docs below.
 - Settings & Configs → [docs/settings.md](docs/settings.md)
 - Tenant → [docs/tenant.md](docs/tenant.md)
 - Auth → [docs/auth.md](docs/auth.md)
+- Policy (OPA route coverage) → [docs/policy.md](docs/policy.md)
 - DB (Mongo/Beanie) → [docs/db.md](docs/db.md)
 - Signals (Rabbit / Kafka) → [docs/signals.md](docs/signals.md)
 - Cache (Redis) → [docs/cache.md](docs/cache.md)

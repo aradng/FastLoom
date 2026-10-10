@@ -4,6 +4,8 @@ from typing import Any
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
+from fastloom.constants import HEALTHCHECK_PATH
+
 
 def init_healthcheck(
     app: FastAPI,
@@ -11,7 +13,7 @@ def init_healthcheck(
 ) -> None:
     router = APIRouter()
 
-    @router.get("/healthcheck")
+    @router.get(HEALTHCHECK_PATH)
     async def healthcheck_endpoint() -> JSONResponse:
         try:
             for handler in healthcheck_handlers:
