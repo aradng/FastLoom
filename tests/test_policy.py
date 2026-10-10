@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from fastloom.healthcheck.handler import init_healthcheck
 from fastloom.policy import main as cli
-from fastloom.policy.rego import ROUTES_FILE, render
+from fastloom.policy.rego import ROUTES_FILE, key, render
 from fastloom.policy.schemas import PolicySourceError, Route
 from fastloom.policy.source import ServiceSource
 from fastloom.test.utils import generate_token
@@ -675,8 +675,7 @@ NOTES = ("GET", "/api/shop/items/{item_id}/notes/{rest:path}")
 
 
 def rule(method: str, path: str, value: str) -> str:
-    key = json.dumps([method, path], ensure_ascii=False)
-    return f"route_rules[{key}] := {value}\n"
+    return f"route_rules[{key(Route(method=method, path=path))}] := {value}\n"
 
 
 def scope(prefix: str, value: str) -> str:
@@ -716,14 +715,13 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     assert out.count("added as todo") == len(SHOP_ROUTES)
     assert 'not "public"' not in out
     assert (
-        'route_patterns[["DELETE", "/api/shop/items/{item_id}"]] := '
-        "`^/api/shop/items/(?P<item_id>[^/]+)$`\n"
-        'route_rules[["DELETE", "/api/shop/items/{item_id}"]] := "todo"\n'
+        'route_rules[["DELETE", "/api/shop/items/{item_id}", '
+        '"^/api/shop/items/(?P<item_id>[^/]+)$"]] := "todo"\n'
         in routes.read_text()
     )
     assert (
-        'route_patterns[["*", "/api/shop/files/{path:path}"]] := '
-        "`^/api/shop/files/(?P<path>.*)$`\n" in routes.read_text()
+        'route_rules[["*", "/api/shop/files/{path:path}", '
+        '"^/api/shop/files/(?P<path>.*)$"]] := "todo"\n' in routes.read_text()
     )
     assert run(*args) == 1
     assert capsys.readouterr().out.count('not "public"') == len(SHOP_ROUTES)
@@ -741,9 +739,9 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
 def test_routes_are_written_in_path_then_method_order(service: Path):
     run()
     keys = [
-        tuple(json.loads(key))
-        for key in re.findall(
-            r"^route_rules\[(\[.*?\])\]",
+        tuple(json.loads(head)[:2])
+        for head in re.findall(
+            r"^route_rules\[(.*?)\] := ",
             (service / "policy" / ROUTES_FILE).read_text(),
             re.MULTILINE,
         )
@@ -892,7 +890,7 @@ def test_prefix_rules_are_kept_sorted_after_the_preamble(service: Path):
     assert (
         text.index(scope("/api/shop/admin", '[["admin"]]'))
         < text.index(scope("/api/shop/items", '[["broker"]]'))
-        < text.index("\nroute_patterns[")
+        < text.index("\nroute_rules[")
     )
     assert run() == 0
 
@@ -948,6 +946,25 @@ def test_an_unreadable_prefix_fails_without_writing(
     assert run() == 1
     assert "cannot read the prefix" in capsys.readouterr().err
     assert routes.read_text() == edited
+
+
+def test_a_two_line_file_keeps_its_rules(service: Path):
+    filled = rule_all(service, {ITEM: '[["admin"]]'}).read_text()
+    routes = service / "policy" / ROUTES_FILE
+    values = {ITEM: '[["admin"]]'}
+    routes.write_text(
+        "package policy\n\n"
+        + "".join(
+            f"route_patterns[{json.dumps(route)}] := `^x$`\n"
+            f"route_rules[{json.dumps(route)}] := "
+            f"{values.get(route, '"public"')}\n\n"
+            for route in SHOP_ROUTES
+        )
+    )
+
+    assert run() == 1
+    assert routes.read_text() == filled
+    assert run() == 0
 
 
 @pytest.mark.parametrize(
@@ -1298,7 +1315,7 @@ PATTERNS = [
 @needs_opa
 def test_each_route_pattern_matches_the_paths_it_answers(tmp_path: Path):
     def case(index: int, template: str, path: str, expected: bool) -> str:
-        route = json.dumps(["GET", template])
+        route = key(Route(method="GET", path=template))
         request = json.dumps(
             {
                 "attributes": {

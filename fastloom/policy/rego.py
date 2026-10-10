@@ -11,10 +11,10 @@ from fastloom.policy.schemas import (
 )
 
 ROUTES_FILE = "routes.rego"
-PATTERN_PREFIX = "route_patterns["
+OLD_PATTERN_PREFIX = "route_patterns["
 RULE_PREFIX = "route_rules["
 SCOPE_PREFIX = "prefix_rules["
-STATEMENTS = (PATTERN_PREFIX, RULE_PREFIX, SCOPE_PREFIX)
+STATEMENTS = (OLD_PATTERN_PREFIX, RULE_PREFIX, SCOPE_PREFIX)
 TODO = '"todo"'
 INDENTED = ("\t", " ", "]", "}")
 
@@ -39,12 +39,12 @@ authenticated if {
 
 roles := object.get(claims, "roles", [])
 
-routes := {route | some route, _ in data.policy.route_patterns}
+routes := {route | some route, _ in data.policy.route_rules}
 
 requested(route) if {
 \troute[0] in {http.method, "*"}
 \tsome candidate in {path, trim_suffix(path, "/"), concat("", [path, "/"])}
-\tregex.match(data.policy.route_patterns[route], candidate)
+\tregex.match(route[2], candidate)
 }
 
 matched := {route | some route in routes; requested(route)}
@@ -85,7 +85,9 @@ allow if {
 
 
 def key(route: Route) -> str:
-    return json.dumps([route.method, route.path], ensure_ascii=False)
+    return json.dumps(
+        [route.method, route.path, pattern(route)], ensure_ascii=False
+    )
 
 
 def pattern(route: Route) -> str:
@@ -95,11 +97,8 @@ def pattern(route: Route) -> str:
         raise PolicySourceError(f"{route.path}: {e}") from e
 
 
-def block(route: Route, rule: str) -> str:
-    return (
-        f"\n{PATTERN_PREFIX}{key(route)}] := `{pattern(route)}`\n"
-        f"{RULE_PREFIX}{key(route)}] := {rule}\n"
-    )
+def line(route: Route, rule: str) -> str:
+    return f"{RULE_PREFIX}{key(route)}] := {rule}\n"
 
 
 def render(
@@ -112,7 +111,10 @@ def render(
             f"{rule}\n"
             for prefix, rule in sorted(scopes.items())
         )
-        + "".join(block(route, rules.get(route, TODO)) for route in routes)
+        + "".join(
+            ("\n" if i == 0 else "") + line(route, rules.get(route, TODO))
+            for i, route in enumerate(routes)
+        )
     )
 
 
@@ -151,7 +153,7 @@ def read(text: str) -> tuple[list[RuleLine], list[ScopeLine]]:
 def read_rule(statement: str) -> RuleLine:
     head, _, value = statement.removeprefix(RULE_PREFIX).partition("] := ")
     try:
-        method, path = json.loads(head)
+        method, path, *_ = json.loads(head)
         return RuleLine(route=Route(method=method, path=path), value=value)
     except ValueError as e:
         raise PolicySourceError(
