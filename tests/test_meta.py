@@ -13,7 +13,7 @@ class Widget(SelfSustaining):
 
 def test_unbound_attr_raises_attribute_error() -> None:
     with pytest.raises(AttributeError, match="not bound"):
-        _ = Widget.name
+        _ = Widget.name  # type: ignore[misc]
 
 
 def test_unbound_self_raises_attribute_error() -> None:
@@ -23,7 +23,7 @@ def test_unbound_self_raises_attribute_error() -> None:
 
 def test_bound_attr_reads_through() -> None:
     Widget()
-    assert Widget.name == "widget"
+    assert Widget.name == "widget"  # type: ignore[misc]
 
 
 async def test_bound_in_task_visible_to_sibling_task() -> None:
@@ -35,7 +35,7 @@ async def test_bound_in_task_visible_to_sibling_task() -> None:
         Widget()
 
     async def read_it() -> str:
-        return Widget.name
+        return Widget.name  # type: ignore[misc]
 
     await asyncio.create_task(bind_it())
     assert await asyncio.create_task(read_it()) == "widget"

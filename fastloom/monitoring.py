@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from collections.abc import Callable, Sequence
-from enum import Enum
+from enum import Enum, member
 from os import getenv
 from typing import TYPE_CHECKING, Any
 
@@ -273,16 +273,16 @@ def instrument_pydantic_ai():
 
 
 class Instruments(Enum):
-    REDIS = instrument_redis
-    CELERY = instrument_celery
-    RABBIT = instrument_rabbit
-    HTTPX = instrument_httpx
-    REQUESTS = instrument_requests
-    METRICS = instrument_metrics
-    MONGODB = instrument_mongodb
-    PYDANTIC = instrument_pydantic
-    PYDANTIC_AI = instrument_pydantic_ai
-    OPENAI = instrument_openai
+    REDIS = member(instrument_redis)
+    CELERY = member(instrument_celery)
+    RABBIT = member(instrument_rabbit)
+    HTTPX = member(instrument_httpx)
+    REQUESTS = member(instrument_requests)
+    METRICS = member(instrument_metrics)
+    MONGODB = member(instrument_mongodb)
+    PYDANTIC = member(instrument_pydantic)
+    PYDANTIC_AI = member(instrument_pydantic_ai)
+    OPENAI = member(instrument_openai)
 
 
 def instrument_otel(

@@ -8,19 +8,23 @@ repos:
           - id: end-of-file-fixer
           - id: check-yaml
           - id: check-added-large-files
+    - repo: https://github.com/tsvikas/sync-with-uv
+      rev: v0.6.0
+      hooks:
+          - id: sync-with-uv
     - repo: https://github.com/pre-commit/mirrors-mypy
-      rev: v1.19.1
+      rev: v2.3.0
       hooks:
       -   id: mypy
           additional_dependencies:
-            - mypy-extensions==1.0.0
-            - "typing-extensions==4.15.0"
-            - "pydantic==2.12.5"
+            - mypy-extensions==1.1.0  # sync-with-uv
+            - "typing-extensions==4.16.0"  # sync-with-uv
+            - "pydantic==2.13.4"  # sync-with-uv
             - "returns"
-            - "types-pyyaml"
+            - "types-pyyaml==6.0.12.20260518"  # sync-with-uv
             - "starlette>=0.40.0,<2.0.0"
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.15.7
+      rev: v0.15.21
       hooks:
         - id: ruff
           args: [ --fix ]

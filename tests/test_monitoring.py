@@ -166,3 +166,8 @@ def test_drop_mcp_client_errors_survives_a_cyclic_cause_chain():
     hint = {"exc_info": (type(a), a, a.__traceback__)}
 
     assert drop_mcp_client_errors(event, hint) is event
+
+
+def test_instruments_are_enum_members() -> None:
+    assert Instruments.RABBIT in Instruments
+    assert all(callable(instrument.value) for instrument in Instruments)
