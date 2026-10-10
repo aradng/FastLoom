@@ -72,7 +72,7 @@ The `TC` singleton exposes two ready-to-go dependencies:
 
 - `TC.auth.get_claims` — required; returns `UserClaims`.
 - `TC.optional_auth.get_claims` — optional; returns `UserClaims | None`.
-- `TC.auth.get_token` / `TC.optional_auth.get_token` — raw string token (after stripping the `Bearer ` prefix).
+- `TC.auth.get_token` / `TC.optional_auth.get_token` — raw string token (after stripping a `Bearer` scheme in any case, RFC 7235).
 
 ```python
 from typing import Annotated

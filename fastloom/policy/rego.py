@@ -1,4 +1,6 @@
 import json
+import re
+from collections import defaultdict
 from collections.abc import Iterable
 
 from starlette.routing import compile_path
@@ -15,10 +17,9 @@ ROUTES_FILE = "routes.rego"
 RULES = "route_rules"
 PATTERNS = "route_patterns"
 SCOPES = "prefix_rules"
-TABLES = (RULES, PATTERNS, SCOPES)
-OLD_STATEMENTS = tuple(f"{name}[" for name in TABLES)
+HEAD = re.compile(rf"^({RULES}|{PATTERNS}|{SCOPES})( := {{}}?$|\[)")
+STRINGS = re.compile(r'"(?:\\.|[^"\\])*"|`[^`]*`')
 TODO = '"todo"'
-INDENTED = ("\t", " ", "]", "}")
 DECODER = json.JSONDecoder()
 
 PREAMBLE = """package policy
@@ -29,8 +30,9 @@ http := input.attributes.request.http
 
 path := urlquery.decode(replace(split(http.path, "?")[0], "+", "%2B"))
 
-bearer := substring(http.headers.authorization, count("Bearer "), -1) if \
-startswith(lower(http.headers.authorization), "bearer ")
+bearer := trim_space(\
+substring(http.headers.authorization, count("bearer "), -1)\
+) if startswith(lower(http.headers.authorization), "bearer ")
 
 claims := payload if [_, payload, _] := io.jwt.decode(bearer)
 
@@ -120,83 +122,54 @@ def render(
     )
 
 
-def opens(line: str) -> bool:
-    return line.startswith(OLD_STATEMENTS) or any(
-        line in (f"{name} := {{", f"{name} := {{}}") for name in TABLES
+def depth(line: str) -> int:
+    bare = STRINGS.sub("", line)
+    return sum(bare.count(c) for c in "[{(") - sum(
+        bare.count(c) for c in "]})"
     )
 
 
-def statements(text: str) -> list[tuple[str, str, str]]:
+def statements(text: str) -> dict[str, list[tuple[str, str]]]:
     lines = text.split("\n")
-    number = next(
-        (i for i, line in enumerate(lines) if opens(line)), len(lines)
+    first = next(
+        (i for i, line in enumerate(lines) if HEAD.match(line)), len(lines)
     )
-    found: list[tuple[str, str, str]] = []
-    while number < len(lines):
-        line = lines[number]
-        name = line.split(" ")[0].split("[")[0]
-        if line.strip() == "" or line == f"{name} := {{}}":
-            number += 1
-        elif name in TABLES and line == f"{name} := {{":
-            number, entries = table_entries(lines, number + 1)
-            found += [(name, key, value) for key, value in entries]
-        elif line.startswith(OLD_STATEMENTS):
-            statement = [line]
-            number += 1
-            while number < len(lines) and lines[number].startswith(INDENTED):
-                statement.append(lines[number])
-                number += 1
-            key, _, value = (
-                "\n\t".join(statement)
-                .removeprefix(f"{name}[")
-                .partition("] := ")
-            )
-            found.append((name, key, value))
-        else:
-            raise PolicySourceError(
-                f"{ROUTES_FILE}:{number + 1}: {line.strip()} is not part of "
-                "a rule; keep other rego in its own file"
-            )
-    return found
-
-
-def table_entries(
-    lines: list[str], start: int
-) -> tuple[int, list[tuple[str, str]]]:
-    found: list[list[str]] = []
+    found: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    table: str | None = None
+    opened = 0
     current: list[str] = []
     level = 0
-    for number, line in enumerate(lines[start:], start):
-        if not current and line == "}":
-            return number + 1, [entry("\n".join(e).strip()) for e in found]
-        if not current and line.strip() == "":
-            continue
+    for number, raw in enumerate(lines[first:], first + 1):
+        line = raw.rstrip()
+        if not current:
+            head = HEAD.match(line)
+            if not line or (head and head[2] == " := {}"):
+                continue
+            if line.lstrip().startswith("#") or not (table or head):
+                raise PolicySourceError(
+                    f"{ROUTES_FILE}:{number}: {line.strip()} is not part "
+                    "of a rule; keep other rego in its own file"
+                )
+            if head and head[2] != "[" or line == "}":
+                table, opened = (head[1], number) if head else (None, 0)
+                continue
         current.append(line)
         level += depth(line)
-        if level <= 0:
-            found.append(current)
-            current, level = [], 0
-    raise PolicySourceError(f"{ROUTES_FILE}: a table is never closed")
-
-
-def depth(line: str) -> int:
-    level = 0
-    quote: str | None = None
-    escaped = False
-    for char in line:
-        if escaped:
-            escaped = False
-        elif quote == '"' and char == "\\":
-            escaped = True
-        elif quote is not None:
-            quote = None if char == quote else quote
-        elif char in '"`':
-            quote = char
-        elif char in "[{(":
-            level += 1
-        elif char in "]})":
-            level -= 1
-    return level
+        if level > 0:
+            continue
+        if table:
+            found[table].append(entry("\n".join(current).strip()))
+        else:
+            name, _, statement = "\n\t".join(current).partition("[")
+            key, _, value = statement.partition("] := ")
+            found[name].append((key, value))
+        current, level = [], 0
+    if table or current:
+        raise PolicySourceError(
+            f"{ROUTES_FILE}:{opened or number}: "
+            f"{table or current[0].strip()} is never closed"
+        )
+    return found
 
 
 def entry(text: str) -> tuple[str, str]:
@@ -204,33 +177,27 @@ def entry(text: str) -> tuple[str, str]:
         _, end = DECODER.raw_decode(text)
     except ValueError:
         end = 0
-    key, colon, value = text[:end], *text[end:].lstrip().partition(":")[1:]
-    if not colon:
-        raise PolicySourceError(
-            f"{ROUTES_FILE}: cannot read the key of {text.strip()}"
-        )
-    return key, value.strip().removesuffix(",").rstrip()
+    key, value = text[:end], text[end:].lstrip()
+    if not value.startswith(":"):
+        raise PolicySourceError(f"{ROUTES_FILE}: cannot read {text}")
+    return key, value[1:].strip().removesuffix(",").rstrip()
 
 
 def read(text: str) -> tuple[list[RuleLine], list[ScopeLine]]:
     found = statements(text)
     return (
-        [read_rule(key, value) for name, key, value in found if name == RULES],
-        [
-            read_scope(key, value)
-            for name, key, value in found
-            if name == SCOPES
-        ],
+        [read_rule(*e) for e in found[RULES]],
+        [read_scope(*e) for e in found[SCOPES]],
     )
 
 
 def read_rule(key: str, value: str) -> RuleLine:
     try:
-        method, path, *_ = json.loads(key)
+        method, path = json.loads(key)
         return RuleLine(route=Route(method=method, path=path), value=value)
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         raise PolicySourceError(
-            f"{ROUTES_FILE}: cannot read the route in {RULES}[{key}]"
+            f"{ROUTES_FILE}: cannot read the route {key}"
         ) from e
 
 
@@ -239,5 +206,5 @@ def read_scope(key: str, value: str) -> ScopeLine:
         return ScopeLine(prefix=PREFIX_ADAPTER.validate_json(key), value=value)
     except ValueError as e:
         raise PolicySourceError(
-            f"{ROUTES_FILE}: cannot read the prefix in {SCOPES}[{key}]"
+            f"{ROUTES_FILE}: cannot read the prefix {key}"
         ) from e
