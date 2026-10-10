@@ -12,7 +12,7 @@ Generate the three files every fastloom service needs at its project root, plus 
 Ask in one round:
 
 1. **Service name** (used as the Python package and `PROJECT_NAME`).
-2. **Capabilities needed** — multi-select from: `mongo`, `rabbit`, `kafka`, `redis`, `mcp`, `celery`, `httpx`, `openai`. `fastapi` is always included.
+2. **Capabilities needed** — multi-select from: `mongo`, `rabbit`, `kafka`, `redis`, `mcp`, `celery`, `httpx`, `openai`, `policy` (the `fastloom-policy` OPA route hook, see `docs/policy.md`). `fastapi` is always included.
 3. **IAM mode** — OIDC (`OIDC_URL`) or OAuth2 (`authorizationUrl` + `tokenUrl`) or none for local dev.
 
 ## Generate

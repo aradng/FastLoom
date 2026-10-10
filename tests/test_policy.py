@@ -1,4 +1,3 @@
-import base64
 import json
 import re
 import shutil
@@ -8,16 +7,14 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
+from fastapi import FastAPI
 
+from fastloom.healthcheck.handler import init_healthcheck
 from fastloom.policy import main as cli
 from fastloom.policy.rego import ROUTES_FILE, render
-from fastloom.policy.schemas import Route
-from fastloom.policy.source import (
-    CAPABILITY_ROUTES,
-    FRAMEWORK_ROUTES,
-    PolicySourceError,
-    ServiceSource,
-)
+from fastloom.policy.schemas import PolicySourceError, Route
+from fastloom.policy.source import ServiceSource
+from fastloom.test.utils import generate_token
 
 FILES = {
     "pyproject.toml": """
@@ -117,16 +114,47 @@ FILES = {
 
         @router.post("/agent/")
         async def agent(): ...
+
+
+        @router.get("/a+b")
+        async def plus(): ...
     """,
+}
+
+
+FRAMEWORK = {
+    ("GET", "/healthcheck"),
+    ("GET", "/tenant_schema"),
+    ("GET", "/tenant_settings"),
+    ("POST", "/tenant_settings"),
+    ("GET", "/reload"),
+    ("GET", "/docs"),
+    ("GET", "/docs/oauth2-redirect"),
+    ("GET", "/redoc"),
+    ("GET", "/openapi.json"),
+}
+CAPABILITIES = {
+    "MCPSettings": {("*", "/mcp")},
+    "RabbitmqSettings": {
+        ("GET", "/rabbitapi"),
+        ("GET", "/rabbitapi.json"),
+        ("GET", "/rabbitapi.yaml"),
+        ("POST", "/rabbitapi/try"),
+    },
+    "KafkaSettings": {
+        ("GET", "/kafkaapi"),
+        ("GET", "/kafkaapi.json"),
+        ("GET", "/kafkaapi.yaml"),
+        ("POST", "/kafkaapi/try"),
+    },
 }
 
 
 def framework(prefix: str, *capabilities: str) -> set[tuple[str, str]]:
     return {
         (method, prefix + path)
-        for method, path in (
-            *FRAMEWORK_ROUTES,
-            *(r for name in capabilities for r in CAPABILITY_ROUTES[name]),
+        for method, path in FRAMEWORK.union(
+            *(CAPABILITIES[name] for name in capabilities)
         )
     }
 
@@ -143,6 +171,7 @@ SHOP_ROUTES = framework("/api/shop") | {
     ("GET", "/api/shop/chart/dashboard/boards/{board_id}"),
     ("POST", "/api/shop/webhook"),
     ("POST", "/api/shop/agent/"),
+    ("GET", "/api/shop/a+b"),
     ("*", "/api/shop/files/{path:path}"),
 }
 
@@ -314,6 +343,24 @@ FAILURES = {
         "async def agent(: ...",
         "shop.api.hooks: cannot parse",
     ),
+    "attribute of a constant": (
+        "shop/api/admin.py",
+        "@router.get(STATS)",
+        "@router.get(STATS.name)",
+        r"cannot read STATS\.name",
+    ),
+    "router includes itself": (
+        "shop/api/chart/__init__.py",
+        "router.include_router(dashboard.router",
+        "router.include_router(router",
+        "includes itself",
+    ),
+    "import above the top package": (
+        "app.py",
+        "from fastloom.launcher.schemas import App\n",
+        "from fastloom.launcher.schemas import App\nfrom .. import nothing\n",
+        r"cannot resolve from \.\. import nothing",
+    ),
 }
 
 
@@ -383,6 +430,7 @@ EDGE_FILES = {
             SPREAD = "/spread"
     """,
     "edge/routing.py": """
+        import edge.api.misc
         import edge.api.package.child
 
         from .api import chain, reports, spread
@@ -394,11 +442,13 @@ EDGE_FILES = {
             (reports.router, Path.REPORTS, "Reports"),
             (chain.top, Legacy.CHAIN.value, "Chain"),
             (spread.router, Prefix.SPREAD, "Spread"),
+            (edge.api.misc.router, "/m", "Misc"),
         )
         mounted = (
             ("/api/edge/static", object()),
             ("/api/edge-extra", object()),
             ("", object()),
+            ("/api/edge", object()),
         )
     """,
     "edge/api/__init__.py": "",
@@ -499,6 +549,18 @@ EDGE_FILES = {
         async def package(): ...
     """,
     "edge/api/package/child.py": "",
+    "edge/api/misc.py": (
+        "import fastapi\n\n"
+        'router = fastapi.APIRouter(prefix="/z")\n'
+        "later: fastapi.APIRouter\n\n\n"
+        "class Holder:\n"
+        '    router = fastapi.APIRouter(prefix="/shadow")\n\n\n'
+        "def register():\n"
+        '    @router.get("/inside")\n'
+        "    async def inside(): ...\n\n\n"
+        '@router.get("/misc")\n'
+        "async def misc(): ...\n"
+    ),
     "edge/api/spread/more.py": """
         from . import router as spread
 
@@ -524,6 +586,7 @@ def test_routes_resolve_across_modules_aliases_and_nesting(tmp_path: Path):
         ("HEAD", "/api/edge/reports/live"),
         ("OPTIONS", "/api/edge/reports/سلام"),
         ("GET", "/api/edge/spread/s/package"),
+        ("GET", "/api/edge/m/z/misc"),
         ("GET", "/api/edge/chain/top/m/middle/b/bottom/leaf"),
         ("GET", "/api/edge/chain/top/side/"),
         ("TRACE", "/api/edge/spread/s/trace"),
@@ -541,26 +604,61 @@ def test_routes_resolve_across_modules_aliases_and_nesting(tmp_path: Path):
     } | framework("/api/edge")
 
 
+SETTINGS_IMPORTS = (
+    "import fastloom.mcp.settings as mcp\n"
+    "from fastloom.settings.general import BaseGeneralSettings\n"
+    "from fastloom.signals.kafka.settings import KafkaSettings\n"
+    "from fastloom.signals.rabbit.settings import RabbitmqSettings\n\n\n"
+)
+CAPABLE = {
+    "plain": ("class Settings(BaseGeneralSettings): ...\n", ()),
+    "mcp through a module": (
+        "class Settings(BaseGeneralSettings, mcp.MCPSettings): ...\n",
+        ("MCPSettings",),
+    ),
+    "brokers": (
+        "class Settings(KafkaSettings, RabbitmqSettings): ...\n",
+        ("KafkaSettings", "RabbitmqSettings"),
+    ),
+    "inherited": (
+        "class Common(KafkaSettings): ...\n\n\nclass Settings(Common): ...\n",
+        ("KafkaSettings",),
+    ),
+    "only Settings counts": (
+        "class TenantSettings(mcp.MCPSettings): ...\n\n\n"
+        "class Settings(BaseGeneralSettings): ...\n",
+        (),
+    ),
+}
+
+
 @pytest.mark.parametrize(
-    "bases",
-    [
-        ("BaseGeneralSettings",),
-        ("BaseGeneralSettings", "MCPSettings"),
-        ("BaseGeneralSettings", "KafkaSettings", "RabbitmqSettings"),
-    ],
-    ids=["plain", "mcp", "brokers"],
+    ("code", "capabilities"), CAPABLE.values(), ids=CAPABLE
 )
 def test_fastloom_routes_follow_the_settings_capabilities(
-    service: Path, bases: tuple[str, ...]
+    service: Path, code: str, capabilities: tuple[str, ...]
 ):
-    write(
-        service,
-        {"settings.py": f"class Settings({', '.join(bases)}): ...\n"},
-    )
+    write(service, {"settings.py": SETTINGS_IMPORTS + code})
 
-    assert read(service) == SHOP_ROUTES | framework(
-        "/api/shop", *(b for b in bases if b in CAPABILITY_ROUTES)
-    )
+    assert read(service) == SHOP_ROUTES | framework("/api/shop", *capabilities)
+
+
+def test_an_unreadable_settings_base_fails(service: Path):
+    write(service, {"settings.py": "class Settings(make_base()): ...\n"})
+
+    with pytest.raises(PolicySourceError, match="cannot read the base class"):
+        ServiceSource(service).routes()
+
+
+def test_fastloom_routes_match_what_fastapi_and_fastloom_register():
+    app = FastAPI()
+    init_healthcheck(app, [])
+
+    assert {
+        (method, route.path)
+        for route in app.routes
+        for method in getattr(route, "methods", set()) - {"HEAD"}
+    } <= FRAMEWORK
 
 
 def run(*args: str) -> int:
@@ -569,6 +667,7 @@ def run(*args: str) -> int:
 
 
 STATS = ("GET", "/api/shop/admin/v1/stats")
+ITEMS = ("GET", "/api/shop/items")
 ITEM = ("GET", "/api/shop/items/{item_id}")
 SPECIAL = ("GET", "/api/shop/items/special")
 DELETE_ITEM = ("DELETE", "/api/shop/items/{item_id}")
@@ -578,6 +677,15 @@ NOTES = ("GET", "/api/shop/items/{item_id}/notes/{rest:path}")
 def rule(method: str, path: str, value: str) -> str:
     key = json.dumps([method, path], ensure_ascii=False)
     return f"route_rules[{key}] := {value}\n"
+
+
+def scope(prefix: str, value: str) -> str:
+    key = json.dumps(prefix, ensure_ascii=False)
+    return f"prefix_rules[{key}] := {value}\n"
+
+
+def append(routes: Path, line: str) -> None:
+    routes.write_text(routes.read_text() + "\n" + line)
 
 
 def rule_all(service: Path, values: dict[tuple[str, str], str | None]) -> Path:
@@ -600,10 +708,13 @@ def rule_all(service: Path, values: dict[tuple[str, str], str | None]) -> Path:
 def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     service: Path, capsys: pytest.CaptureFixture[str], args: list[str]
 ):
-    routes = service / (args[-1] if args else "policy") / ROUTES_FILE
+    directory = args[-1] if args else "policy"
+    routes = service / directory / ROUTES_FILE
 
     assert run(*args) == 1
-    assert capsys.readouterr().out.count("added as todo") == len(SHOP_ROUTES)
+    out = capsys.readouterr().out
+    assert out.count("added as todo") == len(SHOP_ROUTES)
+    assert 'not "public"' not in out
     assert (
         'route_patterns[["DELETE", "/api/shop/items/{item_id}"]] := '
         "`^/api/shop/items/(?P<item_id>[^/]+)$`\n"
@@ -618,10 +729,27 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     assert capsys.readouterr().out.count('not "public"') == len(SHOP_ROUTES)
 
     replace(service, str(routes), '"todo"', '"public"')
-
     assert run(*args) == 0
     assert capsys.readouterr().out == ""
-    assert not (service / ("policy" if args else "rules")).exists()
+    written = routes.stat().st_mtime_ns
+    assert run(*args) == 0
+    assert routes.stat().st_mtime_ns == written
+    other = "policy" if args else "rules"
+    assert not (service / other).exists()
+
+
+def test_routes_are_written_in_path_then_method_order(service: Path):
+    run()
+    keys = [
+        tuple(json.loads(key))
+        for key in re.findall(
+            r"^route_rules\[(\[.*?\])\]",
+            (service / "policy" / ROUTES_FILE).read_text(),
+            re.MULTILINE,
+        )
+    ]
+
+    assert keys == sorted(keys, key=lambda k: (k[1], k[0]))
 
 
 @pytest.mark.parametrize(
@@ -630,9 +758,18 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
         '"authenticated"',
         '[["owner:read", "admin:write"], ["admin"]]',
         '[\n\t["owner:read", "admin:write"],\n\t["admin"],\n]',
+        '[\n    ["owner:read", "admin:write"],\n    ["admin"],\n]',
         '[{"owner:read", "admin:write"}, {"admin"}]',
+        '[{\n\t"admin",\n}]',
     ],
-    ids=["authenticated", "roles", "roles across lines", "roles as sets"],
+    ids=[
+        "authenticated",
+        "roles",
+        "roles across lines",
+        "space indented",
+        "roles as sets",
+        "set closed on its own line",
+    ],
 )
 def test_a_well_formed_rule_passes_and_survives_the_rewrite(
     service: Path, value: str
@@ -654,6 +791,8 @@ PROBLEMS = {
     "not a role name": '[["admin", 1]]',
     "python tuple": '[("admin",)]',
     "set of sets": '{{"admin"}}',
+    "rego syntax": '[["admin"]] if x',
+    "not a literal": "data.roles",
 }
 
 
@@ -691,43 +830,79 @@ def test_a_changed_route_keeps_the_other_rules(
     assert '"POST", "/api/shop/agent/"' not in text
 
 
-def test_a_route_listed_twice_fails_without_writing(
-    service: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("line", "message"),
+    [
+        (
+            rule(*SPECIAL, '"public"'),
+            "lists GET /api/shop/items/special twice",
+        ),
+        (scope("/api/shop", '"public"') * 2, "lists prefix /api/shop twice"),
+    ],
+    ids=["route", "prefix"],
+)
+def test_a_line_listed_twice_fails_without_writing(
+    service: Path, capsys: pytest.CaptureFixture[str], line: str, message: str
 ):
     routes = rule_all(service, {})
-    routes.write_text(routes.read_text() + "\n" + rule(*SPECIAL, '"public"'))
+    append(routes, line)
     edited = routes.read_text()
 
     assert run() == 1
-    assert "lists GET /api/shop/items/special twice" in capsys.readouterr().err
+    assert message in capsys.readouterr().err
     assert routes.read_text() == edited
 
 
-def test_anything_outside_a_rule_value_is_regenerated(service: Path):
+def test_other_rego_in_the_file_fails_without_writing(
+    service: Path, capsys: pytest.CaptureFixture[str]
+):
+    routes = rule_all(service, {})
+    append(routes, "x := 1\n")
+    edited = routes.read_text()
+
+    assert run() == 1
+    assert "x := 1 is not part of a rule" in capsys.readouterr().err
+    assert routes.read_text() == edited
+
+
+def test_a_rule_cut_by_a_blank_line_fails_without_writing(service: Path):
+    routes = rule_all(service, {STATS: '[\n\t["admin"],\n\n\t["owner"],\n]'})
+    edited = routes.read_text()
+
+    assert run() == 1
+    assert routes.read_text() == edited
+
+
+def test_an_edited_preamble_is_regenerated(service: Path):
     routes = rule_all(service, {})
     filled = routes.read_text()
-    routes.write_text(
-        filled.replace("default allow := false", "") + "x := 1\n"
-    )
+    routes.write_text(filled.replace("default allow := false\n", ""))
 
     assert run() == 1
     assert routes.read_text() == filled
-    assert run() == 0
 
 
-def scope(prefix: str, value: str) -> str:
-    return f"prefix_rules[{json.dumps(prefix)}] := {value}\n"
-
-
-def test_a_prefix_rule_survives_the_rewrite(service: Path):
+def test_prefix_rules_are_kept_sorted_after_the_preamble(service: Path):
     routes = rule_all(service, {})
-    routes.write_text(
-        routes.read_text() + "\n" + scope("/api/shop/items", '[["broker"]]')
-    )
+    append(routes, scope("/api/shop/items", '[["broker"]]'))
+    append(routes, scope("/api/shop/admin", '[["admin"]]'))
 
     assert run() == 1
-    assert scope("/api/shop/items", '[["broker"]]') in routes.read_text()
+    text = routes.read_text()
+    assert (
+        text.index(scope("/api/shop/admin", '[["admin"]]'))
+        < text.index(scope("/api/shop/items", '[["broker"]]'))
+        < text.index("\nroute_patterns[")
+    )
     assert run() == 0
+
+
+def test_a_non_ascii_prefix_is_kept_as_written(service: Path):
+    routes = rule_all(service, {})
+    append(routes, scope("/api/shop/سلام", '"authenticated"'))
+    run()
+
+    assert scope("/api/shop/سلام", '"authenticated"') in routes.read_text()
 
 
 @pytest.mark.parametrize(
@@ -738,7 +913,7 @@ def test_a_prefix_rule_survives_the_rewrite(service: Path):
     ],
     ids=["no route under it", "malformed rule"],
 )
-def test_a_bad_prefix_rule_is_reported(
+def test_a_bad_prefix_rule_fails_once_the_file_is_settled(
     service: Path,
     capsys: pytest.CaptureFixture[str],
     prefix: str,
@@ -746,7 +921,8 @@ def test_a_bad_prefix_rule_is_reported(
     message: str,
 ):
     routes = rule_all(service, {})
-    routes.write_text(routes.read_text() + "\n" + scope(prefix, value))
+    append(routes, scope(prefix, value))
+    run()
     capsys.readouterr()
 
     assert run() == 1
@@ -758,14 +934,15 @@ def test_a_bad_prefix_rule_is_reported(
     [
         'prefix_rules["api/shop"] := "public"\n',
         'prefix_rules[/api/shop] := "public"\n',
+        'prefix_rules["/api/shop/{id}"] := "public"\n',
     ],
-    ids=["no leading slash", "not a string"],
+    ids=["no leading slash", "not a string", "a parameter"],
 )
 def test_an_unreadable_prefix_fails_without_writing(
     service: Path, capsys: pytest.CaptureFixture[str], line: str
 ):
     routes = rule_all(service, {})
-    routes.write_text(routes.read_text() + "\n" + line)
+    append(routes, line)
     edited = routes.read_text()
 
     assert run() == 1
@@ -815,17 +992,18 @@ def test_an_unreadable_source_fails_without_writing(
     assert not (service / "policy").exists()
 
 
-def token(
-    roles: list[str], expires_in: int = 600, sub: str | None = "u"
-) -> str:
-    def part(data: dict[str, object]) -> str:
-        encoded = base64.urlsafe_b64encode(json.dumps(data).encode())
-        return encoded.rstrip(b"=").decode()
+def token(roles: list[str], **claims: object) -> str:
+    payload = {
+        "sub": "u",
+        "roles": roles,
+        "exp": int(time.time()) + 600,
+    } | claims
+    present = {k: v for k, v in payload.items() if v is not None}
+    return f"Bearer {generate_token(json.dumps(present))}"
 
-    claims = {"roles": roles, "exp": int(time.time()) + expires_in} | (
-        {} if sub is None else {"sub": sub}
-    )
-    return f"Bearer {part({'alg': 'HS256'})}.{part(claims)}.c2ln"
+
+def auth(value: str) -> dict[str, str]:
+    return {"authorization": value}
 
 
 needs_opa = pytest.mark.skipif(
@@ -833,48 +1011,78 @@ needs_opa = pytest.mark.skipif(
 )
 
 
-def opa(service: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def opa(directory: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["opa", *args], cwd=service, capture_output=True, text=True
+        ["opa", *args],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
 
 
+def assert_allow(
+    directory: Path,
+    method: str,
+    path: str,
+    headers: dict[str, str],
+    allowed: bool,
+) -> None:
+    request = {"method": method, "path": path, "headers": headers}
+    write(
+        directory,
+        {
+            "input.json": json.dumps(
+                {"attributes": {"request": {"http": request}}}
+            )
+        },
+    )
+    decision = opa(
+        directory,
+        "eval",
+        "-f",
+        "raw",
+        "-d",
+        "policy",
+        "-i",
+        "input.json",
+        "data.policy.allow",
+    )
+    assert decision.stdout.strip() == str(allowed).lower(), decision.stderr
+
+
 @needs_opa
-@pytest.mark.parametrize(
-    "state", ["todo", "ruled", "no routes"], ids=["todo", "ruled", "no routes"]
-)
+@pytest.mark.parametrize("state", ["todo", "ruled", "prefixed", "no routes"])
 def test_the_generated_policy_is_valid_rego(service: Path, state: str):
     if state == "no routes":
         write(service, {"app.py": "from x import App\n\napp = App()\n"})
     run()
-    if state == "ruled":
-        rule_all(service, {STATS: '[["admin"]]'})
+    if state in ("ruled", "prefixed"):
+        routes = rule_all(service, {STATS: '[["admin"]]'})
+    if state == "prefixed":
+        append(routes, scope("/api/shop/admin", '[["admin"]]'))
+        run()
     write(service, {"policy/custom.rego": CUSTOM})
 
     assert opa(service, "fmt", "--diff", "--fail", "policy").stdout == ""
     checked = opa(service, "check", "--strict", "policy")
     assert checked.returncode == 0, checked.stdout + checked.stderr
+    v0 = opa(service, "check", "--v0-compatible", f"policy/{ROUTES_FILE}")
+    assert v0.returncode == 0, v0.stdout + v0.stderr
 
 
-CUSTOM = """package policy
-
-allow if http.headers["x-internal-key"] == "k"
-"""
+CUSTOM = 'package policy\n\nallow if http.headers["x-internal-key"] == "k"\n'
 RULES: dict[tuple[str, str], str | None] = {
     DELETE_ITEM: '"authenticated"',
     STATS: '[["owner:read", "admin:write"], ["admin"]]',
     ITEM: '[["admin"]]',
 }
-
-
-def auth(value: str) -> dict[str, str]:
-    return {"authorization": value}
-
-
+ITEM_1 = ("DELETE", "/api/shop/items/1")
 DECISIONS = {
     "public, no token": ("GET", "/api/shop/items/?a=1", {}, {}, True),
     "mount root": ("PATCH", "/api/shop/files", {}, {}, True),
     "catch-all": ("GET", "/api/shop/items/1/notes/a/b", {}, {}, True),
+    "a plus in the path": ("GET", "/api/shop/a+b", {}, {}, True),
     "encoded slash matches the decoded route": (
         "GET",
         "/api/shop/items/1%2Fnotes%2Fx",
@@ -883,49 +1091,21 @@ DECISIONS = {
         False,
     ),
     "malformed escape": ("GET", "/api/shop/items%zz", {}, {}, False),
-    "authenticated, no token": ("DELETE", "/api/shop/items/1", {}, {}, False),
-    "authenticated": (
-        "DELETE",
-        "/api/shop/items/1",
-        auth(token([])),
-        {},
-        True,
-    ),
+    "authenticated, no token": (*ITEM_1, {}, {}, False),
+    "authenticated": (*ITEM_1, auth(token([])), {}, True),
     "expired": (
-        "DELETE",
-        "/api/shop/items/1",
-        auth(token([], -60)),
+        *ITEM_1,
+        auth(token([], exp=int(time.time()) - 60)),
         {},
         False,
     ),
-    "empty sub": (
-        "DELETE",
-        "/api/shop/items/1",
-        auth(token([], sub="")),
-        {},
-        False,
-    ),
-    "no sub": (
-        "DELETE",
-        "/api/shop/items/1",
-        auth(token([], sub=None)),
-        {},
-        False,
-    ),
-    "not a bearer": (
-        "DELETE",
-        "/api/shop/items/1",
-        auth("Basic dTpw"),
-        {},
-        False,
-    ),
-    "the service's own allow": (
-        "DELETE",
-        "/api/shop/items/1",
-        {"x-internal-key": "k"},
-        {},
-        True,
-    ),
+    "exp not a number": (*ITEM_1, auth(token([], exp="soon")), {}, False),
+    "no exp": (*ITEM_1, auth(token([], exp=None)), {}, False),
+    "empty sub": (*ITEM_1, auth(token([], sub="")), {}, False),
+    "sub not a string": (*ITEM_1, auth(token([], sub=123)), {}, False),
+    "no sub": (*ITEM_1, auth(token([], sub=None)), {}, False),
+    "not a bearer": (*ITEM_1, auth("Basic dTpw"), {}, False),
+    "the service's own allow": (*ITEM_1, {"x-internal-key": "k"}, {}, True),
     "one role of a pair": (*STATS, auth(token(["owner:read"])), {}, False),
     "both roles of a pair": (
         *STATS,
@@ -934,6 +1114,18 @@ DECISIONS = {
         True,
     ),
     "the other alternative": (*STATS, auth(token(["admin"])), {}, True),
+    "role on an expired token": (
+        *STATS,
+        auth(token(["admin"], exp=int(time.time()) - 60)),
+        {},
+        False,
+    ),
+    "role without a sub": (
+        *STATS,
+        auth(token(["admin"], sub=None)),
+        {},
+        False,
+    ),
     "roles as sets": (
         *STATS,
         auth(token(["admin"])),
@@ -989,72 +1181,98 @@ def test_the_generated_policy_decides_in_opa(
 ):
     rule_all(service, RULES | overrides)
     write(service, {"policy/custom.rego": CUSTOM})
-    request = {"method": method, "path": path, "headers": headers}
-    write(
-        service,
-        {
-            "input.json": json.dumps(
-                {"attributes": {"request": {"http": request}}}
-            )
-        },
-    )
 
-    decision = opa(
-        service,
-        "eval",
-        "-f",
-        "raw",
-        "-d",
-        "policy",
-        "-i",
-        "input.json",
-        "data.policy.allow",
-    )
-    assert decision.stdout.strip() == str(allowed).lower(), decision.stderr
+    assert_allow(service, method, path, headers, allowed)
 
 
-PREFIXED = {
-    "route role alone": (["admin"], False),
-    "prefix role alone": (["broker"], False),
-    "both": (["broker", "admin"], True),
+GUARDED = {
+    "route role alone": (
+        {"/api/shop/admin": '[["broker"]]'},
+        STATS,
+        auth(token(["admin"])),
+        False,
+    ),
+    "prefix role alone": (
+        {"/api/shop/admin": '[["broker"]]'},
+        STATS,
+        auth(token(["broker"])),
+        False,
+    ),
+    "both roles": (
+        {"/api/shop/admin": '[["broker"]]'},
+        STATS,
+        auth(token(["broker", "admin"])),
+        True,
+    ),
+    "anonymous under a role prefix": (
+        {"/api/shop/items": '[["broker"]]'},
+        ITEMS,
+        {},
+        False,
+    ),
+    "a role prefix over a public route": (
+        {"/api/shop/items": '[["broker"]]'},
+        ITEMS,
+        auth(token(["broker"])),
+        True,
+    ),
+    "authenticated prefix, no token": (
+        {"/api/shop/items": '"authenticated"'},
+        ITEMS,
+        {},
+        False,
+    ),
+    "authenticated prefix": (
+        {"/api/shop/items": '"authenticated"'},
+        ITEMS,
+        auth(token([])),
+        True,
+    ),
+    "nested prefixes, outer only": (
+        {"/api/shop": '"authenticated"', "/api/shop/items": '[["broker"]]'},
+        ITEMS,
+        auth(token([])),
+        False,
+    ),
+    "nested prefixes": (
+        {"/api/shop": '"authenticated"', "/api/shop/items": '[["broker"]]'},
+        ITEMS,
+        auth(token(["broker"])),
+        True,
+    ),
+    "a sibling name is not under the prefix": (
+        {"/api/shop/item": '[["broker"]]'},
+        ITEMS,
+        {},
+        True,
+    ),
+    "a parameter route under the prefix": (
+        {"/api/shop/items/7": '[["broker"]]'},
+        ("GET", "/api/shop/items/7"),
+        {},
+        False,
+    ),
 }
 
 
 @needs_opa
-@pytest.mark.parametrize(("roles", "allowed"), PREFIXED.values(), ids=PREFIXED)
-def test_a_prefix_rule_is_anded_with_the_route_rule_in_opa(
-    service: Path, roles: list[str], allowed: bool
+@pytest.mark.parametrize(
+    ("prefixes", "request_route", "headers", "allowed"),
+    GUARDED.values(),
+    ids=GUARDED,
+)
+def test_a_prefix_rule_guards_every_request_under_it_in_opa(
+    service: Path,
+    prefixes: dict[str, str],
+    request_route: tuple[str, str],
+    headers: dict[str, str],
+    allowed: bool,
 ):
     routes = rule_all(service, {STATS: '[["admin"]]'})
-    routes.write_text(
-        routes.read_text() + "\n" + scope("/api/shop/admin", '[["broker"]]')
-    )
-    request = {
-        "method": "GET",
-        "path": "/api/shop/admin/v1/stats",
-        "headers": auth(token(roles)),
-    }
-    write(
-        service,
-        {
-            "input.json": json.dumps(
-                {"attributes": {"request": {"http": request}}}
-            )
-        },
-    )
+    for prefix, value in prefixes.items():
+        append(routes, scope(prefix, value))
 
-    decision = opa(
-        service,
-        "eval",
-        "-f",
-        "raw",
-        "-d",
-        "policy",
-        "-i",
-        "input.json",
-        "data.policy.allow",
-    )
-    assert decision.stdout.strip() == str(allowed).lower(), decision.stderr
+    assert_allow(service, *request_route, headers, allowed)
 
 
 PATTERNS = [

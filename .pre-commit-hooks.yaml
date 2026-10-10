@@ -4,7 +4,7 @@
   entry: fastloom-policy
   language: python
   language_version: "3.13"
-  files: \.py$|^pyproject\.toml$|routes\.rego$
-  # NOTE: keep this starlette range equal to the policy extra in pyproject.toml
-  additional_dependencies: ["starlette>=0.40.0,<2.0.0"]
+  files: ^(.*\.py|pyproject\.toml|(.*/)?routes\.rego)$
+  # NOTE: keep these ranges equal to the policy extra in pyproject.toml
+  additional_dependencies: ["starlette>=0.40.0,<2.0.0", "click>=8.1.0,<9.0.0"]
   pass_filenames: false

@@ -14,6 +14,7 @@ from typing import (
     get_origin,
 )
 
+from fastloom.constants import KAFKA_SCHEMA_URL
 from fastloom.meta import SelfSustaining
 from fastloom.observability.settings import ObservabilitySettings
 from fastloom.signals.kafka.settings import KafkaSettings, KafkaSubscriptable
@@ -92,7 +93,7 @@ def get_kafka_router(
 
     return KafkaRouter(
         settings.KAFKA_URI,
-        schema_url="/kafkaapi",
+        schema_url=KAFKA_SCHEMA_URL,
         acks=acks,
         enable_idempotence=enable_idempotence,
         allow_auto_create_topics=allow_auto_create_topics,

@@ -7,61 +7,71 @@ from http import HTTPMethod
 from importlib.util import resolve_name
 from pathlib import Path
 
+from fastloom.constants import (
+    HEALTHCHECK_PATH,
+    KAFKA_SCHEMA_URL,
+    MCP_PATH,
+    RABBIT_SCHEMA_URL,
+    RELOAD_PATH,
+    TENANT_SCHEMA_PATH,
+    TENANT_SETTINGS_PATH,
+)
 from fastloom.meta import read_project_name
-from fastloom.policy.schemas import Route, ordered
+from fastloom.policy.schemas import PolicySourceError, Route, ordered
 from fastloom.settings.base import ProjectSettings
 
 ROUTE_METHODS = {
     method.lower(): method for method in HTTPMethod if method != "CONNECT"
 } | {"websocket": HTTPMethod.GET}
-UNREADABLE_ROUTER_CALLS = {
-    "add_api_route",
-    "add_api_websocket_route",
-    "add_route",
-    "add_websocket_route",
-    "route",
-    "websocket_route",
-    "mount",
-    "host",
-}
-ROUTER_METHODS = {
-    *ROUTE_METHODS,
-    *UNREADABLE_ROUTER_CALLS,
-    "api_route",
-    "include_router",
-}
+UNREADABLE_ROUTER_CALLS = frozenset(
+    {
+        "add_api_route",
+        "add_api_websocket_route",
+        "add_route",
+        "add_websocket_route",
+        "route",
+        "websocket_route",
+        "mount",
+        "host",
+    }
+)
+ROUTER_METHODS = frozenset(
+    {
+        *ROUTE_METHODS,
+        *UNREADABLE_ROUTER_CALLS,
+        "api_route",
+        "include_router",
+    }
+)
 APP_MODULE = "app"
 SETTINGS_MODULE = "settings"
 FRAMEWORK_ROUTES = (
-    ("GET", "/healthcheck"),
-    ("GET", "/tenant_schema"),
-    ("GET", "/tenant_settings"),
-    ("POST", "/tenant_settings"),
-    ("GET", "/reload"),
-    ("GET", "/docs"),
-    ("GET", "/docs/oauth2-redirect"),
-    ("GET", "/redoc"),
-    ("GET", "/openapi.json"),
+    Route(method=HTTPMethod.GET, path=HEALTHCHECK_PATH),
+    Route(method=HTTPMethod.GET, path=TENANT_SCHEMA_PATH),
+    Route(method=HTTPMethod.GET, path=TENANT_SETTINGS_PATH),
+    Route(method=HTTPMethod.POST, path=TENANT_SETTINGS_PATH),
+    Route(method=HTTPMethod.GET, path=RELOAD_PATH),
+    Route(method=HTTPMethod.GET, path="/docs"),
+    Route(method=HTTPMethod.GET, path="/docs/oauth2-redirect"),
+    Route(method=HTTPMethod.GET, path="/redoc"),
+    Route(method=HTTPMethod.GET, path="/openapi.json"),
 )
 
 
-def broker_docs(url: str) -> tuple[tuple[str, str], ...]:
+def broker_docs(url: str) -> tuple[Route, ...]:
     return (
-        ("GET", url),
-        ("GET", f"{url}.json"),
-        ("GET", f"{url}.yaml"),
-        ("POST", f"{url}/try"),
+        Route(method=HTTPMethod.GET, path=url),
+        Route(method=HTTPMethod.GET, path=f"{url}.json"),
+        Route(method=HTTPMethod.GET, path=f"{url}.yaml"),
+        Route(method=HTTPMethod.POST, path=f"{url}/try"),
     )
 
 
 CAPABILITY_ROUTES = {
-    "MCPSettings": (("*", "/mcp"),),
-    "RabbitmqSettings": broker_docs("/rabbitapi"),
-    "KafkaSettings": broker_docs("/kafkaapi"),
+    "MCPSettings": (Route(method="*", path=MCP_PATH),),
+    "RabbitmqSettings": broker_docs(RABBIT_SCHEMA_URL),
+    "KafkaSettings": broker_docs(KAFKA_SCHEMA_URL),
 }
-
-
-class PolicySourceError(Exception): ...
 
 
 @dataclass(frozen=True)
@@ -167,7 +177,6 @@ def bound_names(statement: ast.stmt) -> list[str]:
     return []
 
 
-@cache
 def bindings(node: ast.AST) -> dict[str, list[ast.stmt]]:
     found: dict[str, list[ast.stmt]] = defaultdict(list)
     for statement in statements(node):
@@ -195,7 +204,7 @@ class ServiceSource:
         self.api_prefix = ProjectSettings(PROJECT_NAME=project).API_PREFIX
         self.file = cache(self.find)
         self.tree = cache(self.parse)
-        self.registered: dict[Router, list[RouterCall]] = defaultdict(list)
+        self.scope = cache(bindings)
 
     def find(self, module: str) -> Path | None:
         base = self.root.joinpath(*module.split("."))
@@ -281,7 +290,7 @@ class ServiceSource:
         return self.lookup(name, self.tree(name), attr)
 
     def lookup(self, module: str, scope: ast.AST, name: str) -> Value:
-        match bindings(scope).get(name, []):
+        match self.scope(scope).get(name, []):
             case [ast.Import(names=aliases)]:
                 return Ref(
                     next((a.name for a in aliases if a.asname == name), name)
@@ -296,7 +305,7 @@ class ServiceSource:
                 | ast.AnnAssign(value=ast.expr() as value)
             ]:
                 if isinstance(
-                    value, ast.List | ast.Tuple | ast.Set
+                    value, ast.List | ast.Tuple
                 ) and has_attribute_access(self.tree(module), name):
                     raise PolicySourceError(
                         f"{module}: {name} is changed after it is bound, "
@@ -309,6 +318,12 @@ class ServiceSource:
                 | ast.ClassDef() as definition
             ]:
                 return Expr(module, definition)
+            case [ast.Import(), *_] as imports if all(
+                isinstance(i, ast.Import)
+                and all(a.asname is None for a in i.names)
+                for i in imports
+            ):
+                return Ref(name)
             case [_, _, *_]:
                 raise PolicySourceError(
                     f"{module}: {name} is bound more than once, which "
@@ -362,7 +377,13 @@ class ServiceSource:
             raise PolicySourceError(f"{module}: {name} is not an HTTP method")
         return HTTPMethod[name]
 
-    def router_routes(self, router: Router, prefix: str) -> Iterator[Route]:
+    def router_routes(
+        self, router: Router, prefix: str, chain: tuple[Router, ...] = ()
+    ) -> Iterator[Route]:
+        if router in chain:
+            raise PolicySourceError(
+                f"{router.module}: {ast.unparse(router.call)} includes itself"
+            )
         call = readable(router.module, router.call)
         base = prefix + self.string(router.module, keyword(call, "prefix"))
         for found in self.registered[router]:
@@ -376,6 +397,7 @@ class ServiceSource:
                 yield from self.router_routes(
                     self.router(module, self.required(module, call, "router")),
                     base + self.string(module, keyword(call, "prefix")),
+                    (*chain, router),
                 )
                 continue
             path = (
@@ -414,28 +436,37 @@ class ServiceSource:
 
     def mount_path(self, module: str, node: ast.expr) -> str:
         path = self.string(module, node).rstrip("/")
-        if not (
-            path == self.api_prefix or path.startswith(f"{self.api_prefix}/")
-        ):
+        if not f"{path}/".startswith(f"{self.api_prefix}/"):
             path = self.api_prefix + path
         return f"{path}/{{path:path}}"
 
     def capabilities(self) -> set[str]:
         if self.file(SETTINGS_MODULE) is None:
             return set()
-        return {
-            base.id if isinstance(base, ast.Name) else base.attr
-            for node in self.tree(SETTINGS_MODULE).body
-            if isinstance(node, ast.ClassDef) and node.name == "Settings"
-            for base in node.bases
-            if isinstance(base, ast.Name | ast.Attribute)
-        }
+        tree = self.tree(SETTINGS_MODULE)
+        match self.lookup(SETTINGS_MODULE, tree, "Settings"):
+            case Expr(module=owner, node=ast.ClassDef() as settings):
+                return self.bases(owner, settings)
+        raise PolicySourceError(f"{SETTINGS_MODULE}: Settings is not a class")
+
+    def bases(self, module: str, cls: ast.ClassDef) -> set[str]:
+        return set().union(*(self.base(module, b) for b in cls.bases))
+
+    def base(self, module: str, node: ast.expr) -> set[str]:
+        match self.evaluate(module, node):
+            case Ref(name=name):
+                return {name.rpartition(".")[2]}
+            case Expr(module=owner, node=ast.ClassDef() as parent):
+                return self.bases(owner, parent)
+        raise PolicySourceError(
+            f"{module}: cannot read the base class {ast.unparse(node)}"
+        )
 
     def framework_routes(self) -> set[Route]:
         capable = self.capabilities()
         return {
-            Route(method=method, path=self.api_prefix + path)
-            for method, path in (
+            route.model_copy(update={"path": self.api_prefix + route.path})
+            for route in (
                 *FRAMEWORK_ROUTES,
                 *(
                     route
@@ -447,18 +478,17 @@ class ServiceSource:
         }
 
     def routes(self) -> list[Route]:
-        app = next(
-            (
-                node
-                for node in walk(self.tree(APP_MODULE))
-                if isinstance(node, ast.Call) and named(node.func, "App")
-            ),
-            None,
-        )
-        if app is None:
-            raise PolicySourceError("app.py has no App(...)")
-        readable(APP_MODULE, app)
-        self.registered.clear()
+        tree = self.tree(APP_MODULE)
+        try:
+            bound = self.lookup(APP_MODULE, tree, "app")
+        except PolicySourceError as e:
+            raise PolicySourceError("app.py has no App(...)") from e
+        match bound:
+            case Expr(node=ast.Call(func=func) as app) if named(func, "App"):
+                readable(APP_MODULE, app)
+            case _:
+                raise PolicySourceError("app.py has no App(...)")
+        self.registered: dict[Router, list[RouterCall]] = defaultdict(list)
         for module in self.reachable(APP_MODULE, set()):
             self.register(module)
         found = self.framework_routes()

@@ -1,0 +1,7 @@
+HEALTHCHECK_PATH = "/healthcheck"
+TENANT_SCHEMA_PATH = "/tenant_schema"
+TENANT_SETTINGS_PATH = "/tenant_settings"
+RELOAD_PATH = "/reload"
+MCP_PATH = "/mcp"
+RABBIT_SCHEMA_URL = "/rabbitapi"
+KAFKA_SCHEMA_URL = "/kafkaapi"

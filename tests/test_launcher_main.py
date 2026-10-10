@@ -67,9 +67,7 @@ def test_main_binds_to_the_host_from_the_environment(
     else:
         monkeypatch.setenv("APP_HOST", env)
     configs = MagicMock()
-    configs.__getitem__.return_value.general = LauncherSettings.model_validate(
-        {}
-    )
+    configs.__getitem__.return_value.general = LauncherSettings()
     run = Mock()
     monkeypatch.setattr(launcher_main, "Configs", configs)
     monkeypatch.setattr(launcher_main, "get_settings_cls", Mock())

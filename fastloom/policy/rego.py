@@ -1,19 +1,26 @@
 import json
-from itertools import takewhile
 
 from starlette.routing import compile_path
 
-from fastloom.policy.schemas import PREFIX, Route, RuleLine
-from fastloom.policy.source import PolicySourceError
+from fastloom.policy.schemas import (
+    PREFIX_ADAPTER,
+    PolicySourceError,
+    Route,
+    RuleLine,
+    ScopeLine,
+)
 
 ROUTES_FILE = "routes.rego"
 PATTERN_PREFIX = "route_patterns["
 RULE_PREFIX = "route_rules["
 SCOPE_PREFIX = "prefix_rules["
+STATEMENTS = (PATTERN_PREFIX, RULE_PREFIX, SCOPE_PREFIX)
 TODO = '"todo"'
 INDENTED = ("\t", " ", "]", "}")
 
 PREAMBLE = """package policy
+
+import rego.v1
 
 http := input.attributes.request.http
 
@@ -58,18 +65,20 @@ permits(alternatives) if {
 
 default allow := false
 
-guards(route) := {rule |
+slashed_path := concat("", [trim_suffix(path, "/"), "/"])
+
+guards := {rule |
 \tsome prefix, rule in data.policy.prefix_rules
-\tstartswith(concat("", [route[1], "/"]), concat("", [prefix, "/"]))
+\tstartswith(slashed_path, concat("", [prefix, "/"]))
 }
 
 allow if {
 \tcount(matched) > 0
 \tevery route in matched {
 \t\tpermits(data.policy.route_rules[route])
-\t\tevery rule in guards(route) {
-\t\t\tpermits(rule)
-\t\t}
+\t}
+\tevery rule in guards {
+\t\tpermits(rule)
 \t}
 }
 """
@@ -99,32 +108,48 @@ def render(
     return (
         PREAMBLE
         + "".join(
-            f"\n{SCOPE_PREFIX}{json.dumps(prefix)}] := {rule}\n"
+            f"\n{SCOPE_PREFIX}{json.dumps(prefix, ensure_ascii=False)}] := "
+            f"{rule}\n"
             for prefix, rule in sorted(scopes.items())
         )
         + "".join(block(route, rules.get(route, TODO)) for route in routes)
     )
 
 
-def statements(text: str, prefix: str) -> list[tuple[str, str]]:
-    return [statement(chunk) for chunk in f"\n{text}".split(f"\n{prefix}")[1:]]
+def split(text: str) -> list[str]:
+    lines = text.split("\n")
+    first = next(
+        (i for i, line in enumerate(lines) if line.startswith(STATEMENTS)),
+        len(lines),
+    )
+    found: list[list[str]] = []
+    current: list[str] | None = None
+    for number, line in enumerate(lines[first:], first + 1):
+        if line.startswith(STATEMENTS):
+            current = [line]
+            found.append(current)
+        elif line.strip() == "":
+            current = None
+        elif current is not None and line.startswith(INDENTED):
+            current.append(line)
+        else:
+            raise PolicySourceError(
+                f"{ROUTES_FILE}:{number}: {line.strip()} is not part of a "
+                "rule; keep other rego in its own file"
+            )
+    return ["\n".join(statement) for statement in found]
 
 
-def statement(chunk: str) -> tuple[str, str]:
-    first, *rest = chunk.split("\n")
-    head, _, value = "\n".join(
-        [first, *takewhile(lambda line: line.startswith(INDENTED), rest)]
-    ).partition("] := ")
-    return head, value
+def read(text: str) -> tuple[list[RuleLine], list[ScopeLine]]:
+    found = split(text)
+    return (
+        [read_rule(s) for s in found if s.startswith(RULE_PREFIX)],
+        [read_scope(s) for s in found if s.startswith(SCOPE_PREFIX)],
+    )
 
 
-def read_rules(text: str) -> list[RuleLine]:
-    return [
-        read_rule(head, value) for head, value in statements(text, RULE_PREFIX)
-    ]
-
-
-def read_rule(head: str, value: str) -> RuleLine:
+def read_rule(statement: str) -> RuleLine:
+    head, _, value = statement.removeprefix(RULE_PREFIX).partition("] := ")
     try:
         method, path = json.loads(head)
         return RuleLine(route=Route(method=method, path=path), value=value)
@@ -134,16 +159,12 @@ def read_rule(head: str, value: str) -> RuleLine:
         ) from e
 
 
-def read_scopes(text: str) -> list[tuple[str, str]]:
-    return [
-        read_scope(head, value)
-        for head, value in statements(text, SCOPE_PREFIX)
-    ]
-
-
-def read_scope(head: str, value: str) -> tuple[str, str]:
+def read_scope(statement: str) -> ScopeLine:
+    head, _, value = statement.removeprefix(SCOPE_PREFIX).partition("] := ")
     try:
-        return PREFIX.validate_json(head), value
+        return ScopeLine(
+            prefix=PREFIX_ADAPTER.validate_json(head), value=value
+        )
     except ValueError as e:
         raise PolicySourceError(
             f"{ROUTES_FILE}: cannot read the prefix in {SCOPE_PREFIX}{head}]"

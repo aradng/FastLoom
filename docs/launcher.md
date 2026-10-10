@@ -7,7 +7,7 @@ The launcher orchestrates service startup. It discovers `app.py` and `settings.p
 - `fastloom.launcher.main.app()` — FastAPI factory used by uvicorn (`--factory` mode).
 - `fastloom.launcher.main.main()` — CLI entrypoint installed as `launch`; runs uvicorn against the factory.
 - `fastloom.launcher.schemas.App` — declarative pydantic model your `app.py` exports.
-- `fastloom.launcher.settings.LauncherSettings` — `APP_PORT`, `DEBUG`, `WORKERS`, `SETTINGS_PUBLIC`.
+- `fastloom.launcher.settings.LauncherSettings` — `APP_HOST`, `APP_PORT`, `DEBUG`, `WORKERS`, `SETTINGS_PUBLIC`.
 - `fastloom.launcher.utils.combine_lifespans` — compose multiple `Lifespan` context managers into one.
 - `fastloom.launcher.utils.is_installed` — runtime check for optional dependencies; see `fastloom.extras` for the precomputed `X_INSTALLED` constants built on top of it.
 - `fastloom.launcher.utils.setup_brokers` — instruments and constructs `RabbitSubscriber`/`KafkaSubscriber` (in that order, before `get_app()`) based on which settings the service inherits.

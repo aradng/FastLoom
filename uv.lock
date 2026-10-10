@@ -900,6 +900,7 @@ openai = [
     { name = "openai" },
 ]
 policy = [
+    { name = "click" },
     { name = "starlette" },
 ]
 rabbit = [
@@ -957,6 +958,7 @@ requires-dist = [
     { name = "babel", specifier = ">=2.17.0,<3.0.0" },
     { name = "beanie", marker = "extra == 'mongo'", specifier = ">=2.0.0,<3.0.0" },
     { name = "celery", marker = "extra == 'celery'", specifier = ">=5.5.3,<6.0.0" },
+    { name = "click", marker = "extra == 'policy'", specifier = ">=8.1.0,<9.0.0" },
     { name = "deepdiff", marker = "extra == 'test'", specifier = ">=9.0.0,<10.0.0" },
     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0,<1" },
     { name = "fastapi-redis-sdk", extras = ["otel"], marker = "extra == 'redis'", specifier = ">=0.7.0,<0.8.0" },
