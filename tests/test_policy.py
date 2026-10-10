@@ -9,7 +9,7 @@ import pytest
 from starlette.routing import compile_path
 
 from fastloom.policy import main as cli
-from fastloom.policy.rego import COVERAGE, COVERAGE_FILE, ROUTES_FILE
+from fastloom.policy.rego import COVERAGE, COVERAGE_FILE, ROUTES_FILE, render
 from fastloom.policy.source import PolicySourceError, ServiceSource
 
 FILES = {
@@ -20,13 +20,12 @@ FILES = {
     "app.py": """
         from fastloom.launcher.schemas import App
 
-        from shop.api import admin, chart, hooks, internal, items
+        from shop.api import admin, chart, hooks, items
 
         routes = [
             (items.router, "/items", "Items"),
             (admin.router, "/admin", "Admin"),
             (chart.router, "/chart", "Chart"),
-            (internal.router, "/internal/shop", "Internal"),
             (hooks.router, "", "Hooks"),
         ]
 
@@ -91,16 +90,6 @@ FILES = {
         @router.get("/{board_id}")
         async def board(board_id: str): ...
     """,
-    "shop/api/internal.py": """
-        from fastapi import APIRouter, Depends
-        from fastloom.launcher.depends import reject_external
-
-        router = APIRouter(dependencies=[Depends(reject_external)])
-
-
-        @router.post("/map")
-        async def map_trades(): ...
-    """,
     "shop/api/hooks.py": """
         from fastapi import APIRouter
 
@@ -123,7 +112,6 @@ SHOP_ROUTES = {
     ("GET", "/api/shop/admin/v1/stats"),
     ("GET", "/api/shop/chart"),
     ("GET", "/api/shop/chart/dashboard/boards/{board_id}"),
-    ("POST", "/internal/shop/map"),
     ("POST", "/api/shop/webhook"),
     ("POST", "/api/shop/agent/"),
     ("*", "/api/shop/files/{path:path}"),
@@ -154,29 +142,27 @@ def service(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return write(tmp_path, FILES)
 
 
-def test_every_route_is_read_with_its_full_path(service: Path):
-    assert read(service) == SHOP_ROUTES
+PHANTOM = {
+    "tests/test_hooks.py": (
+        "from shop.api.hooks import router\n\n"
+        '@router.get("/phantom")\n'
+        "async def phantom(): ...\n"
+    ),
+    "scripts/broken.py": "router.get(\n",
+}
 
 
-def test_a_relative_root_reads_the_same_routes(service: Path):
-    assert read(Path(".")) == SHOP_ROUTES
+@pytest.mark.parametrize(
+    ("extra", "relative"),
+    [({}, False), ({}, True), (PHANTOM, False)],
+    ids=["absolute root", "relative root", "modules nothing imports"],
+)
+def test_every_route_is_read_with_its_full_path(
+    service: Path, extra: dict[str, str], relative: bool
+):
+    write(service, extra)
 
-
-def test_modules_the_app_never_imports_register_nothing(service: Path):
-    write(
-        service,
-        {
-            "tests/test_hooks.py": """
-                from shop.api.hooks import router
-
-
-                @router.get("/phantom")
-                async def phantom(): ...
-            """
-        },
-    )
-
-    assert read(service) == SHOP_ROUTES
+    assert read(Path(".") if relative else service) == SHOP_ROUTES
 
 
 def test_an_app_without_routes_has_none(service: Path):
@@ -185,189 +171,125 @@ def test_an_app_without_routes_has_none(service: Path):
     assert ServiceSource(service).routes() == []
 
 
+UNREADABLE_CALLS = (
+    "add_api_route('/x', webhook)",
+    "add_route('/x', webhook)",
+    "route('/x')",
+    "websocket_route('/x')",
+    "mount('/x', object())",
+    "host('example.com', object())",
+)
+FAILURES = {
+    "f-string": (
+        "shop/api/admin.py",
+        "@router.get(STATS)",
+        '@router.get(f"/{STATS}")',
+        "f-string",
+    ),
+    **{
+        call.partition("(")[0]: (
+            "shop/api/hooks.py",
+            "router = APIRouter()\n",
+            f"router = APIRouter()\nrouter.{call}\n",
+            re.escape(call),
+        )
+        for call in UNREADABLE_CALLS
+    },
+    "not a router": (
+        "shop/api/chart/dashboard.py",
+        'router = APIRouter(prefix="/boards")',
+        "router = make_router()",
+        "not an APIRouter",
+    ),
+    "named methods": (
+        "shop/api/items.py",
+        'methods=["GET", "PUT"]',
+        "methods=METHODS",
+        "literal methods list",
+    ),
+    "no App": (
+        "app.py",
+        "app = App(",
+        "app = make_app(",
+        r"has no App\(...\)",
+    ),
+    "bare entry": (
+        "app.py",
+        '(items.router, "/items", "Items"),',
+        "items.router,",
+        "each route entry must be",
+    ),
+    "bare mount": (
+        "app.py",
+        'mounts=[("/files/", object())]',
+        'mounts=["/files/"]',
+        "each mount must be",
+    ),
+    "built routes": (
+        "app.py",
+        "routes=routes,",
+        "routes=build(),",
+        r"App\(routes=...\) must be a literal list",
+    ),
+    "rebound": (
+        "shop/api/admin.py",
+        'router = APIRouter(prefix="/v1")\n',
+        'router = APIRouter(prefix="/v1")\nrouter = APIRouter()\n',
+        "router is bound more than once",
+    ),
+    "augmented": (
+        "app.py",
+        "\napp = App(",
+        '\nroutes += [(hooks.router, "/more", "More")]\napp = App(',
+        "routes is bound more than once",
+    ),
+    "appended": (
+        "app.py",
+        "\napp = App(",
+        '\nroutes.append((hooks.router, "/more", "More"))\napp = App(',
+        "routes is changed after it is bound",
+    ),
+    "external constant": (
+        "shop/api/admin.py",
+        "from shop.constants import STATS",
+        "from os.path import sep as STATS",
+        "as a string the repo defines",
+    ),
+    "syntax error": (
+        "shop/api/hooks.py",
+        "async def agent(): ...",
+        "async def agent(: ...",
+        "shop.api.hooks: cannot parse",
+    ),
+    "nameless project": (
+        "pyproject.toml",
+        'name = "shop"',
+        'version = "1"',
+        r"Could not infer project name in .*pyproject\.toml",
+    ),
+    "no pyproject": (
+        "pyproject.toml",
+        None,
+        None,
+        r"Could not find .*pyproject\.toml",
+    ),
+    "no app.py": ("app.py", None, None, "cannot find module app"),
+}
+
+
 @pytest.mark.parametrize(
-    ("name", "old", "new", "message"),
-    [
-        (
-            "shop/api/admin.py",
-            "@router.get(STATS)",
-            '@router.get(f"/{STATS}")',
-            "f-string",
-        ),
-        *(
-            (
-                "shop/api/hooks.py",
-                "router = APIRouter()\n",
-                f"router = APIRouter()\nrouter.{call}\n",
-                re.escape(call),
-            )
-            for call in (
-                "add_api_route('/x', webhook)",
-                "add_route('/x', webhook)",
-                "route('/x')",
-                "websocket_route('/x')",
-                "mount('/x', object())",
-                "host('example.com', object())",
-            )
-        ),
-        (
-            "shop/api/hooks.py",
-            '@router.post("/webhook")\nasync def webhook(): ...',
-            'router.post("/webhook")(lambda: None)',
-            "cannot find the endpoint",
-        ),
-        (
-            "shop/api/internal.py",
-            "dependencies=[Depends(reject_external)]",
-            "dependencies=GUARDS",
-            "dependencies must be a literal list",
-        ),
-        (
-            "shop/api/chart/dashboard.py",
-            'router = APIRouter(prefix="/boards")',
-            "router = make_router()",
-            "not an APIRouter",
-        ),
-        (
-            "shop/api/items.py",
-            'methods=["GET", "PUT"]',
-            "methods=METHODS",
-            "literal methods list",
-        ),
-        ("app.py", "app = App(", "app = make_app(", r"has no App\(...\)"),
-        (
-            "app.py",
-            '(items.router, "/items", "Items"),',
-            "items.router,",
-            "each route entry must be",
-        ),
-        (
-            "app.py",
-            'mounts=[("/files/", object())]',
-            'mounts=["/files/"]',
-            "each mount must be",
-        ),
-        (
-            "app.py",
-            "routes=routes,",
-            "routes=build(),",
-            r"App\(routes=...\) must be a literal list",
-        ),
-        (
-            "shop/api/admin.py",
-            'router = APIRouter(prefix="/v1")\n',
-            'router = APIRouter(prefix="/v1")\nrouter = APIRouter()\n',
-            "router is bound more than once",
-        ),
-        (
-            "app.py",
-            "\napp = App(",
-            '\nroutes += [(hooks.router, "/more", "More")]\napp = App(',
-            "routes is bound more than once",
-        ),
-        (
-            "app.py",
-            "\napp = App(",
-            '\nroutes.append((hooks.router, "/more", "More"))\napp = App(',
-            "routes is changed after it is bound",
-        ),
-        (
-            "shop/api/admin.py",
-            "from shop.constants import STATS",
-            "from os.path import sep as STATS",
-            "as a string the repo defines",
-        ),
-        (
-            "shop/api/hooks.py",
-            "async def agent(): ...",
-            "async def agent(: ...",
-            "shop.api.hooks: cannot parse",
-        ),
-        (
-            "pyproject.toml",
-            'name = "shop"',
-            'version = "1"',
-            r"Could not infer project name in .*pyproject\.toml",
-        ),
-    ],
+    ("name", "old", "new", "message"), FAILURES.values(), ids=FAILURES
 )
 def test_what_cannot_be_read_without_running_the_code_fails(
-    service: Path, name: str, old: str, new: str, message: str
+    service: Path, name: str, old: str | None, new: str | None, message: str
 ):
-    replace(service, name, old, new)
+    if old is None or new is None:
+        (service / name).unlink()
+    else:
+        replace(service, name, old, new)
 
     with pytest.raises(PolicySourceError, match=message):
         ServiceSource(service).routes()
-
-
-@pytest.mark.parametrize(
-    ("missing", "message"),
-    [
-        ("pyproject.toml", r"Could not find .*pyproject\.toml"),
-        ("app.py", "cannot find module app"),
-    ],
-)
-def test_a_missing_entry_file_fails(service: Path, missing: str, message):
-    (service / missing).unlink()
-
-    with pytest.raises(PolicySourceError, match=message):
-        ServiceSource(service).routes()
-
-
-def test_reject_external_leaves_the_bare_path_wherever_it_is_declared(
-    service: Path,
-):
-    write(
-        service,
-        {
-            "shop/api/internal.py": """
-                from typing import Annotated
-
-                from fastapi import APIRouter, Depends
-                from fastloom.launcher.depends import (
-                    reject_external as internal_only,
-                )
-
-                router = APIRouter()
-                child = APIRouter()
-                router.include_router(
-                    child,
-                    prefix="/child",
-                    dependencies=[Depends(dependency=internal_only)],
-                )
-
-
-                @child.get("/leaf")
-                async def leaf(): ...
-
-
-                @router.post("/route", dependencies=[Depends(internal_only)])
-                async def route_level(): ...
-
-
-                @router.post("/annotated")
-                async def annotated(
-                    _: Annotated[None, Depends(internal_only)],
-                ): ...
-
-
-                @router.post("/default")
-                async def default(_: None = Depends(internal_only)): ...
-
-
-                @router.get("/public")
-                async def public(): ...
-            """
-        },
-    )
-
-    assert {(m, p) for m, p in read(service) if "internal" in p} == {
-        ("GET", "/internal/shop/child/leaf"),
-        ("POST", "/internal/shop/route"),
-        ("POST", "/internal/shop/annotated"),
-        ("POST", "/internal/shop/default"),
-        ("GET", "/api/shop/internal/shop/public"),
-    }
 
 
 EDGE_FILES = {
@@ -514,7 +436,6 @@ EDGE_FILES = {
         @same.post("/assigned")
         async def assigned(): ...
     """,
-    "node_modules/pkg/broken.py": "router.get(\n",
 }
 
 
@@ -573,42 +494,59 @@ def run(monkeypatch: pytest.MonkeyPatch, *args: str) -> int:
     return cli.main()
 
 
-def test_the_command_writes_the_routes_and_tests_until_they_are_current(
-    service: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-):
-    assert run(monkeypatch) == 1
-    assert "policy was regenerated" in capsys.readouterr().out
-    assert (service / "policy" / COVERAGE_FILE).read_text() == COVERAGE
-    assert run(monkeypatch) == 0
-    assert capsys.readouterr().out == ""
+def written(root: Path) -> tuple[str, str]:
+    return render(ServiceSource(root).routes()), COVERAGE
 
-    replace(
-        service,
-        "shop/api/hooks.py",
-        '@router.post("/webhook")',
-        '@router.put("/webhook")',
+
+def files(directory: Path) -> tuple[str, str]:
+    return (
+        (directory / ROUTES_FILE).read_text(),
+        (directory / COVERAGE_FILE).read_text(),
     )
 
-    assert run(monkeypatch) == 1
-    routes = (service / "policy" / ROUTES_FILE).read_text()
-    assert '["PUT", "/api/shop/webhook"]' in routes
-    assert '["POST", "/api/shop/webhook"]' not in routes
 
-
-def test_a_stale_coverage_file_is_regenerated_without_route_changes(
+@pytest.mark.parametrize(
+    "args", [[], ["--policy-dir", "rules"]], ids=["default", "moved"]
+)
+def test_the_command_writes_the_policy_until_it_is_current(
     service: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    args: list[str],
+):
+    directory = service / (args[-1] if args else "policy")
+
+    assert run(monkeypatch, *args) == 1
+    assert "was regenerated" in capsys.readouterr().out
+    assert files(directory) == written(service)
+    assert run(monkeypatch, *args) == 0
+    assert capsys.readouterr().out == ""
+    assert not (service / ("policy" if args else "rules")).exists()
+
+
+@pytest.mark.parametrize(
+    ("name", "old", "new"),
+    [
+        ("shop/api/hooks.py", '@router.post("/webhook")', '@router.put("/x")'),
+        (f"policy/{COVERAGE_FILE}", "package policy_test", "package stale"),
+    ],
+    ids=["route changed", "coverage edited"],
+)
+def test_a_change_regenerates_the_policy(
+    service: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    old: str,
+    new: str,
 ):
     run(monkeypatch)
+    replace(service, name, old, new)
     capsys.readouterr()
-    (service / "policy" / COVERAGE_FILE).write_text("package policy_test\n")
 
     assert run(monkeypatch) == 1
-    assert "policy was regenerated" in capsys.readouterr().out
-    assert (service / "policy" / COVERAGE_FILE).read_text() == COVERAGE
+    assert "was regenerated" in capsys.readouterr().out
+    assert files(service / "policy") == written(service)
 
 
 def test_an_unreadable_source_fails_without_writing(
@@ -620,17 +558,6 @@ def test_an_unreadable_source_fails_without_writing(
 
     assert run(monkeypatch) == 1
     assert capsys.readouterr().err.startswith("fastloom-policy: ")
-    assert not (service / "policy").exists()
-
-
-def test_the_policy_directory_can_be_moved(
-    service: Path, monkeypatch: pytest.MonkeyPatch
-):
-    assert run(monkeypatch, "--policy-dir", "rules") == 1
-    assert (
-        '["GET", "/api/shop/items"]'
-        in (service / "rules" / ROUTES_FILE).read_text()
-    )
     assert not (service / "policy").exists()
 
 

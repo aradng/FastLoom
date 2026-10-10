@@ -60,7 +60,7 @@ Starting from `app.py`'s `App(routes=[(router, prefix, ...), ...], mounts=[(path
 - the route decorators `get`, `put`, `post`, `delete`, `patch`, `head`, `options`, `trace`, `websocket` (as `GET`) and `api_route(path, methods=[...])` — on a function inside an `if`, a `try` or a class body (not one nested in another function) or called as `router.get("/x")(endpoint)`, under an `as` alias or a plain `name = router` included;
 - `include_router(child, prefix=...)`, `child` positional or `router=`, followed into the child router.
 
-Prefixes add up the way FastAPI adds them: the `App` entry, each `include_router`, then each `APIRouter(prefix=...)`. Paths start with the service's `API_PREFIX` — `/api/<project name>`, the name read from `pyproject.toml` the way `PROJECT_NAME` defaults to it — except under [`reject_external`](launcher.md#reject_external), which is only reachable on the bare path, so that is the path generated (`/internal/trade/chat/map`). `reject_external` counts wherever FastAPI applies it: a router's, an `include_router`'s or a route's `dependencies=[Depends(...)]`, or an endpoint parameter (`Annotated[None, Depends(reject_external)]`, `= Depends(reject_external)`), imported under any name.
+Prefixes add up the way FastAPI adds them: the `App` entry, each `include_router`, then each `APIRouter(prefix=...)`. Every path starts with the service's `API_PREFIX` — `/api/<project name>`, the name read from `pyproject.toml` the way `PROJECT_NAME` defaults to it. [`reject_external`](launcher.md#reject_external) isn't read: a route behind it is still generated under `API_PREFIX`, where `reject_external` answers 404, and its bare path, which never passes the proxy, isn't listed.
 
 Prefixes, paths and methods may be literals, module constants or enum members (`StrEnum` or `(str, Enum)`) the repo defines. A mount path already under `API_PREFIX` is kept as it is.
 
@@ -69,9 +69,9 @@ What it can't read without running the code fails the hook, naming what it could
 - f-strings, and names that aren't a string constant the repo defines;
 - `add_api_route`, `add_api_websocket_route`, `add_route`, `add_websocket_route`, `route`, `websocket_route`, `mount` and `host` on a router;
 - a router that isn't an `APIRouter(...)` the repo defines;
-- a non-literal `App(routes=...)`, `App(mounts=...)`, `dependencies` or `api_route` `methods`, an `App` entry or mount that isn't a tuple, and an `app.py` without `App(...)`;
+- a non-literal `App(routes=...)`, `App(mounts=...)` or `api_route` `methods`, an `App` entry or mount that isn't a tuple, and an `app.py` without `App(...)`;
 - a module-level name it reads that is bound more than once (`+=` included), or a list it reads that has a method called on it (`.append(...)`, `.extend(...)`);
-- a route call whose endpoint it can't find, a followed module that doesn't parse, and a missing or nameless `pyproject.toml`.
+- a followed module that doesn't parse, and a missing or nameless `pyproject.toml`.
 
 ## What it doesn't generate
 

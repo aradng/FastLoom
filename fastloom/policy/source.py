@@ -31,7 +31,6 @@ ROUTER_METHODS = {
     "include_router",
 }
 APP_MODULE = "app"
-REJECT_EXTERNAL = "fastloom.launcher.depends.reject_external"
 
 
 class PolicySourceError(Exception): ...
@@ -62,7 +61,6 @@ class RouterCall:
     module: str
     call: ast.Call
     attr: str
-    parent: ast.AST
 
 
 def named(node: ast.expr, *names: str) -> bool:
@@ -84,14 +82,14 @@ def argument(call: ast.Call, name: str) -> ast.expr | None:
     return call.args[0] if call.args else keyword(call, name)
 
 
-def walk(node: ast.AST) -> Iterator[tuple[ast.AST, ast.AST]]:
+def walk(node: ast.AST) -> Iterator[ast.AST]:
     children: Iterable[ast.AST] = (
         node.decorator_list
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
         else ast.iter_child_nodes(node)
     )
     for child in children:
-        yield child, node
+        yield child
         yield from walk(child)
 
 
@@ -199,7 +197,7 @@ class ServiceSource:
 
     def imports(self, module: str) -> Iterator[str]:
         yield module.rpartition(".")[0]
-        for node, _ in walk(self.tree(module)):
+        for node in walk(self.tree(module)):
             match node:
                 case ast.Import(names=aliases):
                     yield from (a.name for a in aliases)
@@ -308,51 +306,6 @@ class ServiceSource:
             f"{module}: {ast.unparse(call)} has no {name} to read"
         )
 
-    def rejecting(self, module: str, dependency: ast.expr) -> bool:
-        try:
-            return self.evaluate(module, dependency) == Ref(REJECT_EXTERNAL)
-        except PolicySourceError:
-            return False
-
-    def rejects_external(self, module: str, node: ast.AST) -> bool:
-        return any(
-            self.rejecting(module, dependency)
-            for call in ast.walk(node)
-            if isinstance(call, ast.Call)
-            and named(call.func, "Depends", "Security")
-            and (dependency := argument(call, "dependency")) is not None
-        )
-
-    def internal(self, module: str, call: ast.Call) -> bool:
-        match keyword(call, "dependencies"):
-            case None:
-                return False
-            case ast.List() | ast.Tuple() as listing:
-                return self.rejects_external(module, listing)
-        raise PolicySourceError(
-            f"{module}: dependencies must be a literal list to be read "
-            "without running the code"
-        )
-
-    def endpoint_internal(self, found: RouterCall) -> bool:
-        match found.parent:
-            case ast.FunctionDef(args=args) | ast.AsyncFunctionDef(args=args):
-                return self.rejects_external(found.module, args)
-            case ast.Call(func=func, args=[endpoint, *_]) if (
-                func is found.call
-            ):
-                match self.evaluate(found.module, endpoint):
-                    case Expr(
-                        module=owner,
-                        node=ast.FunctionDef(args=args)
-                        | ast.AsyncFunctionDef(args=args),
-                    ):
-                        return self.rejects_external(owner, args)
-        raise PolicySourceError(
-            f"{found.module}: cannot find the endpoint "
-            f"{ast.unparse(found.call)} registers"
-        )
-
     def methods(self, found: RouterCall) -> list[HTTPMethod]:
         if found.attr != "api_route":
             return [ROUTE_METHODS[found.attr]]
@@ -369,13 +322,10 @@ class ServiceSource:
             "read without running the code"
         )
 
-    def router_routes(
-        self, router: Router, prefix: str, internal: bool
-    ) -> Iterator[Route]:
+    def router_routes(self, router: Router, prefix: str) -> Iterator[Route]:
         base = prefix + self.string(
             router.module, keyword(router.call, "prefix")
         )
-        internal = internal or self.internal(router.module, router.call)
         for found in self.registered[router]:
             module, call = found.module, found.call
             if found.attr in UNREADABLE_ROUTER_CALLS:
@@ -387,16 +337,10 @@ class ServiceSource:
                 yield from self.router_routes(
                     self.router(module, self.required(module, call, "router")),
                     base + self.string(module, keyword(call, "prefix")),
-                    internal or self.internal(module, call),
                 )
                 continue
-            bare = (
-                internal
-                or self.internal(module, call)
-                or self.endpoint_internal(found)
-            )
             path = (
-                ("" if bare else self.api_prefix)
+                self.api_prefix
                 + base
                 + self.string(module, self.required(module, call, "path"))
             )
@@ -404,7 +348,7 @@ class ServiceSource:
                 yield Route(method=method, path=path)
 
     def register(self, module: str) -> None:
-        for node, parent in walk(self.tree(module)):
+        for node in walk(self.tree(module)):
             match node:
                 case ast.Call(
                     func=ast.Attribute(value=receiver, attr=attr)
@@ -415,7 +359,7 @@ class ServiceSource:
                         continue
                     if isinstance(router, Router):
                         self.registered[router].append(
-                            RouterCall(module, node, attr, parent)
+                            RouterCall(module, node, attr)
                         )
 
     def listing(self, app: ast.Call, name: str) -> tuple[str, list[ast.expr]]:
@@ -441,7 +385,7 @@ class ServiceSource:
         app = next(
             (
                 node
-                for node, _ in walk(self.tree(APP_MODULE))
+                for node in walk(self.tree(APP_MODULE))
                 if isinstance(node, ast.Call) and named(node.func, "App")
             ),
             None,
@@ -459,7 +403,6 @@ class ServiceSource:
                         self.router_routes(
                             self.router(owner, router),
                             self.string(owner, prefix),
-                            internal=False,
                         )
                     )
                 case _:
