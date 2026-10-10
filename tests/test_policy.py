@@ -1105,6 +1105,12 @@ DECISIONS = {
     "sub not a string": (*ITEM_1, auth(token([], sub=123)), {}, False),
     "no sub": (*ITEM_1, auth(token([], sub=None)), {}, False),
     "not a bearer": (*ITEM_1, auth("Basic dTpw"), {}, False),
+    "lowercase scheme": (
+        *ITEM_1,
+        auth(token([]).replace("Bearer", "bearer", 1)),
+        {},
+        True,
+    ),
     "the service's own allow": (*ITEM_1, {"x-internal-key": "k"}, {}, True),
     "one role of a pair": (*STATS, auth(token(["owner:read"])), {}, False),
     "both roles of a pair": (

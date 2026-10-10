@@ -27,7 +27,7 @@ http := input.attributes.request.http
 path := urlquery.decode(replace(split(http.path, "?")[0], "+", "%2B"))
 
 bearer := substring(http.headers.authorization, count("Bearer "), -1) if \
-startswith(http.headers.authorization, "Bearer ")
+startswith(lower(http.headers.authorization), "bearer ")
 
 claims := payload if [_, payload, _] := io.jwt.decode(bearer)
 
