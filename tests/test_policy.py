@@ -714,6 +714,64 @@ def test_anything_outside_a_rule_value_is_regenerated(service: Path):
     assert run() == 0
 
 
+def scope(prefix: str, value: str) -> str:
+    return f"prefix_rules[{json.dumps(prefix)}] := {value}\n"
+
+
+def test_a_prefix_rule_survives_the_rewrite(service: Path):
+    routes = rule_all(service, {})
+    routes.write_text(
+        routes.read_text() + "\n" + scope("/api/shop/items", '[["broker"]]')
+    )
+
+    assert run() == 1
+    assert scope("/api/shop/items", '[["broker"]]') in routes.read_text()
+    assert run() == 0
+
+
+@pytest.mark.parametrize(
+    ("prefix", "value", "message"),
+    [
+        ("/api/shop/item", '[["broker"]]', "matches no route"),
+        ("/api/shop/items", '"publc"', 'not "public"'),
+    ],
+    ids=["no route under it", "malformed rule"],
+)
+def test_a_bad_prefix_rule_is_reported(
+    service: Path,
+    capsys: pytest.CaptureFixture[str],
+    prefix: str,
+    value: str,
+    message: str,
+):
+    routes = rule_all(service, {})
+    routes.write_text(routes.read_text() + "\n" + scope(prefix, value))
+    capsys.readouterr()
+
+    assert run() == 1
+    assert f"prefix {prefix}: {message}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'prefix_rules["api/shop"] := "public"\n',
+        'prefix_rules[/api/shop] := "public"\n',
+    ],
+    ids=["no leading slash", "not a string"],
+)
+def test_an_unreadable_prefix_fails_without_writing(
+    service: Path, capsys: pytest.CaptureFixture[str], line: str
+):
+    routes = rule_all(service, {})
+    routes.write_text(routes.read_text() + "\n" + line)
+    edited = routes.read_text()
+
+    assert run() == 1
+    assert "cannot read the prefix" in capsys.readouterr().err
+    assert routes.read_text() == edited
+
+
 @pytest.mark.parametrize(
     "head",
     ['["GET" "/x"]', '["FETCH", "/x"]', '["GET"]'],
@@ -946,6 +1004,50 @@ def test_the_generated_policy_decides_in_opa(
     assert decision.stdout.strip() == str(allowed).lower(), decision.stderr
 
 
+PREFIXED = {
+    "route role alone": (["admin"], False),
+    "prefix role alone": (["broker"], False),
+    "both": (["broker", "admin"], True),
+}
+
+
+@needs_opa
+@pytest.mark.parametrize(("roles", "allowed"), PREFIXED.values(), ids=PREFIXED)
+def test_a_prefix_rule_is_anded_with_the_route_rule_in_opa(
+    service: Path, roles: list[str], allowed: bool
+):
+    routes = rule_all(service, {STATS: '[["admin"]]'})
+    routes.write_text(
+        routes.read_text() + "\n" + scope("/api/shop/admin", '[["broker"]]')
+    )
+    request = {
+        "method": "GET",
+        "path": "/api/shop/admin/v1/stats",
+        "headers": auth(token(roles)),
+    }
+    write(
+        service,
+        {
+            "input.json": json.dumps(
+                {"attributes": {"request": {"http": request}}}
+            )
+        },
+    )
+
+    decision = opa(
+        service,
+        "eval",
+        "-f",
+        "raw",
+        "-d",
+        "policy",
+        "-i",
+        "input.json",
+        "data.policy.allow",
+    )
+    assert decision.stdout.strip() == str(allowed).lower(), decision.stderr
+
+
 PATTERNS = [
     ("/x", ["/x", "/x/"], ["/xY", "/x/y", "/", "/w/x"]),
     ("/x/", ["/x", "/x/"], ["/xY"]),
@@ -987,7 +1089,7 @@ def test_each_route_pattern_matches_the_paths_it_answers(tmp_path: Path):
         tmp_path,
         {
             f"policy/{ROUTES_FILE}": render(
-                [Route(method="GET", path=t) for t, _, _ in PATTERNS], {}
+                [Route(method="GET", path=t) for t, _, _ in PATTERNS], {}, {}
             ),
             "policy/patterns_test.rego": "package patterns_test\n\n"
             "import data.policy\n\n"

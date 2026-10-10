@@ -14,7 +14,7 @@ Run from a service root, `fastloom-policy` reads the service's source with the s
 - a fixed preamble:
   - `requested(route)` — the request's method is the route's (any, for `*`) and its path, query string dropped, matches the route's pattern, also with its trailing slash added or removed: Starlette redirects `/x/` and `/x` to whichever the route declares, and that redirect has to get through. The same rule lets a bare mount root reach its mount.
   - `allow` — `false` by default. It is `true` when the request matches at least one route and **every** matched route's rule permits it. Requiring all of them is deliberate: when `/items/{id}` and `/items/special` both match, the policy can't know which one FastAPI dispatches to, so the stricter rule wins.
-  - `http`, `path`, `bearer`, `claims`, `authenticated`, `roles`, `routes`, `matched`, `permits` — the request, its token and the helpers `allow` uses. `authenticated` is a non-empty string `sub` on a token that hasn't expired. `io.jwt.decode` does not check the signature: verify the token at the edge (Envoy's `jwt_authn`) before `ext_authz`. `roles` is the token's `roles` claim, `[]` when it has none.
+  - `http`, `path`, `bearer`, `claims`, `authenticated`, `roles`, `routes`, `matched`, `permits`, `guards` — the request, its token and the helpers `allow` uses. `authenticated` is a non-empty string `sub` on a token that hasn't expired. `io.jwt.decode` does not check the signature: verify the token at the edge (Envoy's `jwt_authn`) before `ext_authz`. `roles` is the token's `roles` claim, `[]` when it has none.
 - one block per route, keyed by `[method, path]` with the path spelled as the route declares it:
   - `route_patterns[...]` — Starlette's own pattern for the path (`compile_path`): `{id}` is one segment, `{id:int}` digits, `{rest:path}` any suffix. A mount from `App(mounts=...)` is `["*", "<mount>/{path:path}"]`.
   - `route_rules[...]` — the route's rule. A new route gets `"todo"`; a rule already in the file is read back and written again as it is.
@@ -41,6 +41,16 @@ route_rules[["POST", "/api/notify/orders"]] := [["owner:read", "admin:write"], [
 - a list of role lists — a valid token holding every role of at least one inner list. The example reads (`owner:read` and `admin:write`) or `admin`. Inner rego sets (`{"admin"}`) work as well; role names are non-empty double-quoted strings.
 
 The hook fails the commit, naming the route, when a route is new (its rule is written as `"todo"`), a rule is still `"todo"` or isn't one of the three forms above (a typo, an empty list, an empty role list), or a route was deleted (its block is dropped). It fails without writing anything when a rule's route can't be read or a route is listed twice. `allow` denies the same mistakes at runtime, so a rule that slips through still fails closed.
+
+### Prefix rules
+
+A service whose routers group by audience — everything under `/api/assistant/broker` is for brokers — can say so once, in `routes.rego`:
+
+```rego
+prefix_rules["/api/assistant/broker"] := [["broker"]]
+```
+
+Every route at or under that prefix must satisfy the prefix's rule **and** its own `route_rules` value, so `route_rules[["PUT", "/api/assistant/broker/{id}"]] := [["ADMIN"]]` then needs both `broker` and `ADMIN`. A prefix matches whole path segments: `/api/assistant/brokerage` isn't under `/api/assistant/broker`. The value takes the same three forms as a route's rule (a `"public"` prefix adds nothing, being ANDed); the key is a literal path starting with `/`, without `{params}`. Each run keeps the prefix rules, sorted, right after the preamble, and fails the commit when one is malformed or matches no route — a mistyped prefix would otherwise guard nothing.
 
 Rego the service writes for itself — an `allow if { ... }` for what roles don't cover, an internal key or a source address, and the helpers it needs — goes in its own files in `package policy`, which fastloom never touches. Rego ORs those rules with the generated one, so they can only grant more. Data-level checks — ownership of a row, anything that depends on the request body — stay in the service's code.
 

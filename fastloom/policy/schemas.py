@@ -17,6 +17,7 @@ type Rule = (
     | Annotated[list[Roles], Field(min_length=1)]
 )
 RULE = TypeAdapter[Rule](Rule)
+PREFIX = TypeAdapter[str](Annotated[str, Field(pattern="^/")])
 
 
 class RuleLine(BaseModel, frozen=True):
