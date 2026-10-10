@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from fastloom.healthcheck.handler import init_healthcheck
 from fastloom.policy import main as cli
-from fastloom.policy.rego import ROUTES_FILE, key, render
+from fastloom.policy.rego import ROUTES_FILE, render
 from fastloom.policy.schemas import PolicySourceError, Route
 from fastloom.policy.source import ServiceSource
 from fastloom.test.utils import generate_token
@@ -675,16 +675,25 @@ NOTES = ("GET", "/api/shop/items/{item_id}/notes/{rest:path}")
 
 
 def rule(method: str, path: str, value: str) -> str:
-    return f"route_rules[{key(Route(method=method, path=path))}] := {value}\n"
+    return f"\t{json.dumps([method, path], ensure_ascii=False)}: {value},\n"
 
 
 def scope(prefix: str, value: str) -> str:
-    key = json.dumps(prefix, ensure_ascii=False)
-    return f"prefix_rules[{key}] := {value}\n"
+    return f"\t{json.dumps(prefix, ensure_ascii=False)}: {value},\n"
 
 
 def append(routes: Path, line: str) -> None:
     routes.write_text(routes.read_text() + "\n" + line)
+
+
+def add(routes: Path, name: str, entry: str) -> None:
+    text = routes.read_text()
+    opener = f"\n{name} := {{\n"
+    if opener not in text:
+        text = text.replace(
+            "\nroute_rules := {\n", f"{opener}}}\n\nroute_rules := {{\n", 1
+        )
+    routes.write_text(text.replace(opener, opener + entry, 1))
 
 
 def rule_all(service: Path, values: dict[tuple[str, str], str | None]) -> Path:
@@ -714,14 +723,15 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     out = capsys.readouterr().out
     assert out.count("added as todo") == len(SHOP_ROUTES)
     assert 'not "public"' not in out
+    text = routes.read_text()
+    assert rule(*DELETE_ITEM, '"todo"') in text
     assert (
-        'route_rules[["DELETE", "/api/shop/items/{item_id}", '
-        '"^/api/shop/items/(?P<item_id>[^/]+)$"]] := "todo"\n'
-        in routes.read_text()
+        '\t["DELETE", "/api/shop/items/{item_id}"]: '
+        "`^/api/shop/items/(?P<item_id>[^/]+)$`,\n" in text
     )
     assert (
-        'route_rules[["*", "/api/shop/files/{path:path}", '
-        '"^/api/shop/files/(?P<path>.*)$"]] := "todo"\n' in routes.read_text()
+        '\t["*", "/api/shop/files/{path:path}"]: '
+        "`^/api/shop/files/(?P<path>.*)$`,\n" in text
     )
     assert run(*args) == 1
     assert capsys.readouterr().out.count('not "public"') == len(SHOP_ROUTES)
@@ -738,13 +748,11 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
 
 def test_routes_are_written_in_path_then_method_order(service: Path):
     run()
+    text = (service / "policy" / ROUTES_FILE).read_text()
+    table = text.split("\nroute_rules := {\n")[1].split("\n}\n")[0]
     keys = [
-        tuple(json.loads(head)[:2])
-        for head in re.findall(
-            r"^route_rules\[(.*?)\] := ",
-            (service / "policy" / ROUTES_FILE).read_text(),
-            re.MULTILINE,
-        )
+        tuple(json.loads(line.strip().partition("]: ")[0] + "]"))
+        for line in table.splitlines()
     ]
 
     assert keys == sorted(keys, key=lambda k: (k[1], k[0]))
@@ -755,10 +763,10 @@ def test_routes_are_written_in_path_then_method_order(service: Path):
     [
         '"authenticated"',
         '[["owner:read", "admin:write"], ["admin"]]',
-        '[\n\t["owner:read", "admin:write"],\n\t["admin"],\n]',
-        '[\n    ["owner:read", "admin:write"],\n    ["admin"],\n]',
+        '[\n\t\t["owner:read", "admin:write"],\n\t\t["admin"],\n\t]',
+        '[\n        ["owner:read", "admin:write"],\n        ["admin"],\n    ]',
         '[{"owner:read", "admin:write"}, {"admin"}]',
-        '[{\n\t"admin",\n}]',
+        '[{\n\t\t"admin",\n\t}]',
     ],
     ids=[
         "authenticated",
@@ -829,21 +837,30 @@ def test_a_changed_route_keeps_the_other_rules(
 
 
 @pytest.mark.parametrize(
-    ("line", "message"),
+    ("table", "line", "message"),
     [
         (
+            "route_rules",
             rule(*SPECIAL, '"public"'),
             "lists GET /api/shop/items/special twice",
         ),
-        (scope("/api/shop", '"public"') * 2, "lists prefix /api/shop twice"),
+        (
+            "prefix_rules",
+            scope("/api/shop", '"public"') * 2,
+            "lists prefix /api/shop twice",
+        ),
     ],
     ids=["route", "prefix"],
 )
 def test_a_line_listed_twice_fails_without_writing(
-    service: Path, capsys: pytest.CaptureFixture[str], line: str, message: str
+    service: Path,
+    capsys: pytest.CaptureFixture[str],
+    table: str,
+    line: str,
+    message: str,
 ):
     routes = rule_all(service, {})
-    append(routes, line)
+    add(routes, table, line)
     edited = routes.read_text()
 
     assert run() == 1
@@ -863,14 +880,6 @@ def test_other_rego_in_the_file_fails_without_writing(
     assert routes.read_text() == edited
 
 
-def test_a_rule_cut_by_a_blank_line_fails_without_writing(service: Path):
-    routes = rule_all(service, {STATS: '[\n\t["admin"],\n\n\t["owner"],\n]'})
-    edited = routes.read_text()
-
-    assert run() == 1
-    assert routes.read_text() == edited
-
-
 def test_an_edited_preamble_is_regenerated(service: Path):
     routes = rule_all(service, {})
     filled = routes.read_text()
@@ -882,22 +891,22 @@ def test_an_edited_preamble_is_regenerated(service: Path):
 
 def test_prefix_rules_are_kept_sorted_after_the_preamble(service: Path):
     routes = rule_all(service, {})
-    append(routes, scope("/api/shop/items", '[["broker"]]'))
-    append(routes, scope("/api/shop/admin", '[["admin"]]'))
+    add(routes, "prefix_rules", scope("/api/shop/admin", '[["admin"]]'))
+    add(routes, "prefix_rules", scope("/api/shop/items", '[["broker"]]'))
 
     assert run() == 1
     text = routes.read_text()
     assert (
         text.index(scope("/api/shop/admin", '[["admin"]]'))
         < text.index(scope("/api/shop/items", '[["broker"]]'))
-        < text.index("\nroute_rules[")
+        < text.index("\nroute_rules := {")
     )
     assert run() == 0
 
 
 def test_a_non_ascii_prefix_is_kept_as_written(service: Path):
     routes = rule_all(service, {})
-    append(routes, scope("/api/shop/سلام", '"authenticated"'))
+    add(routes, "prefix_rules", scope("/api/shop/سلام", '"authenticated"'))
     run()
 
     assert scope("/api/shop/سلام", '"authenticated"') in routes.read_text()
@@ -919,7 +928,7 @@ def test_a_bad_prefix_rule_fails_once_the_file_is_settled(
     message: str,
 ):
     routes = rule_all(service, {})
-    append(routes, scope(prefix, value))
+    add(routes, "prefix_rules", scope(prefix, value))
     run()
     capsys.readouterr()
 
@@ -930,9 +939,9 @@ def test_a_bad_prefix_rule_fails_once_the_file_is_settled(
 @pytest.mark.parametrize(
     "line",
     [
-        'prefix_rules["api/shop"] := "public"\n',
-        'prefix_rules[/api/shop] := "public"\n',
-        'prefix_rules["/api/shop/{id}"] := "public"\n',
+        '\t"api/shop": "public",\n',
+        '\t/api/shop: "public",\n',
+        '\t"/api/shop/{id}": "public",\n',
     ],
     ids=["no leading slash", "not a string", "a parameter"],
 )
@@ -940,11 +949,11 @@ def test_an_unreadable_prefix_fails_without_writing(
     service: Path, capsys: pytest.CaptureFixture[str], line: str
 ):
     routes = rule_all(service, {})
-    append(routes, line)
+    add(routes, "prefix_rules", line)
     edited = routes.read_text()
 
     assert run() == 1
-    assert "cannot read the prefix" in capsys.readouterr().err
+    assert "cannot read" in capsys.readouterr().err
     assert routes.read_text() == edited
 
 
@@ -975,7 +984,7 @@ def test_a_two_line_file_keeps_its_rules(service: Path):
 def test_an_unreadable_rule_fails_without_writing(
     service: Path, capsys: pytest.CaptureFixture[str], head: str
 ):
-    text = f'package policy\n\nroute_rules[{head}] := "public"\n'
+    text = f'package policy\n\nroute_rules := {{\n\t{head}: "public",\n}}\n'
     routes = write(service, {f"policy/{ROUTES_FILE}": text}) / "policy"
 
     assert run() == 1
@@ -1077,7 +1086,7 @@ def test_the_generated_policy_is_valid_rego(service: Path, state: str):
     if state in ("ruled", "prefixed"):
         routes = rule_all(service, {STATS: '[["admin"]]'})
     if state == "prefixed":
-        append(routes, scope("/api/shop/admin", '[["admin"]]'))
+        add(routes, "prefix_rules", scope("/api/shop/admin", '[["admin"]]'))
         run()
     write(service, {"policy/custom.rego": CUSTOM})
 
@@ -1293,7 +1302,7 @@ def test_a_prefix_rule_guards_every_request_under_it_in_opa(
 ):
     routes = rule_all(service, {STATS: '[["admin"]]'})
     for prefix, value in prefixes.items():
-        append(routes, scope(prefix, value))
+        add(routes, "prefix_rules", scope(prefix, value))
 
     assert_allow(service, *request_route, headers, allowed)
 
@@ -1315,7 +1324,7 @@ PATTERNS = [
 @needs_opa
 def test_each_route_pattern_matches_the_paths_it_answers(tmp_path: Path):
     def case(index: int, template: str, path: str, expected: bool) -> str:
-        route = key(Route(method="GET", path=template))
+        route = json.dumps(["GET", template])
         request = json.dumps(
             {
                 "attributes": {

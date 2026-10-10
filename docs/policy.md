@@ -15,38 +15,42 @@ Run from a service root, `fastloom-policy` reads the service's source with the s
   - `requested(route)` — the request's method is the route's (any, for `*`) and its path, query string dropped and percent-decoded, matches the route's pattern, also with its trailing slash added or removed: Starlette redirects `/x/` and `/x` to whichever the route declares, and that redirect has to get through. The same rule lets a bare mount root reach its mount.
   - `allow` — `false` by default. It is `true` when the request matches at least one route and **every** matched route's rule permits it. Requiring all of them is deliberate: when `/items/{id}` and `/items/special` both match, the policy can't know which one FastAPI dispatches to, so the stricter rule wins.
   - `http`, `path`, `bearer`, `claims`, `authenticated`, `roles`, `routes`, `matched`, `permits`, `slashed_path`, `guards` — the request, its token and the helpers `allow` uses. `bearer` is the token after an `Authorization` scheme of `Bearer` in any case, as FastAPI reads it. `authenticated` is a non-empty string `sub` on a token that hasn't expired. `io.jwt.decode` does not check the signature: verify the token at the edge (Envoy's `jwt_authn`) before `ext_authz`. `roles` is the token's `roles` claim, `[]` when it has none.
-- one `route_rules[[method, path, pattern]] := rule` line per route:
-  - `path` is spelled as the route declares it. A mount from `App(mounts=...)` is `["*", "<mount>/{path:path}"]`.
-  - `pattern` is Starlette's own regex for the path (`compile_path`), so OPA matches exactly what FastAPI routes: `{id}` is one segment, `{id:int}` digits, `{rest:path}` any suffix. It's regenerated every run.
-  - `rule` is the route's rule. A new route gets `"todo"`; a rule already in the file is read back by method and path and written again as it is.
+- three tables, each keyed by route (`[method, path]`, the path spelled as the route declares it; a mount from `App(mounts=...)` is `["*", "<mount>/{path:path}"]`), one entry per line:
+  - `prefix_rules` — yours, when you have any (below).
+  - `route_rules` — yours: the route's rule. A new route gets `"todo"`; a rule already in the table is read back and written again as it is.
+  - `route_patterns` — generated, never edited: Starlette's own regex for the path (`compile_path`), so OPA matches exactly what FastAPI routes: `{id}` is one segment, `{id:int}` digits, `{rest:path}` any suffix.
 
-The preamble is regenerated on every run and a deleted route's line is dropped. Below the preamble the file holds only `prefix_rules` and `route_rules` statements (a file in the older two-statement format, with `route_patterns` lines, is rewritten and keeps its rules): any other line there — a helper rule, a comment, the rest of a rule value cut by a blank line — fails the hook without writing, so nothing hand-written is lost; other rego goes in its own file. The names above are reserved in `package policy`; the service's rego must not define them, `default allow` included.
+The preamble and `route_patterns` are regenerated on every run, and a deleted route's entries are dropped. Below the preamble the file holds only those three tables (a file in the older one-statement-per-route format is rewritten and keeps its rules): any other line there — a helper rule, a comment — fails the hook without writing, so nothing hand-written is lost; other rego goes in its own file. The names above are reserved in `package policy`; the service's rego must not define them, `default allow` included.
 
 ## What the service writes
 
-The value of each `route_rules[...]` in `routes.rego`, replacing its `"todo"`:
+The value of each route in the `route_rules` table, replacing its `"todo"`:
 
 ```rego
-route_rules[["GET", "/api/notify/health", "^/api/notify/health$"]] := "public"
-route_rules[["GET", "/api/notify/notification", "^/api/notify/notification$"]] := "authenticated"
-route_rules[["PUT", "/api/notify/orders/{order_id}", "^/api/notify/orders/(?P<order_id>[^/]+)$"]] := [["owner:read", "admin:write"], ["admin"]]
+route_rules := {
+	["GET", "/api/notify/health"]: "public",
+	["GET", "/api/notify/notification"]: "authenticated",
+	["PUT", "/api/notify/orders/{order_id}"]: [["owner:read", "admin:write"], ["admin"]],
+}
 ```
 
 - `"public"` — anyone, no token.
 - `"authenticated"` — any valid token, whatever its roles.
 - a list of role lists — a valid token holding every role of at least one inner list. The example reads (`owner:read` and `admin:write`) or `admin`. Inner rego sets (`{"admin"}`) work as well; role names are non-empty double-quoted strings.
 
-The hook fails the commit, naming the route, when a route is new (its rule is written as `"todo"`), a rule is still `"todo"` or isn't one of the three forms above (a typo, an empty list, an empty role list), or a route was deleted (its block is dropped). It fails without writing anything when a rule's route can't be read or a route is listed twice. `allow` denies the same mistakes at runtime, so a rule that slips through still fails closed.
+The hook fails the commit, naming the route, when a route is new (its rule is written as `"todo"`), a rule is still `"todo"` or isn't one of the three forms above (a typo, an empty list, an empty role list), or a route was deleted (its entries are dropped). It fails without writing anything when a rule's route can't be read or a route is listed twice. `allow` denies the same mistakes at runtime, so a rule that slips through still fails closed.
 
 ### Prefix rules
 
 A service whose routers group by audience — everything under `/api/assistant/broker` is for brokers — can say so once, in `routes.rego`:
 
 ```rego
-prefix_rules["/api/assistant/broker"] := [["broker"]]
+prefix_rules := {
+	"/api/assistant/broker": [["broker"]],
+}
 ```
 
-Every request whose path is at or under that prefix must satisfy the prefix's rule **and** the rule of each route it matches, so a `[["ADMIN"]]` rule on `PUT /api/assistant/broker/{id}` then needs both `broker` and `ADMIN`. The prefix is checked against the request's decoded path, not the route templates, so a route like `/api/assistant/{name}` that also answers `/api/assistant/broker` can't slip past it. Prefixes stack: a request under `/api/x` and `/api/x/admin` needs both rules. A prefix matches whole path segments: `/api/assistant/brokerage` isn't under `/api/assistant/broker`. The value takes the same three forms as a route's rule (a `"public"` prefix adds nothing, being ANDed); the key is a literal path starting with `/`, without `{params}`. Each run keeps the prefix rules, sorted, right after the preamble, and fails the commit when one is malformed, listed twice, or covers no route — a mistyped prefix would otherwise guard nothing.
+Every request whose path is at or under that prefix must satisfy the prefix's rule **and** the rule of each route it matches, so a `[["ADMIN"]]` rule on `PUT /api/assistant/broker/{id}` then needs both `broker` and `ADMIN`. The prefix is checked against the request's decoded path, not the route templates, so a route like `/api/assistant/{name}` that also answers `/api/assistant/broker` can't slip past it. Prefixes stack: a request under `/api/x` and `/api/x/admin` needs both rules. A prefix matches whole path segments: `/api/assistant/brokerage` isn't under `/api/assistant/broker`. The value takes the same three forms as a route's rule (a `"public"` prefix adds nothing, being ANDed); the key is a literal path starting with `/`, without `{params}`. Each run keeps the prefix rules, sorted, in a `prefix_rules` table right after the preamble (add the table yourself the first time), and fails the commit when one is malformed, listed twice, or covers no route — a mistyped prefix would otherwise guard nothing.
 
 Rego the service writes for itself — an `allow if { ... }` for what roles don't cover, an internal key or a source address, and the helpers it needs — goes in its own files in `package policy`, which fastloom never touches. Rego ORs those rules with the generated one, so they can only grant more. Data-level checks — ownership of a row, anything that depends on the request body — stay in the service's code.
 
@@ -57,7 +61,7 @@ Starting from `app.py`'s `App(routes=[(router, prefix, ...), ...], mounts=[(path
 - the route decorators `get`, `put`, `post`, `delete`, `patch`, `head`, `options`, `trace`, `websocket` (as `GET`) and `api_route(path, methods=[...])` — on a function inside an `if`, a `try` or a class body (not one nested in another function) or called as `router.get("/x")(endpoint)`, under an `as` alias or a plain `name = router` included;
 - `include_router(child, prefix=...)`, `child` positional or `router=`, followed into the child router.
 
-fastloom's own routes are generated too. The launcher's routes get blocks like any other: `GET /healthcheck`, the system endpoints `/tenant_schema`, `/tenant_settings` (`GET`, `POST`) and `/reload`, and the docs (`/docs`, `/docs/oauth2-redirect`, `/redoc`, `/openapi.json`), all under `API_PREFIX`. When the service's `Settings` in `settings.py` inherits `MCPSettings` — directly, through its own base classes, or through a module (`mcp.MCPSettings`); a base it can't follow fails the hook — the MCP endpoint is `["*", "<API_PREFIX>/mcp"]`; `KafkaSettings` or `RabbitmqSettings` add the broker's AsyncAPI page (`/kafkaapi` or `/rabbitapi`, its `.json` and `.yaml` and `POST .../try`). A capability switched off at runtime (`DOCS_ENABLED`, `MCP_ENABLED`) still gets its block; its rule then never matters.
+fastloom's own routes are generated too. The launcher's routes get entries like any other: `GET /healthcheck`, the system endpoints `/tenant_schema`, `/tenant_settings` (`GET`, `POST`) and `/reload`, and the docs (`/docs`, `/docs/oauth2-redirect`, `/redoc`, `/openapi.json`), all under `API_PREFIX`. When the service's `Settings` in `settings.py` inherits `MCPSettings` — directly, through its own base classes, or through a module (`mcp.MCPSettings`); a base it can't follow fails the hook — the MCP endpoint is `["*", "<API_PREFIX>/mcp"]`; `KafkaSettings` or `RabbitmqSettings` add the broker's AsyncAPI page (`/kafkaapi` or `/rabbitapi`, its `.json` and `.yaml` and `POST .../try`). A capability switched off at runtime (`DOCS_ENABLED`, `MCP_ENABLED`) still gets its entries; its rule then never matters.
 
 Prefixes add up the way FastAPI adds them: the `App` entry, each `include_router`, then each `APIRouter(prefix=...)`. Every path starts with the service's `API_PREFIX` — `/api/<project name>`, the name read from `pyproject.toml` the way `PROJECT_NAME` defaults to it. [`reject_external`](launcher.md#reject_external) isn't read: a route behind it is still generated under `API_PREFIX`, where `reject_external` answers 404, and its bare path, which never passes the proxy, isn't listed.
 
