@@ -5,31 +5,15 @@ from pathlib import Path
 
 import click
 
-from fastloom.policy.rego import (
-    ROUTES_FILE,
-    RULES_FILE,
-    RULES_HEADER,
-    placeholder,
-    read_rules,
-    render,
-)
+from fastloom.policy.rego import ROUTES_FILE, read_rules, render
 from fastloom.policy.schemas import RULE, ordered
 from fastloom.policy.source import PolicySourceError, ServiceSource
 
 
 class Problem(StrEnum):
     ADDED = "added as todo"
-    STALE = "no longer a route, delete it"
-    DUPLICATE = "listed more than once"
+    REMOVED = "no longer a route, its rule was dropped"
     INVALID = 'not "public", "authenticated" or a list of role lists'
-
-
-def write_if_changed(path: Path, content: str) -> bool:
-    if path.exists() and path.read_text(encoding="utf-8") == content:
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-    return True
 
 
 def invalid(value: str) -> bool:
@@ -44,8 +28,8 @@ def invalid(value: str) -> bool:
 
 @click.command(
     help=(
-        "Generate the OPA route list for a service and keep its per-route "
-        "rules complete, without importing the service."
+        "Generate a service's OPA routes and keep a rule for each, without "
+        "importing the service."
     )
 )
 @click.option(
@@ -55,40 +39,36 @@ def invalid(value: str) -> bool:
     show_default=True,
 )
 def main(policy_dir: Path) -> None:
-    rules_path = policy_dir / RULES_FILE
-    text = (
-        rules_path.read_text(encoding="utf-8") if rules_path.exists() else ""
-    )
-    if text.strip() == "":
-        text = RULES_HEADER
+    path = policy_dir / ROUTES_FILE
+    before = path.read_text(encoding="utf-8") if path.exists() else ""
     try:
         routes = ServiceSource(Path.cwd()).routes()
-        rendered = render(routes)
-        rules = read_rules(text)
+        lines = read_rules(before)
+        twice = [
+            r for r, n in Counter(r.route for r in lines).items() if n > 1
+        ]
+        if twice:
+            raise PolicySourceError(
+                f"{ROUTES_FILE} lists {twice[0].method} {twice[0].path} twice"
+            )
+        rules = {line.route: line.value for line in lines}
+        after = render(routes, rules)
     except PolicySourceError as e:
         click.echo(f"fastloom-policy: {e}", err=True)
         raise click.exceptions.Exit(1) from e
-    listed = Counter(rule.route for rule in rules)
-    added = ordered(set(routes) - set(listed))
     report = {
-        Problem.ADDED: added,
-        Problem.STALE: ordered(set(listed) - set(routes)),
-        Problem.DUPLICATE: ordered(r for r, n in listed.items() if n > 1),
+        Problem.ADDED: ordered(set(routes) - set(rules)),
+        Problem.REMOVED: ordered(set(rules) - set(routes)),
         Problem.INVALID: ordered(
-            rule.route
-            for rule in rules
-            if listed[rule.route] == 1 and invalid(rule.value)
+            r for r in routes if r in rules and invalid(rules[r])
         ),
     }
-    changed = write_if_changed(policy_dir / ROUTES_FILE, rendered)
-    changed |= write_if_changed(
-        rules_path, text + "".join(placeholder(r) for r in added)
-    )
+    if after != before:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(after, encoding="utf-8")
     for problem, found in report.items():
         for route in found:
             click.echo(f"  {route.method} {route.path}: {problem}")
-    if changed or any(report.values()):
-        click.echo(
-            f"{policy_dir} needs attention: fix {rules_path}, then stage it."
-        )
+    if after != before or report[Problem.INVALID]:
+        click.echo(f"{path} needs attention: fill each rule, then stage it.")
         raise click.exceptions.Exit(1)

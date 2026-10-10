@@ -1,4 +1,5 @@
 import json
+from itertools import takewhile
 
 from starlette.routing import compile_path
 
@@ -6,13 +7,13 @@ from fastloom.policy.schemas import Route, RuleLine
 from fastloom.policy.source import PolicySourceError
 
 ROUTES_FILE = "routes.rego"
-RULES_FILE = "rules.rego"
+PATTERN_PREFIX = "route_patterns["
 RULE_PREFIX = "route_rules["
-RULES_HEADER = "package policy\n"
+TODO = '"todo"'
+INDENTED = ("\t", " ", "]", "}")
 
-PREAMBLE = (
-    RULES_HEADER
-    + """
+PREAMBLE = """package policy
+
 http := input.attributes.request.http
 
 path := split(http.path, "?")[0]
@@ -61,8 +62,8 @@ allow if {
 \tevery route in matched {
 \t\tpermits(data.policy.route_rules[route])
 \t}
-}"""
-)
+}
+"""
 
 
 def key(route: Route) -> str:
@@ -76,14 +77,17 @@ def pattern(route: Route) -> str:
         raise PolicySourceError(f"{route.path}: {e}") from e
 
 
-def render(routes: list[Route]) -> str:
-    patterns = "".join(f"\t{key(r)}: `{pattern(r)}`,\n" for r in routes)
-    listing = f"\n\nroute_patterns := {{\n{patterns}}}" if routes else ""
-    return f"{PREAMBLE}{listing}\n"
+def block(route: Route, rule: str) -> str:
+    return (
+        f"\n{PATTERN_PREFIX}{key(route)}] := `{pattern(route)}`\n"
+        f"{RULE_PREFIX}{key(route)}] := {rule}\n"
+    )
 
 
-def placeholder(route: Route) -> str:
-    return f'\n{RULE_PREFIX}{key(route)}] := "todo"\n'
+def render(routes: list[Route], rules: dict[Route, str]) -> str:
+    return PREAMBLE + "".join(
+        block(route, rules.get(route, TODO)) for route in routes
+    )
 
 
 def read_rules(text: str) -> list[RuleLine]:
@@ -93,11 +97,15 @@ def read_rules(text: str) -> list[RuleLine]:
 
 
 def read_rule(chunk: str) -> RuleLine:
-    head, _, value = chunk.partition("\n\n")[0].partition("] := ")
+    first, *rest = chunk.split("\n")
+    statement = "\n".join(
+        [first, *takewhile(lambda line: line.startswith(INDENTED), rest)]
+    )
+    head, _, value = statement.partition("] := ")
     try:
         method, path = json.loads(head)
         return RuleLine(route=Route(method=method, path=path), value=value)
     except ValueError as e:
         raise PolicySourceError(
-            f"{RULES_FILE}: cannot read the route in {RULE_PREFIX}{head}]"
+            f"{ROUTES_FILE}: cannot read the route in {RULE_PREFIX}{head}]"
         ) from e

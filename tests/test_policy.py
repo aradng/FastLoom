@@ -10,7 +10,7 @@ from textwrap import dedent
 import pytest
 
 from fastloom.policy import main as cli
-from fastloom.policy.rego import ROUTES_FILE, RULES_FILE, RULES_HEADER, render
+from fastloom.policy.rego import ROUTES_FILE, render
 from fastloom.policy.schemas import Route
 from fastloom.policy.source import PolicySourceError, ServiceSource
 
@@ -537,20 +537,21 @@ DELETE_ITEM = ("DELETE", "/api/shop/items/{item_id}")
 
 def rule(method: str, path: str, value: str) -> str:
     key = json.dumps([method, path], ensure_ascii=False)
-    return f"\nroute_rules[{key}] := {value}\n"
+    return f"route_rules[{key}] := {value}\n"
 
 
 def rule_all(service: Path, values: dict[tuple[str, str], str | None]) -> Path:
-    lines = (
-        rule(method, path, value)
-        for method, path in sorted(SHOP_ROUTES)
-        if (value := values.get((method, path), '"public"')) is not None
-    )
-    return (
-        write(service, {f"policy/{RULES_FILE}": RULES_HEADER + "".join(lines)})
-        / "policy"
-        / RULES_FILE
-    )
+    run()
+    routes = service / "policy" / ROUTES_FILE
+    text = routes.read_text()
+    for method, path in SHOP_ROUTES:
+        value = values.get((method, path), '"public"')
+        text = text.replace(
+            rule(method, path, '"todo"'),
+            "" if value is None else rule(method, path, value),
+        )
+    routes.write_text(text)
+    return routes
 
 
 @pytest.mark.parametrize(
@@ -559,23 +560,24 @@ def rule_all(service: Path, values: dict[tuple[str, str], str | None]) -> Path:
 def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     service: Path, capsys: pytest.CaptureFixture[str], args: list[str]
 ):
-    directory = service / (args[-1] if args else "policy")
+    routes = service / (args[-1] if args else "policy") / ROUTES_FILE
 
     assert run(*args) == 1
     assert capsys.readouterr().out.count("added as todo") == len(SHOP_ROUTES)
-    routes = (directory / ROUTES_FILE).read_text()
     assert (
-        '\t["DELETE", "/api/shop/items/{item_id}"]: '
-        "`^/api/shop/items/(?P<item_id>[^/]+)$`,\n" in routes
+        'route_patterns[["DELETE", "/api/shop/items/{item_id}"]] := '
+        "`^/api/shop/items/(?P<item_id>[^/]+)$`\n"
+        'route_rules[["DELETE", "/api/shop/items/{item_id}"]] := "todo"\n'
+        in routes.read_text()
     )
     assert (
-        '\t["*", "/api/shop/files/{path:path}"]: '
-        "`^/api/shop/files/(?P<path>.*)$`,\n" in routes
+        'route_patterns[["*", "/api/shop/files/{path:path}"]] := '
+        "`^/api/shop/files/(?P<path>.*)$`\n" in routes.read_text()
     )
     assert run(*args) == 1
     assert capsys.readouterr().out.count('not "public"') == len(SHOP_ROUTES)
 
-    replace(service, str(directory / RULES_FILE), '"todo"', '"public"')
+    replace(service, str(routes), '"todo"', '"public"')
 
     assert run(*args) == 0
     assert capsys.readouterr().out == ""
@@ -592,12 +594,14 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     ],
     ids=["authenticated", "roles", "roles across lines", "roles as sets"],
 )
-def test_a_well_formed_rule_passes(service: Path, value: str):
-    assert run() == 1
-
-    rule_all(service, {STATS: value})
+def test_a_well_formed_rule_passes_and_survives_the_rewrite(
+    service: Path, value: str
+):
+    routes = rule_all(service, {STATS: value})
+    filled = routes.read_text()
 
     assert run() == 0
+    assert routes.read_text() == filled
 
 
 PROBLEMS = {
@@ -617,7 +621,6 @@ PROBLEMS = {
 def test_a_malformed_rule_is_reported(
     service: Path, capsys: pytest.CaptureFixture[str], value: str
 ):
-    run()
     rule_all(service, {STATS: value})
     capsys.readouterr()
 
@@ -626,75 +629,49 @@ def test_a_malformed_rule_is_reported(
     assert 'GET /api/shop/admin/v1/stats: not "public"' in out
 
 
-@pytest.mark.parametrize(
-    ("extra", "message"),
-    [
-        (rule("GET", "/api/shop/gone", '"public"'), "no longer a route"),
-        (rule(*SPECIAL, '"public"'), "listed more than once"),
-    ],
-    ids=["stale", "duplicate"],
-)
-def test_a_rule_that_matches_no_single_route_is_reported(
-    service: Path,
-    capsys: pytest.CaptureFixture[str],
-    extra: str,
-    message: str,
+def test_a_changed_route_keeps_the_other_rules(
+    service: Path, capsys: pytest.CaptureFixture[str]
 ):
-    run()
-    rules = rule_all(service, {})
-    rules.write_text(rules.read_text() + extra)
-    capsys.readouterr()
-
-    assert run() == 1
-    assert message in capsys.readouterr().out
-
-
-def test_a_new_route_is_appended_without_touching_existing_rules(
-    service: Path,
-):
-    run()
-    rules = rule_all(service, {STATS: '[["admin"]]'})
-    before = rules.read_text()
+    routes = rule_all(service, {STATS: '[["admin"]]'})
     replace(
         service,
         "shop/api/hooks.py",
         '@router.post("/agent/")',
         '@router.put("/agent/")',
     )
+    capsys.readouterr()
 
     assert run() == 1
-    assert rules.read_text() == before + rule(
-        "PUT", "/api/shop/agent/", '"todo"'
+    out = capsys.readouterr().out
+    assert "PUT /api/shop/agent/: added as todo" in out
+    assert "POST /api/shop/agent/: no longer a route" in out
+    text = routes.read_text()
+    assert rule(*STATS, '[["admin"]]') in text
+    assert rule("PUT", "/api/shop/agent/", '"todo"') in text
+    assert '"POST", "/api/shop/agent/"' not in text
+
+
+def test_a_route_listed_twice_fails_without_writing(
+    service: Path, capsys: pytest.CaptureFixture[str]
+):
+    routes = rule_all(service, {})
+    routes.write_text(routes.read_text() + "\n" + rule(*SPECIAL, '"public"'))
+    edited = routes.read_text()
+
+    assert run() == 1
+    assert "lists GET /api/shop/items/special twice" in capsys.readouterr().err
+    assert routes.read_text() == edited
+
+
+def test_anything_outside_a_rule_value_is_regenerated(service: Path):
+    routes = rule_all(service, {})
+    filled = routes.read_text()
+    routes.write_text(
+        filled.replace("default allow := false", "") + "x := 1\n"
     )
 
-
-def test_rego_after_the_last_rule_is_left_alone(service: Path):
-    run()
-    rules = rule_all(service, {})
-    rules.write_text(rules.read_text() + "\nallow if input.internal\n")
-
-    assert run() == 0
-
-
-def test_an_empty_rules_file_gets_the_package_header(service: Path):
-    write(service, {f"policy/{RULES_FILE}": ""})
-
     assert run() == 1
-    assert (
-        (service / "policy" / RULES_FILE).read_text().startswith(RULES_HEADER)
-    )
-
-
-def test_a_hand_edited_route_list_is_rewritten(service: Path):
-    run()
-    rule_all(service, {})
-    assert run() == 0
-    routes = service / "policy" / ROUTES_FILE
-    generated = routes.read_text()
-    routes.write_text(generated + "\nextra := 1\n")
-
-    assert run() == 1
-    assert routes.read_text() == generated
+    assert routes.read_text() == filled
     assert run() == 0
 
 
@@ -703,21 +680,17 @@ def test_a_hand_edited_route_list_is_rewritten(service: Path):
     ['["GET" "/x"]', '["FETCH", "/x"]', '["GET"]'],
     ids=["not json", "unknown method", "no path"],
 )
-def test_an_unreadable_rules_line_fails(
+def test_an_unreadable_rule_fails_without_writing(
     service: Path, capsys: pytest.CaptureFixture[str], head: str
 ):
-    write(
-        service,
-        {
-            f"policy/{RULES_FILE}": RULES_HEADER
-            + f'\nroute_rules[{head}] := "public"\n'
-        },
-    )
+    text = f'package policy\n\nroute_rules[{head}] := "public"\n'
+    routes = write(service, {f"policy/{ROUTES_FILE}": text}) / "policy"
 
     assert run() == 1
     assert capsys.readouterr().err.startswith(
-        f"fastloom-policy: {RULES_FILE}: cannot read"
+        f"fastloom-policy: {ROUTES_FILE}: cannot read"
     )
+    assert (routes / ROUTES_FILE).read_text() == text
 
 
 @pytest.mark.parametrize(
@@ -778,66 +751,125 @@ def test_the_generated_policy_is_valid_rego(service: Path, state: str):
     run()
     if state == "ruled":
         rule_all(service, {STATS: '[["admin"]]'})
+    write(service, {"policy/custom.rego": CUSTOM})
 
     assert opa(service, "fmt", "--diff", "--fail", "policy").stdout == ""
     checked = opa(service, "check", "--strict", "policy")
     assert checked.returncode == 0, checked.stdout + checked.stderr
 
 
+CUSTOM = """package policy
+
+allow if http.headers["x-internal-key"] == "k"
+"""
 RULES: dict[tuple[str, str], str | None] = {
     DELETE_ITEM: '"authenticated"',
     STATS: '[["owner:read", "admin:write"], ["admin"]]',
     ITEM: '[["admin"]]',
 }
+
+
+def auth(value: str) -> dict[str, str]:
+    return {"authorization": value}
+
+
 DECISIONS = {
-    "public, no token": ("GET", "/api/shop/items/?a=1", None, {}, True),
-    "mount root": ("PATCH", "/api/shop/files", None, {}, True),
-    "catch-all": ("GET", "/api/shop/items/1/notes/a/b", None, {}, True),
-    "authenticated, no token": (
+    "public, no token": ("GET", "/api/shop/items/?a=1", {}, {}, True),
+    "mount root": ("PATCH", "/api/shop/files", {}, {}, True),
+    "catch-all": ("GET", "/api/shop/items/1/notes/a/b", {}, {}, True),
+    "authenticated, no token": ("DELETE", "/api/shop/items/1", {}, {}, False),
+    "authenticated": (
         "DELETE",
         "/api/shop/items/1",
-        None,
-        {},
-        False,
-    ),
-    "authenticated": ("DELETE", "/api/shop/items/1", token([]), {}, True),
-    "expired": ("DELETE", "/api/shop/items/1", token([], -60), {}, False),
-    "empty sub": ("DELETE", "/api/shop/items/1", token([], sub=""), {}, False),
-    "no sub": ("DELETE", "/api/shop/items/1", token([], sub=None), {}, False),
-    "not a bearer": ("DELETE", "/api/shop/items/1", "Basic dTpw", {}, False),
-    "one role of a pair": (*STATS, token(["owner:read"]), {}, False),
-    "both roles of a pair": (
-        *STATS,
-        token(["owner:read", "admin:write"]),
+        auth(token([])),
         {},
         True,
     ),
-    "the other alternative": (*STATS, token(["admin"]), {}, True),
+    "expired": (
+        "DELETE",
+        "/api/shop/items/1",
+        auth(token([], -60)),
+        {},
+        False,
+    ),
+    "empty sub": (
+        "DELETE",
+        "/api/shop/items/1",
+        auth(token([], sub="")),
+        {},
+        False,
+    ),
+    "no sub": (
+        "DELETE",
+        "/api/shop/items/1",
+        auth(token([], sub=None)),
+        {},
+        False,
+    ),
+    "not a bearer": (
+        "DELETE",
+        "/api/shop/items/1",
+        auth("Basic dTpw"),
+        {},
+        False,
+    ),
+    "the service's own allow": (
+        "DELETE",
+        "/api/shop/items/1",
+        {"x-internal-key": "k"},
+        {},
+        True,
+    ),
+    "one role of a pair": (*STATS, auth(token(["owner:read"])), {}, False),
+    "both roles of a pair": (
+        *STATS,
+        auth(token(["owner:read", "admin:write"])),
+        {},
+        True,
+    ),
+    "the other alternative": (*STATS, auth(token(["admin"])), {}, True),
     "roles as sets": (
         *STATS,
-        token(["admin"]),
+        auth(token(["admin"])),
         {STATS: '[{"owner:read"}, {"admin"}]'},
         True,
     ),
-    "overlap, one rule denies": (*SPECIAL, None, {}, False),
-    "overlap, both rules allow": (*SPECIAL, token(["admin"]), {}, True),
-    "wrong method": ("POST", "/api/shop/items", token(["admin"]), {}, False),
-    "no such route": ("GET", "/api/shop/itemsX", token(["admin"]), {}, False),
-    "todo rule": (*STATS, token(["admin"]), {STATS: '"todo"'}, False),
-    "missing rule": (*STATS, token(["admin"]), {STATS: None}, False),
+    "overlap, one rule denies": (*SPECIAL, {}, {}, False),
+    "overlap, both rules allow": (*SPECIAL, auth(token(["admin"])), {}, True),
+    "wrong method": (
+        "POST",
+        "/api/shop/items",
+        auth(token(["admin"])),
+        {},
+        False,
+    ),
+    "no such route": (
+        "GET",
+        "/api/shop/itemsX",
+        auth(token(["admin"])),
+        {},
+        False,
+    ),
+    "todo rule": (*STATS, auth(token(["admin"])), {STATS: '"todo"'}, False),
+    "missing rule": (*STATS, auth(token(["admin"])), {STATS: None}, False),
     "object rule": (
         *STATS,
-        token(["admin"]),
+        auth(token(["admin"])),
         {STATS: '{"x": ["admin"]}'},
         False,
     ),
-    "empty alternative": (*STATS, token(["admin"]), {STATS: "[[]]"}, False),
+    "empty alternative": (
+        *STATS,
+        auth(token(["admin"])),
+        {STATS: "[[]]"},
+        False,
+    ),
 }
 
 
 @needs_opa
 @pytest.mark.parametrize(
-    ("method", "path", "authorization", "overrides", "allowed"),
+    ("method", "path", "headers", "overrides", "allowed"),
     DECISIONS.values(),
     ids=DECISIONS,
 )
@@ -845,13 +877,12 @@ def test_the_generated_policy_decides_in_opa(
     service: Path,
     method: str,
     path: str,
-    authorization: str | None,
+    headers: dict[str, str],
     overrides: dict[tuple[str, str], str | None],
     allowed: bool,
 ):
-    run()
     rule_all(service, RULES | overrides)
-    headers = {} if authorization is None else {"authorization": authorization}
+    write(service, {"policy/custom.rego": CUSTOM})
     request = {"method": method, "path": path, "headers": headers}
     write(
         service,
@@ -917,7 +948,7 @@ def test_each_route_pattern_matches_the_paths_it_answers(tmp_path: Path):
         tmp_path,
         {
             f"policy/{ROUTES_FILE}": render(
-                [Route(method="GET", path=t) for t, _, _ in PATTERNS]
+                [Route(method="GET", path=t) for t, _, _ in PATTERNS], {}
             ),
             "policy/patterns_test.rego": "package patterns_test\n\n"
             "import data.policy\n\n"
