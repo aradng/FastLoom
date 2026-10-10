@@ -1,7 +1,10 @@
+import base64
+import json
 import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from textwrap import dedent
 
@@ -9,7 +12,7 @@ import pytest
 from starlette.routing import compile_path
 
 from fastloom.policy import main as cli
-from fastloom.policy.rego import COVERAGE, COVERAGE_FILE, ROUTES_FILE, render
+from fastloom.policy.rego import ROUTES_FILE, RULES_FILE, RULES_HEADER, render
 from fastloom.policy.source import PolicySourceError, ServiceSource
 
 FILES = {
@@ -494,21 +497,27 @@ def run(monkeypatch: pytest.MonkeyPatch, *args: str) -> int:
     return cli.main()
 
 
-def written(root: Path) -> tuple[str, str]:
-    return render(ServiceSource(root).routes()), COVERAGE
+def rule(method: str, path: str, value: str) -> str:
+    return f"\nroute_rules[{json.dumps([method, path])}] := {value}\n"
 
 
-def files(directory: Path) -> tuple[str, str]:
-    return (
-        (directory / ROUTES_FILE).read_text(),
-        (directory / COVERAGE_FILE).read_text(),
+def rule_all(service: Path, **values: str) -> None:
+    write(
+        service,
+        {
+            f"policy/{RULES_FILE}": RULES_HEADER
+            + "".join(
+                rule(m, p, values.get(p.rsplit("/", 1)[-1], '"public"'))
+                for m, p in sorted(SHOP_ROUTES)
+            )
+        },
     )
 
 
 @pytest.mark.parametrize(
     "args", [[], ["--policy-dir", "rules"]], ids=["default", "moved"]
 )
-def test_the_command_writes_the_policy_until_it_is_current(
+def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     service: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -517,36 +526,108 @@ def test_the_command_writes_the_policy_until_it_is_current(
     directory = service / (args[-1] if args else "policy")
 
     assert run(monkeypatch, *args) == 1
-    assert "was regenerated" in capsys.readouterr().out
-    assert files(directory) == written(service)
+    assert capsys.readouterr().out.count("added as todo") == len(SHOP_ROUTES)
+    assert (directory / ROUTES_FILE).read_text() == render(
+        ServiceSource(service).routes()
+    )
+    assert run(monkeypatch, *args) == 1
+    assert capsys.readouterr().out.count('not "public"') == len(SHOP_ROUTES)
+
+    replace(service, str(directory / RULES_FILE), '"todo"', '"public"')
+
     assert run(monkeypatch, *args) == 0
     assert capsys.readouterr().out == ""
     assert not (service / ("policy" if args else "rules")).exists()
 
 
 @pytest.mark.parametrize(
-    ("name", "old", "new"),
+    "value",
     [
-        ("shop/api/hooks.py", '@router.post("/webhook")', '@router.put("/x")'),
-        (f"policy/{COVERAGE_FILE}", "package policy_test", "package stale"),
+        '"authenticated"',
+        '[["owner:read", "admin:write"], ["admin"]]',
+        '[\n\t["owner:read", "admin:write"],\n\t["admin"],\n]',
+        '[{"owner:read", "admin:write"}, {"admin"}]',
     ],
-    ids=["route changed", "coverage edited"],
+    ids=["authenticated", "roles", "roles across lines", "roles as sets"],
 )
-def test_a_change_regenerates_the_policy(
+def test_a_well_formed_rule_passes(
+    service: Path, monkeypatch: pytest.MonkeyPatch, value: str
+):
+    run(monkeypatch)
+    rule_all(service, stats=value)
+
+    assert run(monkeypatch) == 0
+
+
+PROBLEMS = {
+    "todo": ('"todo"', 'not "public"'),
+    "typo": ('"publc"', 'not "public"'),
+    "no alternatives": ("[]", 'not "public"'),
+    "no roles": ("[[]]", 'not "public"'),
+    "not a role name": ('[["admin", 1]]', 'not "public"'),
+}
+
+
+@pytest.mark.parametrize(("value", "message"), PROBLEMS.values(), ids=PROBLEMS)
+def test_a_malformed_rule_is_reported(
     service: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    name: str,
-    old: str,
-    new: str,
+    value: str,
+    message: str,
 ):
     run(monkeypatch)
-    replace(service, name, old, new)
+    rule_all(service, stats=value)
     capsys.readouterr()
 
     assert run(monkeypatch) == 1
-    assert "was regenerated" in capsys.readouterr().out
-    assert files(service / "policy") == written(service)
+    assert (
+        f"GET /api/shop/admin/v1/stats: {message}" in capsys.readouterr().out
+    )
+
+
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        (rule("GET", "/api/shop/gone", '"public"'), "no longer a route"),
+        (rule("GET", "/api/shop/items", '"public"'), "listed more than once"),
+    ],
+    ids=["stale", "duplicate"],
+)
+def test_a_rule_that_matches_no_single_route_is_reported(
+    service: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    extra: str,
+    message: str,
+):
+    run(monkeypatch)
+    rule_all(service)
+    (service / "policy" / RULES_FILE).write_text(
+        (service / "policy" / RULES_FILE).read_text() + extra
+    )
+    capsys.readouterr()
+
+    assert run(monkeypatch) == 1
+    assert message in capsys.readouterr().out
+
+
+def test_a_new_route_is_appended_without_touching_existing_rules(
+    service: Path, monkeypatch: pytest.MonkeyPatch
+):
+    run(monkeypatch)
+    rule_all(service, stats='[["admin"]]')
+    before = (service / "policy" / RULES_FILE).read_text()
+    replace(
+        service,
+        "shop/api/hooks.py",
+        '@router.post("/agent/")',
+        '@router.put("/agent/")',
+    )
+
+    assert run(monkeypatch) == 1
+    after = (service / "policy" / RULES_FILE).read_text()
+    assert after == before + rule("PUT", "/api/shop/agent/", '"todo"')
 
 
 def test_an_unreadable_source_fails_without_writing(
@@ -561,68 +642,89 @@ def test_an_unreadable_source_fails_without_writing(
     assert not (service / "policy").exists()
 
 
-GENERATED = (f"policy/{ROUTES_FILE}", f"policy/{COVERAGE_FILE}")
-SERVICE_POLICY = """package policy
+def token(roles: list[str], expires_in: int = 600) -> str:
+    def part(data: dict[str, object]) -> str:
+        encoded = base64.urlsafe_b64encode(json.dumps(data).encode())
+        return encoded.rstrip(b"=").decode()
 
-ruled_routes := {
-\t"open": {["GET", "/api/shop/items"], ["*", "/api/shop/files/{path:path}"]},
-\t"signed_in": {route | some route in routes} - {
-\t\t["GET", "/api/shop/items"],
-\t\t["*", "/api/shop/files/{path:path}"],
-\t},
+    claims = {"sub": "u", "roles": roles, "exp": int(time.time()) + expires_in}
+    return f"{part({'alg': 'HS256'})}.{part(claims)}.c2ln"
+
+
+DECISIONS = {
+    "public route, no token": ("GET", "/api/shop/items/?a=1", None, True),
+    "mount root": ("PATCH", "/api/shop/files", None, True),
+    "authenticated, no token": ("DELETE", "/api/shop/items/1", None, False),
+    "authenticated": ("DELETE", "/api/shop/items/1", token([]), True),
+    "expired token": ("DELETE", "/api/shop/items/1", token([], -60), False),
+    "one role of a pair": (
+        "GET",
+        "/api/shop/admin/v1/stats",
+        token(["owner:read"]),
+        False,
+    ),
+    "both roles of a pair": (
+        "GET",
+        "/api/shop/admin/v1/stats",
+        token(["owner:read", "admin:write"]),
+        True,
+    ),
+    "the other alternative": (
+        "GET",
+        "/api/shop/admin/v1/stats",
+        token(["admin"]),
+        True,
+    ),
+    "no such route": ("GET", "/api/shop/itemsX", token(["admin"]), False),
 }
-"""
-SERVICE_TESTS = """package service_test
-
-import data.policy
-
-request(method, path) := {"attributes": {"request": {"http": {
-\t"method": method,
-\t"path": path,
-\t"headers": {},
-}}}}
-
-get(path) := request("GET", path)
-
-test_a_listed_path_is_requested if {
-\tpolicy.requested_group("open") with input as get("/api/shop/items/?a=1")
-}
-
-test_a_mount_answers_every_method if {
-\tfiles := request("PATCH", "/api/shop/files/a/b")
-\tpolicy.requested_group("open") with input as files
-}
-
-test_a_sibling_path_is_not_requested if {
-\tnot policy.requested_group("open") with input as get("/api/shop/itemsX")
-}
-
-test_no_token_is_not_authenticated if {
-\tnot policy.authenticated with input as request("GET", "/api/shop/items")
-}
-"""
 
 
 @pytest.mark.skipif(shutil.which("opa") is None, reason="opa is not installed")
-def test_the_generated_policy_passes_opa(
-    service: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("method", "path", "bearer", "allowed"), DECISIONS.values(), ids=DECISIONS
+)
+def test_the_generated_policy_decides_in_opa(
+    service: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    path: str,
+    bearer: str | None,
+    allowed: bool,
 ):
     run(monkeypatch)
-    (service / "policy" / "service.rego").write_text(SERVICE_POLICY)
-    (service / "policy" / "service_test.rego").write_text(SERVICE_TESTS)
+    rule_all(
+        service,
+        **{
+            "{item_id}": '"authenticated"',
+            "stats": '[["owner:read", "admin:write"], ["admin"]]',
+        },
+    )
+    headers = {} if bearer is None else {"authorization": f"Bearer {bearer}"}
+    request = {"method": method, "path": path, "headers": headers}
+    write(
+        service,
+        {
+            "input.json": json.dumps(
+                {"attributes": {"request": {"http": request}}}
+            )
+        },
+    )
 
     def opa(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["opa", *args], cwd=service, capture_output=True, text=True
         )
 
-    formatted = opa("fmt", "--diff", "--fail", *GENERATED)
-    assert (formatted.returncode, formatted.stdout) == (0, "")
+    assert opa("fmt", "--diff", "--fail", "policy").stdout == ""
     assert opa("check", "--strict", "policy").returncode == 0
-    tested = opa("test", "policy")
-    assert tested.returncode == 0, tested.stdout
-
-    replace(service, "policy/service.rego", '["GET", "/api/shop/items"], ', "")
-    tested = opa("test", "policy")
-    assert tested.returncode != 0
-    assert "test_every_route_is_ruled: FAIL" in tested.stdout
+    decision = opa(
+        "eval",
+        "-f",
+        "raw",
+        "-d",
+        "policy",
+        "-i",
+        "input.json",
+        "data.policy.allow",
+    )
+    assert decision.stdout.strip() == str(allowed).lower()

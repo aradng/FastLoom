@@ -1,9 +1,9 @@
 - id: fastloom-policy
   name: fastloom policy
-  description: Generate policy/routes.rego and the tests that make the policy rule every route.
+  description: Generate policy/routes.rego and keep policy/rules.rego naming a rule for every route.
   entry: fastloom-policy
   language: python
   language_version: "3.13"
-  files: \.py$|^pyproject\.toml$|routes(_test)?\.rego$
+  files: \.py$|^pyproject\.toml$|(routes|rules)\.rego$
   additional_dependencies: ["starlette>=0.40.0,<2.0.0"]
   pass_filenames: false

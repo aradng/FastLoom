@@ -1,57 +1,48 @@
 # Policy (OPA route coverage)
 
-A service that authorizes requests with Open Policy Agent keeps its rego in a `policy/` directory. `fastloom-policy` generates the list of the service's routes into that directory, together with tests that fail until the service's own rego gives every route a rule. Who may call a route is the service's to write; that every route has an answer is what the generated files enforce.
+A service that authorizes requests with Open Policy Agent keeps its rego in a `policy/` directory. `fastloom-policy` generates the service's routes and the `allow` decision into that directory, and keeps a rules file in which the service gives every route one rule. The commit fails until every route has a rule and every rule is well formed, and `allow` denies anything a rule doesn't grant.
 
 **Symbols at a glance**
 
 - `fastloom-policy` — console script (`fastloom.policy.main:main`), in the `policy` extra (`fastloom[policy]`, which brings Starlette for its path patterns).
 - `.pre-commit-hooks.yaml` — the `fastloom-policy` hook.
 
-## What it generates
+## What it writes
 
-Run from a service root, `fastloom-policy` reads the service's source with the standard library's `ast` — it never imports it, so it needs none of the service's dependencies — and writes two files into `policy/` (`--policy-dir <dir>` to write them elsewhere). Neither is edited by hand.
+Run from a service root, `fastloom-policy` reads the service's source with the standard library's `ast` — it never imports it, so it needs none of the service's dependencies — and writes into `policy/` (`--policy-dir <dir>` to write elsewhere):
 
-`routes.rego`, in `package policy`:
+`routes.rego`, in `package policy`, regenerated on every run and never edited by hand:
 
-- `route_patterns` — every route as `[method, path]`, the path spelled as the route declares it (`/api/notify/notification/{notification_id}`), mapped to the pattern its requests match. A mount from `App(mounts=...)` is `["*", "<mount>/{path:path}"]`: it answers any method on any sub-path.
-- `routes` — the set of `route_patterns`' keys.
-- `requested(route)` — the request's method is the route's (any, for `*`) and its path, query string dropped, matches the route's pattern, which is Starlette's own (`compile_path`): `{id}` is one segment, `{id:int}` digits, `{rest:path}` any suffix. The path is also tried with its trailing slash added or removed, because Starlette redirects `/x/` and `/x` to whichever the route declares and that redirect has to get through — the same rule lets a bare mount root (`/api/x/mcp`) reach its mount. Patterns overlap where routes do — `/items/{id}` and `/items/{rest:path}` — so `requested()` can be true for more than one route, and their groups' rules all apply.
-- `requested_group(group)` — `requested()` for some route in `ruled_routes[group]`.
-- `http`, `path`, `bearer`, `claims`, `authenticated`, `roles` — the request and its token, decoded once. `authenticated` is a non-empty string `sub` on a token that hasn't expired. `io.jwt.decode` does not check the signature: verify the token at the edge (Envoy's `jwt_authn`) before `ext_authz`. `roles` is `[]` for a token with no `roles` claim, the default `UserClaims` has.
+- `route_patterns` — every route as `[method, path]`, the path spelled as the route declares it (`/api/notify/notification/{notification_id}`), mapped to Starlette's own pattern for it (`compile_path`): `{id}` is one segment, `{id:int}` digits, `{rest:path}` any suffix. A mount from `App(mounts=...)` is `["*", "<mount>/{path:path}"]`.
+- `requested(route)` — the request's method is the route's (any, for `*`) and its path, query string dropped, matches the pattern, also with its trailing slash added or removed: Starlette redirects `/x/` and `/x` to whichever the route declares, and that redirect has to get through. The same rule lets a bare mount root reach its mount.
+- `allow` — `false` by default. It is `true` when the request matches at least one route and **every** matched route's rule permits it. Requiring all of them is deliberate: when `/items/{id}` and `/items/special` both match, the policy can't know which one FastAPI dispatches to, so the stricter rule wins.
+- `http`, `path`, `bearer`, `claims`, `authenticated`, `roles`, `routes`, `matched`, `permits` — the request, its token and the helpers `allow` uses. `authenticated` is a non-empty string `sub` on a token that hasn't expired. `io.jwt.decode` does not check the signature: verify the token at the edge (Envoy's `jwt_authn`) before `ext_authz`. `roles` is the token's `roles` claim, `[]` when it has none.
 
-These names — `http`, `path`, `bearer`, `claims`, `authenticated`, `roles`, `routes`, `route_patterns`, `requested`, `requested_group` — are reserved in `package policy`: the service's rego must not define them. It defines `ruled_routes` and `allow`.
+These names are reserved in `package policy`; the service's rego must not define them, `default allow` included.
 
-`routes_test.rego`, in `package policy_test`: two tests over the service's `ruled_routes`. They fail when a route has no group, or when a group lists a route the app no longer has.
+`rules.rego`, in `package policy`, is the service's. `fastloom-policy` only ever appends to it: a line `route_rules[["POST", "/api/notify/orders"]] := "todo"` for each route that has no rule yet (the whole file, the first time).
 
 ## What the service writes
 
-`ruled_routes`, in `package policy`, puts every route in a group the service names, and `allow` decides each group:
+One rule per route in `rules.rego`, replacing each `"todo"`:
 
 ```rego
 package policy
 
-default allow := false
+route_rules[["GET", "/api/notify/health"]] := "public"
 
-ruled_routes := {
-	"open": {["POST", "/api/notify/sendgrid/webhook"]},
-	"signed_in": {["GET", "/api/notify/notification"]},
-	"admin": {["GET", "/api/notify/admin/email/deliveries"]},
-}
+route_rules[["GET", "/api/notify/notification"]] := "authenticated"
 
-allow if requested_group("open")
-
-allow if {
-	requested_group("signed_in")
-	authenticated
-}
-
-allow if {
-	requested_group("admin")
-	"ADMIN" in roles
-}
+route_rules[["POST", "/api/notify/orders"]] := [["owner:read", "admin:write"], ["admin"]]
 ```
 
-Data-level checks — ownership, rows a caller may see, anything that depends on the request body — stay in the service's code.
+- `"public"` — anyone, no token.
+- `"authenticated"` — any valid token, whatever its roles.
+- a list of role lists — a valid token holding every role of at least one inner list. The example reads (`owner:read` and `admin:write`) or `admin`. Inner rego sets (`{"admin"}`) work as well.
+
+The hook fails the commit, naming the route, when a route has no rule (it appends the `"todo"`), a rule is still `"todo"` or isn't one of the three forms above (a typo, an empty list, an empty role list), a rule names a route the app no longer has (delete the line), or a route is listed twice. `allow` denies the same mistakes at runtime, so a rule that slips through still fails closed.
+
+A service may add its own `allow if { ... }` rules in another file, for what roles don't cover — an internal key, a source address. Rego ORs them with the generated one, so they can only grant more. Data-level checks — ownership of a row, anything that depends on the request body — stay in the service's code.
 
 ## What it reads
 
@@ -93,4 +84,4 @@ What it can't read without running the code fails the hook, naming what it could
       # args: [--policy-dir, rules]
 ```
 
-It runs on any change to a `.py` file, `pyproject.toml` or the generated files, in pre-commit's own environment on Python 3.13 (`language_version`; prek downloads it when the image has an older Python), so it reads 3.13 syntax whatever the service's own Python is — the same locally and in CI. It exits `1` when either file changed (`git diff policy/` shows which routes came and went), so the commit fails until the regenerated files are staged — and the service's `opa test` then fails until `ruled_routes` gives each added route a group. Formatting, `opa check` and `opa test` are each service's own hooks; the generated files are already `opa fmt`-clean.
+It runs on any change to a `.py` file, `pyproject.toml`, `routes.rego` or `rules.rego`, in pre-commit's own environment on Python 3.13 (`language_version`; prek downloads it when the image has an older Python), so it reads 3.13 syntax whatever the service's own Python is — the same locally and in CI. It exits `1`, printing each route and what's wrong with it, when `routes.rego` changed or `rules.rego` needs a rule filled in, deleted or fixed, so the commit fails until both are right and staged. Formatting and `opa check` are each service's own hooks; the generated file is already `opa fmt`-clean.

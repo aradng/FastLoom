@@ -92,7 +92,7 @@ When `MCPSettings.MCP_ENABLED` is set, a FastMCP ASGI app is mounted at `API_PRE
 
 ### Policy (`fastloom/policy/`)
 
-`fastloom-policy` (extra `policy`: Starlette; stdlib `ast`, hook pinned to Python 3.13) statically reads a service's routes — `App(routes=, mounts=)` → `APIRouter` definitions → every route/`include_router` call on them in the modules `app.py` reaches through imports — and writes `policy/routes.rego` (`route_patterns`, `routes`, `requested`, `requested_group`, token helpers) plus `routes_test.rego` (every route is in the service's `ruled_routes`). `source.py` is the reader: anything it can't read without running the code raises `PolicySourceError`, never a guess. `rego.py` renders; its output must stay `opa fmt`-stable. Contract and limits: `docs/policy.md`.
+`fastloom-policy` (extra `policy`: Starlette; stdlib `ast`, hook pinned to Python 3.13) statically reads a service's routes — `App(routes=, mounts=)` → `APIRouter` definitions → every route/`include_router` call on them in the modules `app.py` reaches through imports — and writes `policy/routes.rego` (`route_patterns`, `requested`, a fail-closed `allow`, token helpers). The service owns `policy/rules.rego` (`route_rules[[method, path]] := "public" | "authenticated" | [[roles...], ...]`); the hook appends `"todo"` lines for new routes and fails on missing, stale, duplicate or malformed rules. `source.py` is the reader: anything it can't read without running the code raises `PolicySourceError`, never a guess. `rego.py` renders; its output must stay `opa fmt`-stable. Contract and limits: `docs/policy.md`.
 
 ## Conventions
 
