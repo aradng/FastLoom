@@ -572,6 +572,7 @@ STATS = ("GET", "/api/shop/admin/v1/stats")
 ITEM = ("GET", "/api/shop/items/{item_id}")
 SPECIAL = ("GET", "/api/shop/items/special")
 DELETE_ITEM = ("DELETE", "/api/shop/items/{item_id}")
+NOTES = ("GET", "/api/shop/items/{item_id}/notes/{rest:path}")
 
 
 def rule(method: str, path: str, value: str) -> str:
@@ -874,6 +875,14 @@ DECISIONS = {
     "public, no token": ("GET", "/api/shop/items/?a=1", {}, {}, True),
     "mount root": ("PATCH", "/api/shop/files", {}, {}, True),
     "catch-all": ("GET", "/api/shop/items/1/notes/a/b", {}, {}, True),
+    "encoded slash matches the decoded route": (
+        "GET",
+        "/api/shop/items/1%2Fnotes%2Fx",
+        {},
+        {ITEM: '"public"', NOTES: '[["admin"]]'},
+        False,
+    ),
+    "malformed escape": ("GET", "/api/shop/items%zz", {}, {}, False),
     "authenticated, no token": ("DELETE", "/api/shop/items/1", {}, {}, False),
     "authenticated": (
         "DELETE",

@@ -12,7 +12,7 @@ A service that authorizes requests with Open Policy Agent keeps its rego in a `p
 Run from a service root, `fastloom-policy` reads the service's source with the standard library's `ast` — it never imports it, so it needs none of the service's dependencies — and rewrites `policy/routes.rego` (`--policy-dir <dir>` to write elsewhere), in `package policy`:
 
 - a fixed preamble:
-  - `requested(route)` — the request's method is the route's (any, for `*`) and its path, query string dropped, matches the route's pattern, also with its trailing slash added or removed: Starlette redirects `/x/` and `/x` to whichever the route declares, and that redirect has to get through. The same rule lets a bare mount root reach its mount.
+  - `requested(route)` — the request's method is the route's (any, for `*`) and its path, query string dropped and percent-decoded, matches the route's pattern, also with its trailing slash added or removed: Starlette redirects `/x/` and `/x` to whichever the route declares, and that redirect has to get through. The same rule lets a bare mount root reach its mount.
   - `allow` — `false` by default. It is `true` when the request matches at least one route and **every** matched route's rule permits it. Requiring all of them is deliberate: when `/items/{id}` and `/items/special` both match, the policy can't know which one FastAPI dispatches to, so the stricter rule wins.
   - `http`, `path`, `bearer`, `claims`, `authenticated`, `roles`, `routes`, `matched`, `permits`, `guards` — the request, its token and the helpers `allow` uses. `authenticated` is a non-empty string `sub` on a token that hasn't expired. `io.jwt.decode` does not check the signature: verify the token at the edge (Envoy's `jwt_authn`) before `ext_authz`. `roles` is the token's `roles` claim, `[]` when it has none.
 - one block per route, keyed by `[method, path]` with the path spelled as the route declares it:
@@ -84,7 +84,7 @@ What it can't read without running the code fails the hook, naming what it could
 
 ## What it assumes
 
-- **The proxy normalizes the path.** OPA matches the raw path while Starlette routes on the decoded one, so `/api/x/a%2Fb` or `/api/x//y` can mean different routes to each. Envoy has to normalize before `ext_authz`: `normalize_path`, `merge_slashes`, and `path_with_escaped_slashes_action: UNESCAPE_AND_FORWARD` (or `REJECT_REQUEST`).
+- **The path is matched decoded.** `requested()` percent-decodes the path (keeping `+`) before matching, the way uvicorn decodes it for Starlette, so `/api/x/items/a%2Fsecret` is matched as `/api/x/items/a/secret` — the route FastAPI will run — and a malformed escape matches nothing. The proxy should still `normalize_path`, `merge_slashes` and reject escaped slashes (`path_with_escaped_slashes_action: REJECT_REQUEST`) so such requests never reach a service.
 - **The edge verifies the token.** The policy decodes the JWT without checking its signature, `iss`, `aud` or `nbf`; only `sub` and `exp` are read.
 - **The prefix is the pyproject name.** A `PROJECT_NAME` overridden in `tenants.yaml` changes `API_PREFIX` at runtime but not the generated paths, which then match nothing.
 

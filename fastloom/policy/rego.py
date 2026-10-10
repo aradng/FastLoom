@@ -17,7 +17,7 @@ PREAMBLE = """package policy
 
 http := input.attributes.request.http
 
-path := split(http.path, "?")[0]
+path := urlquery.decode(replace(split(http.path, "?")[0], "+", "%2B"))
 
 bearer := substring(http.headers.authorization, count("Bearer "), -1) if \
 startswith(http.headers.authorization, "Bearer ")
