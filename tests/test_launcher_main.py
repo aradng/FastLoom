@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock, Mock
 
+import pytest
 from fastapi import APIRouter
 
 import fastloom.launcher.main as launcher_main
@@ -55,8 +56,16 @@ def test_app_instruments_and_constructs_subscribers_before_get_app(
     assert positions == sorted(positions)
 
 
-def test_main_binds_to_the_host_from_the_environment(monkeypatch):
-    monkeypatch.setenv("APP_HOST", "127.0.0.1")
+@pytest.mark.parametrize(
+    ("env", "host"), [("127.0.0.1", "127.0.0.1"), (None, "0.0.0.0")]
+)
+def test_main_binds_to_the_host_from_the_environment(
+    monkeypatch, env: str | None, host: str
+):
+    if env is None:
+        monkeypatch.delenv("APP_HOST", raising=False)
+    else:
+        monkeypatch.setenv("APP_HOST", env)
     configs = MagicMock()
     configs.__getitem__.return_value.general = LauncherSettings.model_validate(
         {}
@@ -69,4 +78,4 @@ def test_main_binds_to_the_host_from_the_environment(monkeypatch):
 
     launcher_main.main()
 
-    assert run.call_args.kwargs["host"] == "127.0.0.1"
+    assert run.call_args.kwargs["host"] == host

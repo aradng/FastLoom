@@ -8,10 +8,10 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
-from starlette.routing import compile_path
 
 from fastloom.policy import main as cli
 from fastloom.policy.rego import ROUTES_FILE, RULES_FILE, RULES_HEADER, render
+from fastloom.policy.schemas import Route
 from fastloom.policy.source import PolicySourceError, ServiceSource
 
 FILES = {
@@ -49,6 +49,14 @@ FILES = {
 
         @router.get("")
         async def list_items(): ...
+
+
+        @router.get("/special")
+        async def special(): ...
+
+
+        @router.get("/{item_id}")
+        async def item(item_id: str): ...
 
 
         @router.delete("/{item_id}")
@@ -108,6 +116,8 @@ FILES = {
 }
 SHOP_ROUTES = {
     ("GET", "/api/shop/items"),
+    ("GET", "/api/shop/items/special"),
+    ("GET", "/api/shop/items/{item_id}"),
     ("DELETE", "/api/shop/items/{item_id}"),
     ("GET", "/api/shop/items/{item_id}/notes/{rest:path}"),
     ("PUT", "/api/shop/items/{item_id}/notes/{rest:path}"),
@@ -203,6 +213,30 @@ FAILURES = {
         "router = make_router()",
         "not an APIRouter",
     ),
+    "keywords unpacked": (
+        "shop/api/chart/__init__.py",
+        'prefix="/dashboard")',
+        '**{"prefix": "/dashboard"})',
+        r"include_router\(dashboard\.router, \*\*",
+    ),
+    "App keywords unpacked": (
+        "app.py",
+        "app = App(",
+        "app = App(**EXTRA, ",
+        r"App\(\*\*EXTRA",
+    ),
+    "arguments unpacked": (
+        "shop/api/hooks.py",
+        '@router.post("/webhook")',
+        "@router.post(*PATHS)",
+        r"router\.post\(\*PATHS\)",
+    ),
+    "unknown method": (
+        "shop/api/items.py",
+        'methods=["GET", "PUT"]',
+        'methods=["GET", "FETCH"]',
+        "FETCH is not an HTTP method",
+    ),
     "named methods": (
         "shop/api/items.py",
         'methods=["GET", "PUT"]',
@@ -263,19 +297,6 @@ FAILURES = {
         "async def agent(: ...",
         "shop.api.hooks: cannot parse",
     ),
-    "nameless project": (
-        "pyproject.toml",
-        'name = "shop"',
-        'version = "1"',
-        r"Could not infer project name in .*pyproject\.toml",
-    ),
-    "no pyproject": (
-        "pyproject.toml",
-        None,
-        None,
-        r"Could not find .*pyproject\.toml",
-    ),
-    "no app.py": ("app.py", None, None, "cannot find module app"),
 }
 
 
@@ -283,12 +304,34 @@ FAILURES = {
     ("name", "old", "new", "message"), FAILURES.values(), ids=FAILURES
 )
 def test_what_cannot_be_read_without_running_the_code_fails(
-    service: Path, name: str, old: str | None, new: str | None, message: str
+    service: Path, name: str, old: str, new: str, message: str
 ):
-    if old is None or new is None:
+    replace(service, name, old, new)
+
+    with pytest.raises(PolicySourceError, match=message):
+        ServiceSource(service).routes()
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "message"),
+    [
+        ("pyproject.toml", None, r"Could not find .*pyproject\.toml"),
+        ("app.py", None, "cannot find module app"),
+        (
+            "pyproject.toml",
+            "[project]\n",
+            r"Could not infer project name in .*pyproject\.toml",
+        ),
+    ],
+    ids=["no pyproject", "no app.py", "nameless project"],
+)
+def test_a_missing_entry_file_fails(
+    service: Path, name: str, content: str | None, message: str
+):
+    if content is None:
         (service / name).unlink()
     else:
-        replace(service, name, old, new)
+        write(service, {name: content})
 
     with pytest.raises(PolicySourceError, match=message):
         ServiceSource(service).routes()
@@ -302,15 +345,9 @@ EDGE_FILES = {
     "app.py": """
         from fastloom.launcher.schemas import App
 
-        from edge.routing import listing
+        from edge.routing import listing, mounted
 
-        app = App(
-            routes=listing,
-            mounts=[
-                ("/api/edge/static", object()),
-                ("/api/edge-extra", object()),
-            ],
-        )
+        app = App(routes=listing, mounts=mounted)
     """,
     "edge/__init__.py": "",
     "edge/paths.py": """
@@ -329,16 +366,23 @@ EDGE_FILES = {
             SPREAD = "/spread"
     """,
     "edge/routing.py": """
+        import edge.api.package.child
+
         from .api import chain, reports, spread
         from .api.users import router as users_router
         from .paths import Legacy, Path, Prefix
 
-        listing = [
+        listing = (
             (users_router, "/users", "Users"),
             (reports.router, Path.REPORTS, "Reports"),
-            (chain.top, Legacy.CHAIN, "Chain"),
+            (chain.top, Legacy.CHAIN.value, "Chain"),
             (spread.router, Prefix.SPREAD, "Spread"),
-        ]
+        )
+        mounted = (
+            ("/api/edge/static", object()),
+            ("/api/edge-extra", object()),
+            ("", object()),
+        )
     """,
     "edge/api/__init__.py": "",
     "edge/api/users.py": """
@@ -365,6 +409,11 @@ EDGE_FILES = {
 
         @router.websocket("/live")
         async def live(): ...
+
+
+        @router.head("/live")
+        @router.options("/سلام")
+        async def probe(): ...
     """,
     "edge/api/chain.py": """
         from fastapi import APIRouter
@@ -425,6 +474,14 @@ EDGE_FILES = {
         @router.api_route("/set", methods={"delete"})
         async def set_methods(): ...
     """,
+    "edge/api/package/__init__.py": """
+        from edge.api.spread import router
+
+
+        @router.get("/package")
+        async def package(): ...
+    """,
+    "edge/api/package/child.py": "",
     "edge/api/spread/more.py": """
         from . import router as spread
 
@@ -447,6 +504,9 @@ def test_routes_resolve_across_modules_aliases_and_nesting(tmp_path: Path):
         ("GET", "/api/edge/users/self"),
         ("DELETE", "/api/edge/users/sessions/{session_id}"),
         ("GET", "/api/edge/reports/live"),
+        ("HEAD", "/api/edge/reports/live"),
+        ("OPTIONS", "/api/edge/reports/سلام"),
+        ("GET", "/api/edge/spread/s/package"),
         ("GET", "/api/edge/chain/top/m/middle/b/bottom/leaf"),
         ("GET", "/api/edge/chain/top/side/"),
         ("TRACE", "/api/edge/spread/s/trace"),
@@ -460,35 +520,8 @@ def test_routes_resolve_across_modules_aliases_and_nesting(tmp_path: Path):
         ("POST", "/api/edge/spread/s/assigned"),
         ("*", "/api/edge/static/{path:path}"),
         ("*", "/api/edge/api/edge-extra/{path:path}"),
+        ("*", "/api/edge/{path:path}"),
     }
-
-
-@pytest.mark.parametrize(
-    ("template", "accepted", "rejected"),
-    [
-        ("/x", ["/x", "/x/"], ["/xY", "/x/y", "/", "/w/x"]),
-        ("/x/", ["/x", "/x/"], ["/xY"]),
-        ("/x/{id}", ["/x/1", "/x/1/"], ["/x", "/x/", "/x/1/2"]),
-        ("/x/{p:path}", ["/x", "/x/", "/x/a", "/x/a/b"], ["/xa", "/y"]),
-        ("/n/{id:int}", ["/n/1", "/n/12/"], ["/n/a", "/n/"]),
-        ("/", ["/", ""], ["/x"]),
-        ("/a.b-c", ["/a.b-c"], ["/aXb-c"]),
-        ("/x/{p:path}/y", ["/x/a/b/y", "/x/a/y/"], ["/x/y", "/x/a/z"]),
-        ("/m{id}", ["/m1", "/m1/"], ["/m", "/m/1", "/n1"]),
-        ("/a/{one}/b/{two}", ["/a/1/b/2"], ["/a/1/b", "/a/1/2/b/3"]),
-    ],
-)
-def test_a_pattern_matches_the_paths_its_route_answers(
-    template: str, accepted: list[str], rejected: list[str]
-):
-    compiled = compile_path(template)[0]
-
-    def requested(path: str) -> bool:
-        candidates = {path, path.removesuffix("/"), f"{path}/"}
-        return any(compiled.match(c) for c in candidates)
-
-    assert all(requested(path) for path in accepted)
-    assert not any(requested(path) for path in rejected)
 
 
 def run(*args: str) -> int:
@@ -496,20 +529,27 @@ def run(*args: str) -> int:
     return 0 if code is None else code
 
 
+STATS = ("GET", "/api/shop/admin/v1/stats")
+ITEM = ("GET", "/api/shop/items/{item_id}")
+SPECIAL = ("GET", "/api/shop/items/special")
+DELETE_ITEM = ("DELETE", "/api/shop/items/{item_id}")
+
+
 def rule(method: str, path: str, value: str) -> str:
-    return f"\nroute_rules[{json.dumps([method, path])}] := {value}\n"
+    key = json.dumps([method, path], ensure_ascii=False)
+    return f"\nroute_rules[{key}] := {value}\n"
 
 
-def rule_all(service: Path, **values: str) -> None:
-    write(
-        service,
-        {
-            f"policy/{RULES_FILE}": RULES_HEADER
-            + "".join(
-                rule(m, p, values.get(p.rsplit("/", 1)[-1], '"public"'))
-                for m, p in sorted(SHOP_ROUTES)
-            )
-        },
+def rule_all(service: Path, values: dict[tuple[str, str], str | None]) -> Path:
+    lines = (
+        rule(method, path, value)
+        for method, path in sorted(SHOP_ROUTES)
+        if (value := values.get((method, path), '"public"')) is not None
+    )
+    return (
+        write(service, {f"policy/{RULES_FILE}": RULES_HEADER + "".join(lines)})
+        / "policy"
+        / RULES_FILE
     )
 
 
@@ -517,16 +557,20 @@ def rule_all(service: Path, **values: str) -> None:
     "args", [[], ["--policy-dir", "rules"]], ids=["default", "moved"]
 )
 def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
-    service: Path,
-    capsys: pytest.CaptureFixture[str],
-    args: list[str],
+    service: Path, capsys: pytest.CaptureFixture[str], args: list[str]
 ):
     directory = service / (args[-1] if args else "policy")
 
     assert run(*args) == 1
     assert capsys.readouterr().out.count("added as todo") == len(SHOP_ROUTES)
-    assert (directory / ROUTES_FILE).read_text() == render(
-        ServiceSource(service).routes()
+    routes = (directory / ROUTES_FILE).read_text()
+    assert (
+        '\t["DELETE", "/api/shop/items/{item_id}"]: '
+        "`^/api/shop/items/(?P<item_id>[^/]+)$`,\n" in routes
+    )
+    assert (
+        '\t["*", "/api/shop/files/{path:path}"]: '
+        "`^/api/shop/files/(?P<path>.*)$`,\n" in routes
     )
     assert run(*args) == 1
     assert capsys.readouterr().out.count('not "public"') == len(SHOP_ROUTES)
@@ -549,43 +593,44 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     ids=["authenticated", "roles", "roles across lines", "roles as sets"],
 )
 def test_a_well_formed_rule_passes(service: Path, value: str):
-    run()
-    rule_all(service, stats=value)
+    assert run() == 1
+
+    rule_all(service, {STATS: value})
 
     assert run() == 0
 
 
 PROBLEMS = {
-    "todo": ('"todo"', 'not "public"'),
-    "typo": ('"publc"', 'not "public"'),
-    "no alternatives": ("[]", 'not "public"'),
-    "no roles": ("[[]]", 'not "public"'),
-    "not a role name": ('[["admin", 1]]', 'not "public"'),
+    "todo": '"todo"',
+    "typo": '"publc"',
+    "single quotes": "'public'",
+    "no alternatives": "[]",
+    "no roles": "[[]]",
+    "empty role": '[[""]]',
+    "not a role name": '[["admin", 1]]',
+    "python tuple": '[("admin",)]',
+    "set of sets": '{{"admin"}}',
 }
 
 
-@pytest.mark.parametrize(("value", "message"), PROBLEMS.values(), ids=PROBLEMS)
+@pytest.mark.parametrize("value", PROBLEMS.values(), ids=PROBLEMS)
 def test_a_malformed_rule_is_reported(
-    service: Path,
-    capsys: pytest.CaptureFixture[str],
-    value: str,
-    message: str,
+    service: Path, capsys: pytest.CaptureFixture[str], value: str
 ):
     run()
-    rule_all(service, stats=value)
+    rule_all(service, {STATS: value})
     capsys.readouterr()
 
     assert run() == 1
-    assert (
-        f"GET /api/shop/admin/v1/stats: {message}" in capsys.readouterr().out
-    )
+    out = capsys.readouterr().out
+    assert 'GET /api/shop/admin/v1/stats: not "public"' in out
 
 
 @pytest.mark.parametrize(
     ("extra", "message"),
     [
         (rule("GET", "/api/shop/gone", '"public"'), "no longer a route"),
-        (rule("GET", "/api/shop/items", '"public"'), "listed more than once"),
+        (rule(*SPECIAL, '"public"'), "listed more than once"),
     ],
     ids=["stale", "duplicate"],
 )
@@ -596,10 +641,8 @@ def test_a_rule_that_matches_no_single_route_is_reported(
     message: str,
 ):
     run()
-    rule_all(service)
-    (service / "policy" / RULES_FILE).write_text(
-        (service / "policy" / RULES_FILE).read_text() + extra
-    )
+    rules = rule_all(service, {})
+    rules.write_text(rules.read_text() + extra)
     capsys.readouterr()
 
     assert run() == 1
@@ -610,8 +653,8 @@ def test_a_new_route_is_appended_without_touching_existing_rules(
     service: Path,
 ):
     run()
-    rule_all(service, stats='[["admin"]]')
-    before = (service / "policy" / RULES_FILE).read_text()
+    rules = rule_all(service, {STATS: '[["admin"]]'})
+    before = rules.read_text()
     replace(
         service,
         "shop/api/hooks.py",
@@ -620,78 +663,195 @@ def test_a_new_route_is_appended_without_touching_existing_rules(
     )
 
     assert run() == 1
-    after = (service / "policy" / RULES_FILE).read_text()
-    assert after == before + rule("PUT", "/api/shop/agent/", '"todo"')
+    assert rules.read_text() == before + rule(
+        "PUT", "/api/shop/agent/", '"todo"'
+    )
 
 
+def test_rego_after_the_last_rule_is_left_alone(service: Path):
+    run()
+    rules = rule_all(service, {})
+    rules.write_text(rules.read_text() + "\nallow if input.internal\n")
+
+    assert run() == 0
+
+
+def test_an_empty_rules_file_gets_the_package_header(service: Path):
+    write(service, {f"policy/{RULES_FILE}": ""})
+
+    assert run() == 1
+    assert (
+        (service / "policy" / RULES_FILE).read_text().startswith(RULES_HEADER)
+    )
+
+
+def test_a_hand_edited_route_list_is_rewritten(service: Path):
+    run()
+    rule_all(service, {})
+    assert run() == 0
+    routes = service / "policy" / ROUTES_FILE
+    generated = routes.read_text()
+    routes.write_text(generated + "\nextra := 1\n")
+
+    assert run() == 1
+    assert routes.read_text() == generated
+    assert run() == 0
+
+
+@pytest.mark.parametrize(
+    "head",
+    ['["GET" "/x"]', '["FETCH", "/x"]', '["GET"]'],
+    ids=["not json", "unknown method", "no path"],
+)
+def test_an_unreadable_rules_line_fails(
+    service: Path, capsys: pytest.CaptureFixture[str], head: str
+):
+    write(
+        service,
+        {
+            f"policy/{RULES_FILE}": RULES_HEADER
+            + f'\nroute_rules[{head}] := "public"\n'
+        },
+    )
+
+    assert run() == 1
+    assert capsys.readouterr().err.startswith(
+        f"fastloom-policy: {RULES_FILE}: cannot read"
+    )
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        ("STATS)", 'f"/{STATS}")', "f-string"),
+        ("@router.get(STATS)", '@router.get("/{id:foo}")', "path convertor"),
+    ],
+    ids=["f-string", "unknown convertor"],
+)
 def test_an_unreadable_source_fails_without_writing(
     service: Path,
     capsys: pytest.CaptureFixture[str],
+    old: str,
+    new: str,
+    message: str,
 ):
-    replace(service, "shop/api/admin.py", "STATS)", 'f"/{STATS}")')
+    replace(service, "shop/api/admin.py", old, new)
 
     assert run() == 1
-    assert capsys.readouterr().err.startswith("fastloom-policy: ")
+    err = capsys.readouterr().err
+    assert err.startswith("fastloom-policy: ")
+    assert message in err
     assert not (service / "policy").exists()
 
 
-def token(roles: list[str], expires_in: int = 600) -> str:
+def token(
+    roles: list[str], expires_in: int = 600, sub: str | None = "u"
+) -> str:
     def part(data: dict[str, object]) -> str:
         encoded = base64.urlsafe_b64encode(json.dumps(data).encode())
         return encoded.rstrip(b"=").decode()
 
-    claims = {"sub": "u", "roles": roles, "exp": int(time.time()) + expires_in}
-    return f"{part({'alg': 'HS256'})}.{part(claims)}.c2ln"
+    claims = {"roles": roles, "exp": int(time.time()) + expires_in} | (
+        {} if sub is None else {"sub": sub}
+    )
+    return f"Bearer {part({'alg': 'HS256'})}.{part(claims)}.c2ln"
 
 
+needs_opa = pytest.mark.skipif(
+    shutil.which("opa") is None, reason="opa is not installed"
+)
+
+
+def opa(service: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["opa", *args], cwd=service, capture_output=True, text=True
+    )
+
+
+@needs_opa
+@pytest.mark.parametrize(
+    "state", ["todo", "ruled", "no routes"], ids=["todo", "ruled", "no routes"]
+)
+def test_the_generated_policy_is_valid_rego(service: Path, state: str):
+    if state == "no routes":
+        write(service, {"app.py": "from x import App\n\napp = App()\n"})
+    run()
+    if state == "ruled":
+        rule_all(service, {STATS: '[["admin"]]'})
+
+    assert opa(service, "fmt", "--diff", "--fail", "policy").stdout == ""
+    checked = opa(service, "check", "--strict", "policy")
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+
+
+RULES: dict[tuple[str, str], str | None] = {
+    DELETE_ITEM: '"authenticated"',
+    STATS: '[["owner:read", "admin:write"], ["admin"]]',
+    ITEM: '[["admin"]]',
+}
 DECISIONS = {
-    "public route, no token": ("GET", "/api/shop/items/?a=1", None, True),
-    "mount root": ("PATCH", "/api/shop/files", None, True),
-    "authenticated, no token": ("DELETE", "/api/shop/items/1", None, False),
-    "authenticated": ("DELETE", "/api/shop/items/1", token([]), True),
-    "expired token": ("DELETE", "/api/shop/items/1", token([], -60), False),
-    "one role of a pair": (
-        "GET",
-        "/api/shop/admin/v1/stats",
-        token(["owner:read"]),
+    "public, no token": ("GET", "/api/shop/items/?a=1", None, {}, True),
+    "mount root": ("PATCH", "/api/shop/files", None, {}, True),
+    "catch-all": ("GET", "/api/shop/items/1/notes/a/b", None, {}, True),
+    "authenticated, no token": (
+        "DELETE",
+        "/api/shop/items/1",
+        None,
+        {},
         False,
     ),
+    "authenticated": ("DELETE", "/api/shop/items/1", token([]), {}, True),
+    "expired": ("DELETE", "/api/shop/items/1", token([], -60), {}, False),
+    "empty sub": ("DELETE", "/api/shop/items/1", token([], sub=""), {}, False),
+    "no sub": ("DELETE", "/api/shop/items/1", token([], sub=None), {}, False),
+    "not a bearer": ("DELETE", "/api/shop/items/1", "Basic dTpw", {}, False),
+    "one role of a pair": (*STATS, token(["owner:read"]), {}, False),
     "both roles of a pair": (
-        "GET",
-        "/api/shop/admin/v1/stats",
+        *STATS,
         token(["owner:read", "admin:write"]),
+        {},
         True,
     ),
-    "the other alternative": (
-        "GET",
-        "/api/shop/admin/v1/stats",
+    "the other alternative": (*STATS, token(["admin"]), {}, True),
+    "roles as sets": (
+        *STATS,
         token(["admin"]),
+        {STATS: '[{"owner:read"}, {"admin"}]'},
         True,
     ),
-    "no such route": ("GET", "/api/shop/itemsX", token(["admin"]), False),
+    "overlap, one rule denies": (*SPECIAL, None, {}, False),
+    "overlap, both rules allow": (*SPECIAL, token(["admin"]), {}, True),
+    "wrong method": ("POST", "/api/shop/items", token(["admin"]), {}, False),
+    "no such route": ("GET", "/api/shop/itemsX", token(["admin"]), {}, False),
+    "todo rule": (*STATS, token(["admin"]), {STATS: '"todo"'}, False),
+    "missing rule": (*STATS, token(["admin"]), {STATS: None}, False),
+    "object rule": (
+        *STATS,
+        token(["admin"]),
+        {STATS: '{"x": ["admin"]}'},
+        False,
+    ),
+    "empty alternative": (*STATS, token(["admin"]), {STATS: "[[]]"}, False),
 }
 
 
-@pytest.mark.skipif(shutil.which("opa") is None, reason="opa is not installed")
+@needs_opa
 @pytest.mark.parametrize(
-    ("method", "path", "bearer", "allowed"), DECISIONS.values(), ids=DECISIONS
+    ("method", "path", "authorization", "overrides", "allowed"),
+    DECISIONS.values(),
+    ids=DECISIONS,
 )
 def test_the_generated_policy_decides_in_opa(
     service: Path,
     method: str,
     path: str,
-    bearer: str | None,
+    authorization: str | None,
+    overrides: dict[tuple[str, str], str | None],
     allowed: bool,
 ):
     run()
-    rule_all(
-        service,
-        **{
-            "{item_id}": '"authenticated"',
-            "stats": '[["owner:read", "admin:write"], ["admin"]]',
-        },
-    )
-    headers = {} if bearer is None else {"authorization": f"Bearer {bearer}"}
+    rule_all(service, RULES | overrides)
+    headers = {} if authorization is None else {"authorization": authorization}
     request = {"method": method, "path": path, "headers": headers}
     write(
         service,
@@ -702,14 +862,8 @@ def test_the_generated_policy_decides_in_opa(
         },
     )
 
-    def opa(*args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["opa", *args], cwd=service, capture_output=True, text=True
-        )
-
-    assert opa("fmt", "--diff", "--fail", "policy").stdout == ""
-    assert opa("check", "--strict", "policy").returncode == 0
     decision = opa(
+        service,
         "eval",
         "-f",
         "raw",
@@ -719,4 +873,57 @@ def test_the_generated_policy_decides_in_opa(
         "input.json",
         "data.policy.allow",
     )
-    assert decision.stdout.strip() == str(allowed).lower()
+    assert decision.stdout.strip() == str(allowed).lower(), decision.stderr
+
+
+PATTERNS = [
+    ("/x", ["/x", "/x/"], ["/xY", "/x/y", "/", "/w/x"]),
+    ("/x/", ["/x", "/x/"], ["/xY"]),
+    ("/x/{id}", ["/x/1", "/x/1/"], ["/x", "/x/", "/x/1/2"]),
+    ("/x/{p:path}", ["/x", "/x/", "/x/a", "/x/a/b"], ["/xa", "/y"]),
+    ("/n/{id:int}", ["/n/1", "/n/12/"], ["/n/a", "/n/"]),
+    ("/", ["/", ""], ["/x"]),
+    ("/a.b-c", ["/a.b-c"], ["/aXb-c"]),
+    ("/x/{p:path}/y", ["/x/a/b/y", "/x/a/y/"], ["/x/y", "/x/a/z"]),
+    ("/m{id}", ["/m1", "/m1/"], ["/m", "/m/1", "/n1"]),
+    ("/a/{one}/b/{two}", ["/a/1/b/2"], ["/a/1/b", "/a/1/2/b/3"]),
+]
+
+
+@needs_opa
+def test_each_route_pattern_matches_the_paths_it_answers(tmp_path: Path):
+    def case(index: int, template: str, path: str, expected: bool) -> str:
+        route = json.dumps(["GET", template])
+        request = json.dumps(
+            {
+                "attributes": {
+                    "request": {"http": {"method": "GET", "path": path}}
+                }
+            }
+        )
+        negation = "" if expected else "not "
+        return (
+            f"test_{index} if {{\n\t{negation}policy.requested({route}) "
+            f"with input as {request}\n}}\n"
+        )
+
+    cases = [
+        (template, path, expected)
+        for template, accepted, rejected in PATTERNS
+        for expected, paths in ((True, accepted), (False, rejected))
+        for path in paths
+    ]
+    write(
+        tmp_path,
+        {
+            f"policy/{ROUTES_FILE}": render(
+                [Route(method="GET", path=t) for t, _, _ in PATTERNS]
+            ),
+            "policy/patterns_test.rego": "package patterns_test\n\n"
+            "import data.policy\n\n"
+            + "\n".join(case(i, *c) for i, c in enumerate(cases)),
+        },
+    )
+
+    tested = opa(tmp_path, "test", "policy")
+    assert tested.returncode == 0, tested.stdout

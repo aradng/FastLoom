@@ -20,7 +20,7 @@ Run from a service root, `fastloom-policy` reads the service's source with the s
 
 These names are reserved in `package policy`; the service's rego must not define them, `default allow` included.
 
-`rules.rego`, in `package policy`, is the service's. `fastloom-policy` only ever appends to it: a line `route_rules[["POST", "/api/notify/orders"]] := "todo"` for each route that has no rule yet (the whole file, the first time).
+`rules.rego`, in `package policy`, is the service's: one `route_rules[...] := ...` statement per route, each ending at a blank line, so any other rego belongs in its own file. `fastloom-policy` only ever appends to it: a line `route_rules[["POST", "/api/notify/orders"]] := "todo"` for each route that has no rule yet (the whole file, the first time).
 
 ## What the service writes
 
@@ -38,7 +38,7 @@ route_rules[["POST", "/api/notify/orders"]] := [["owner:read", "admin:write"], [
 
 - `"public"` — anyone, no token.
 - `"authenticated"` — any valid token, whatever its roles.
-- a list of role lists — a valid token holding every role of at least one inner list. The example reads (`owner:read` and `admin:write`) or `admin`. Inner rego sets (`{"admin"}`) work as well.
+- a list of role lists — a valid token holding every role of at least one inner list. The example reads (`owner:read` and `admin:write`) or `admin`. Inner rego sets (`{"admin"}`) work as well; role names are non-empty double-quoted strings.
 
 The hook fails the commit, naming the route, when a route has no rule (it appends the `"todo"`), a rule is still `"todo"` or isn't one of the three forms above (a typo, an empty list, an empty role list), a rule names a route the app no longer has (delete the line), or a route is listed twice. `allow` denies the same mistakes at runtime, so a rule that slips through still fails closed.
 
@@ -53,25 +53,28 @@ Starting from `app.py`'s `App(routes=[(router, prefix, ...), ...], mounts=[(path
 
 Prefixes add up the way FastAPI adds them: the `App` entry, each `include_router`, then each `APIRouter(prefix=...)`. Every path starts with the service's `API_PREFIX` — `/api/<project name>`, the name read from `pyproject.toml` the way `PROJECT_NAME` defaults to it. [`reject_external`](launcher.md#reject_external) isn't read: a route behind it is still generated under `API_PREFIX`, where `reject_external` answers 404, and its bare path, which never passes the proxy, isn't listed.
 
-Prefixes, paths and methods may be literals, module constants or enum members (`StrEnum` or `(str, Enum)`) the repo defines. A mount path already under `API_PREFIX` is kept as it is.
+Prefixes, paths and methods may be literals, module constants or enum members (`StrEnum` or `(str, Enum)`, `.value` included) the repo defines. A mount path already under `API_PREFIX` is kept as it is.
 
 What it can't read without running the code fails the hook, naming what it couldn't read, instead of being guessed:
 
 - f-strings, and names that aren't a string constant the repo defines;
 - `add_api_route`, `add_api_websocket_route`, `add_route`, `add_websocket_route`, `route`, `websocket_route`, `mount` and `host` on a router;
 - a router that isn't an `APIRouter(...)` the repo defines;
+- arguments spread with `*` or `**` into `App(...)`, `APIRouter(...)` or a router call, a path with a converter Starlette doesn't know, and an `api_route` method that isn't an HTTP method;
 - a non-literal `App(routes=...)`, `App(mounts=...)` or `api_route` `methods`, an `App` entry or mount that isn't a tuple, and an `app.py` without `App(...)`;
 - a module-level name it reads that is bound more than once (`+=` included), or a list it reads that has a method called on it (`.append(...)`, `.extend(...)`);
 - a followed module that doesn't parse, and a missing or nameless `pyproject.toml`.
 
 ## What it doesn't generate
 
+- **Routes registered inside a function body.** A decorator on a function nested in another function, or a router call inside one, isn't read: the route is missing from `routes.rego`, so `allow` denies it.
 - **Fastloom's own routes.** The launcher adds `/healthcheck`, the docs (`/docs`, `/redoc`, `/openapi.json`, unless `DOCS_ENABLED` is off), the system endpoints `/tenant_schema`, `/tenant_settings` and `/reload` (reachable only on the bare path, through `reject_external`, unless `SETTINGS_PUBLIC`), the MCP mount when `MCP_ENABLED`, and the broker routers. None of them are in `routes`: the proxy has to route them around the policy, or the service rules them by hand.
 - **CORS preflight.** An `OPTIONS` preflight is answered by the edge's CORS filter before `ext_authz` runs, so it never reaches the policy.
 
 ## What it assumes
 
 - **The proxy normalizes the path.** OPA matches the raw path while Starlette routes on the decoded one, so `/api/x/a%2Fb` or `/api/x//y` can mean different routes to each. Envoy has to normalize before `ext_authz`: `normalize_path`, `merge_slashes`, and `path_with_escaped_slashes_action: UNESCAPE_AND_FORWARD` (or `REJECT_REQUEST`).
+- **The edge verifies the token.** The policy decodes the JWT without checking its signature, `iss`, `aud` or `nbf`; only `sub` and `exp` are read.
 - **The prefix is the pyproject name.** A `PROJECT_NAME` overridden in `tenants.yaml` changes `API_PREFIX` at runtime but not the generated paths, which then match nothing.
 
 ## Pre-commit
@@ -84,4 +87,4 @@ What it can't read without running the code fails the hook, naming what it could
       # args: [--policy-dir, rules]
 ```
 
-It runs on any change to a `.py` file, `pyproject.toml`, `routes.rego` or `rules.rego`, in pre-commit's own environment on Python 3.13 (`language_version`; prek downloads it when the image has an older Python), so it reads 3.13 syntax whatever the service's own Python is — the same locally and in CI. It exits `1`, printing each route and what's wrong with it, when `routes.rego` changed or `rules.rego` needs a rule filled in, deleted or fixed, so the commit fails until both are right and staged. Formatting and `opa check` are each service's own hooks; the generated file is already `opa fmt`-clean.
+It runs on any change to a `.py` file, `pyproject.toml`, `routes.rego` or `rules.rego`, in pre-commit's own environment on Python 3.13 (`language_version`; prek downloads it when the image has an older Python, classic pre-commit needs a `python3.13` on `PATH`), so it reads 3.13 syntax whatever the service's own Python is — the same locally and in CI. It exits `1`, printing each route and what's wrong with it, when `routes.rego` changed or `rules.rego` needs a rule filled in, deleted or fixed, so the commit fails until both are right and staged. Formatting and `opa check` are each service's own hooks; the generated file is already `opa fmt`-clean.

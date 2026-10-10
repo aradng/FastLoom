@@ -94,7 +94,7 @@ It accepts both FastAPI-style lifespans (yield `None`) and FastMCP-style (yield 
 
 ```python
 class LauncherSettings(BaseModel):
-    APP_HOST: EnvBackend[str] = EnvDefault("0.0.0.0")  # uvicorn bind host
+    APP_HOST: EnvBackend[str] = EnvDefault("0.0.0.0")
     APP_PORT: int = 8000
     DEBUG: bool = True       # enables uvicorn --reload
     WORKERS: int = 4

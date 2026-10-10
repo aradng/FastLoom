@@ -2,15 +2,17 @@ import json
 
 from starlette.routing import compile_path
 
-from fastloom.policy.schemas import Route
+from fastloom.policy.schemas import Route, RuleLine
+from fastloom.policy.source import PolicySourceError
 
 ROUTES_FILE = "routes.rego"
 RULES_FILE = "rules.rego"
 RULE_PREFIX = "route_rules["
 RULES_HEADER = "package policy\n"
 
-PREAMBLE = """package policy
-
+PREAMBLE = (
+    RULES_HEADER
+    + """
 http := input.attributes.request.http
 
 path := split(http.path, "?")[0]
@@ -28,12 +30,12 @@ authenticated if {
 
 roles := object.get(claims, "roles", [])
 
-routes := {route | some route, _ in route_patterns}
+routes := {route | some route, _ in data.policy.route_patterns}
 
 requested(route) if {
 \troute[0] in {http.method, "*"}
 \tsome candidate in {path, trim_suffix(path, "/"), concat("", [path, "/"])}
-\tregex.match(route_patterns[route], candidate)
+\tregex.match(data.policy.route_patterns[route], candidate)
 }
 
 matched := {route | some route in routes; requested(route)}
@@ -57,34 +59,45 @@ default allow := false
 allow if {
 \tcount(matched) > 0
 \tevery route in matched {
-\t\tpermits(route_rules[route])
+\t\tpermits(data.policy.route_rules[route])
 \t}
 }"""
+)
 
 
 def key(route: Route) -> str:
     return json.dumps([route.method, route.path], ensure_ascii=False)
 
 
+def pattern(route: Route) -> str:
+    try:
+        return compile_path(route.path)[0].pattern
+    except AssertionError as e:
+        raise PolicySourceError(f"{route.path}: {e}") from e
+
+
 def render(routes: list[Route]) -> str:
-    patterns = "".join(
-        f"\t{key(r)}: `{compile_path(r.path)[0].pattern}`,\n" for r in routes
-    )
-    listing = f"{{\n{patterns}}}" if routes else "{}"
-    return f"{PREAMBLE}\n\nroute_patterns := {listing}\n"
+    patterns = "".join(f"\t{key(r)}: `{pattern(r)}`,\n" for r in routes)
+    listing = f"\n\nroute_patterns := {{\n{patterns}}}" if routes else ""
+    return f"{PREAMBLE}{listing}\n"
 
 
 def placeholder(route: Route) -> str:
     return f'\n{RULE_PREFIX}{key(route)}] := "todo"\n'
 
 
-def read_rules(text: str) -> list[tuple[Route, str]]:
+def read_rules(text: str) -> list[RuleLine]:
     return [
         read_rule(chunk) for chunk in f"\n{text}".split(f"\n{RULE_PREFIX}")[1:]
     ]
 
 
-def read_rule(chunk: str) -> tuple[Route, str]:
-    head, _, value = chunk.partition("] := ")
-    method, path = json.loads(head)
-    return Route(method=method, path=path), value.strip()
+def read_rule(chunk: str) -> RuleLine:
+    head, _, value = chunk.partition("\n\n")[0].partition("] := ")
+    try:
+        method, path = json.loads(head)
+        return RuleLine(route=Route(method=method, path=path), value=value)
+    except ValueError as e:
+        raise PolicySourceError(
+            f"{RULES_FILE}: cannot read the route in {RULE_PREFIX}{head}]"
+        ) from e

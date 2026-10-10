@@ -1,20 +1,14 @@
-from typing import Annotated, Literal
+from typing import Literal
 
-from pydantic import AnyHttpUrl, BaseModel, BeforeValidator, Field
+from pydantic import AnyHttpUrl, BaseModel
 
 from fastloom.settings.base import MonitoringSettings
-from fastloom.settings.utils import pydantic_env_or_default
+from fastloom.settings.utils import EnvBackend, EnvDefault
 from fastloom.types import Str
 
 type ExporterType = Literal["otlp", "console", "none"]
 type MetricsExporterType = ExporterType | Literal["prometheus"]
 type TracesExporterType = ExporterType | Literal["zipkin"]
-
-type EnvBackend[T] = Annotated[T, BeforeValidator(pydantic_env_or_default)]
-
-
-def EnvDefault[T](default: T):
-    return Field(default=default, validate_default=True)
 
 
 class OtelConfig(BaseModel):

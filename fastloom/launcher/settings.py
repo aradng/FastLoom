@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from fastloom.observability.settings import EnvBackend, EnvDefault
+from fastloom.settings.utils import EnvBackend, EnvDefault
 
 
 class LauncherSettings(BaseModel):

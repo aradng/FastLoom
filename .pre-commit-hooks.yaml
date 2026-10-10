@@ -5,5 +5,6 @@
   language: python
   language_version: "3.13"
   files: \.py$|^pyproject\.toml$|(routes|rules)\.rego$
+  # NOTE: keep this starlette range equal to the policy extra in pyproject.toml
   additional_dependencies: ["starlette>=0.40.0,<2.0.0"]
   pass_filenames: false

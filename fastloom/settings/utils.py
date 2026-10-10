@@ -1,8 +1,8 @@
 from collections.abc import Callable
 from os import getenv
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import ValidationInfo
+from pydantic import BeforeValidator, Field, ValidationInfo
 
 
 def get_env_or_err(field_name: str) -> Callable[[], str]:
@@ -21,3 +21,10 @@ def pydantic_env_or_default(v: Any, info: ValidationInfo) -> Any:
     if info.field_name is None:
         return v
     return getenv(info.field_name, v)
+
+
+type EnvBackend[T] = Annotated[T, BeforeValidator(pydantic_env_or_default)]
+
+
+def EnvDefault[T](default: T):
+    return Field(default=default, validate_default=True)

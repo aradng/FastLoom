@@ -11,9 +11,9 @@ from fastloom.meta import read_project_name
 from fastloom.policy.schemas import Route, ordered
 from fastloom.settings.base import ProjectSettings
 
-ROUTE_METHODS = {method.lower(): method for method in HTTPMethod} | {
-    "websocket": HTTPMethod.GET
-}
+ROUTE_METHODS = {
+    method.lower(): method for method in HTTPMethod if method != "CONNECT"
+} | {"websocket": HTTPMethod.GET}
 UNREADABLE_ROUTER_CALLS = {
     "add_api_route",
     "add_api_websocket_route",
@@ -63,10 +63,10 @@ class RouterCall:
     attr: str
 
 
-def named(node: ast.expr, *names: str) -> bool:
+def named(node: ast.expr, name: str) -> bool:
     match node:
-        case ast.Name(id=name) | ast.Attribute(attr=name):
-            return name in names
+        case ast.Name(id=found) | ast.Attribute(attr=found):
+            return found == name
     return False
 
 
@@ -80,6 +80,17 @@ def keyword(call: ast.Call, name: str) -> ast.expr | None:
 
 def argument(call: ast.Call, name: str) -> ast.expr | None:
     return call.args[0] if call.args else keyword(call, name)
+
+
+def readable(module: str, call: ast.Call) -> ast.Call:
+    if any(isinstance(a, ast.Starred) for a in call.args) or any(
+        k.arg is None for k in call.keywords
+    ):
+        raise PolicySourceError(
+            f"{module}: {ast.unparse(call)} cannot be read without running "
+            "the code"
+        )
+    return call
 
 
 def walk(node: ast.AST) -> Iterator[ast.AST]:
@@ -122,16 +133,22 @@ def bound_names(statement: ast.stmt) -> list[str]:
         ):
             return [name]
         case ast.Import(names=aliases):
-            return [
-                a.name.partition(".")[0] if a.asname is None else a.asname
-                for a in aliases
-            ]
+            return [bound(a).partition(".")[0] for a in aliases]
         case ast.ImportFrom(names=aliases):
             return [bound(a) for a in aliases]
     return []
 
 
-def mutated(tree: ast.AST, name: str) -> bool:
+@cache
+def bindings(node: ast.AST) -> dict[str, list[ast.stmt]]:
+    found: dict[str, list[ast.stmt]] = defaultdict(list)
+    for statement in statements(node):
+        for name in bound_names(statement):
+            found[name].append(statement)
+    return found
+
+
+def has_attribute_access(tree: ast.AST, name: str) -> bool:
     return any(
         isinstance(n, ast.Attribute)
         and isinstance(n.value, ast.Name)
@@ -150,7 +167,6 @@ class ServiceSource:
         self.api_prefix = ProjectSettings(PROJECT_NAME=project).API_PREFIX
         self.file = cache(self.find)
         self.tree = cache(self.parse)
-        self.scope = cache(self.bindings)
         self.registered: dict[Router, list[RouterCall]] = defaultdict(list)
 
     def find(self, module: str) -> Path | None:
@@ -161,29 +177,20 @@ class ServiceSource:
         return next((path for path in paths if path.is_file()), None)
 
     def parse(self, module: str) -> ast.Module:
+        if (path := self.file(module)) is None:
+            raise PolicySourceError(f"cannot find module {module} in the repo")
         try:
-            path = self.file(module)
-            if path is None:
-                raise PolicySourceError(
-                    f"cannot find module {module} in the repo"
-                )
-            return ast.parse(path.read_text())
+            return ast.parse(path.read_bytes())
         except SyntaxError as e:
             raise PolicySourceError(
                 f"{module}: cannot parse line {e.lineno}: {e.msg}"
             ) from e
 
-    def bindings(self, node: ast.AST) -> dict[str, list[ast.stmt]]:
-        found: dict[str, list[ast.stmt]] = defaultdict(list)
-        for statement in statements(node):
-            for name in bound_names(statement):
-                found[name].append(statement)
-        return found
-
     def absolute(self, module: str, node: ast.ImportFrom) -> str:
+        path = self.file(module)
         package = (
             module
-            if str(self.file(module)).endswith("__init__.py")
+            if path is not None and path.name == "__init__.py"
             else module.rpartition(".")[0]
         )
         try:
@@ -228,6 +235,8 @@ class ServiceSource:
                 match self.evaluate(module, value):
                     case Ref(name=name):
                         return self.attribute(name, attr)
+                    case str() as text if attr == "value":
+                        return text
                     case Expr(module=owner, node=ast.ClassDef() as body):
                         return self.lookup(owner, body, attr)
                 raise PolicySourceError(
@@ -239,12 +248,12 @@ class ServiceSource:
 
     def attribute(self, name: str, attr: str) -> Value:
         full = f"{name}.{attr}"
-        if self.file(full) or not self.file(name):
+        if self.file(full) is not None or self.file(name) is None:
             return Ref(full)
         return self.lookup(name, self.tree(name), attr)
 
     def lookup(self, module: str, scope: ast.AST, name: str) -> Value:
-        match self.scope(scope).get(name, []):
+        match bindings(scope).get(name, []):
             case [ast.Import(names=aliases)]:
                 return Ref(
                     next((a.name for a in aliases if a.asname == name), name)
@@ -260,7 +269,7 @@ class ServiceSource:
             ]:
                 if isinstance(
                     value, ast.List | ast.Tuple | ast.Set
-                ) and mutated(self.tree(module), name):
+                ) and has_attribute_access(self.tree(module), name):
                     raise PolicySourceError(
                         f"{module}: {name} is changed after it is bound, "
                         "which cannot be read without running the code"
@@ -313,21 +322,23 @@ class ServiceSource:
             case (
                 ast.List(elts=elts) | ast.Tuple(elts=elts) | ast.Set(elts=elts)
             ):
-                return [
-                    HTTPMethod(self.string(found.module, e).upper())
-                    for e in elts
-                ]
+                return [self.method(found.module, e) for e in elts]
         raise PolicySourceError(
             f"{found.module}: api_route needs a literal methods list to be "
             "read without running the code"
         )
 
+    def method(self, module: str, node: ast.expr) -> HTTPMethod:
+        name = self.string(module, node).upper()
+        if name not in HTTPMethod.__members__:
+            raise PolicySourceError(f"{module}: {name} is not an HTTP method")
+        return HTTPMethod[name]
+
     def router_routes(self, router: Router, prefix: str) -> Iterator[Route]:
-        base = prefix + self.string(
-            router.module, keyword(router.call, "prefix")
-        )
+        call = readable(router.module, router.call)
+        base = prefix + self.string(router.module, keyword(call, "prefix"))
         for found in self.registered[router]:
-            module, call = found.module, found.call
+            module, call = found.module, readable(found.module, found.call)
             if found.attr in UNREADABLE_ROUTER_CALLS:
                 raise PolicySourceError(
                     f"{module}: {ast.unparse(call)} cannot be read "
@@ -392,6 +403,8 @@ class ServiceSource:
         )
         if app is None:
             raise PolicySourceError("app.py has no App(...)")
+        readable(APP_MODULE, app)
+        self.registered.clear()
         for module in self.reachable(APP_MODULE, set()):
             self.register(module)
         found: set[Route] = set()

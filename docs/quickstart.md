@@ -115,10 +115,10 @@ Route triples are `(router, prefix, openapi_tag)`, registered bare. The FastAPI 
 ## 5. Run it
 
 ```bash
-# dev (uvicorn --reload when LauncherSettings.DEBUG=true)
+# dev (uvicorn --reload when LauncherSettings.DEBUG=true); binds APP_HOST:APP_PORT
 launch
 
-# or directly
+# or directly, where --host/--port replace APP_HOST/APP_PORT
 uvicorn fastloom.launcher.main:app --factory --host 0.0.0.0 --port 8000
 ```
 

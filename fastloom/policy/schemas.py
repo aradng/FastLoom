@@ -10,12 +10,18 @@ class Route(BaseModel, frozen=True):
     path: str
 
 
-type Roles = Annotated[list[str], Field(min_length=1)]
+type Role = Annotated[str, Field(min_length=1)]
+type Roles = Annotated[list[Role] | set[Role], Field(min_length=1)]
 type Rule = (
     Literal["public", "authenticated"]
     | Annotated[list[Roles], Field(min_length=1)]
 )
 RULE = TypeAdapter[Rule](Rule)
+
+
+class RuleLine(BaseModel, frozen=True):
+    route: Route
+    value: str
 
 
 def ordered(routes: Iterable[Route]) -> list[Route]:

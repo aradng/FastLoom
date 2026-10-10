@@ -154,7 +154,7 @@ Pair it with runtime gates: a precomputed `fastloom.extras.X_INSTALLED` constant
 
 - **Capability fields** use SCREAMING_SNAKE_CASE (`MONGO_URI`, `RABBIT_URI`, `REDIS_URL`, `APP_PORT`). They double as env-var names — `fastloom.settings.utils.pydantic_env_or_default` reads from the environment when present.
 - **Tenant-scoped, business-domain fields** use snake_case (`website_url`, `choice_sources`, `questions`).
-- Prefer `Annotated[T, BeforeValidator(pydantic_env_or_default)]` for any field that should fall back to its env var (see `fastloom.observability.settings.EnvBackend`).
+- Prefer `Annotated[T, BeforeValidator(pydantic_env_or_default)]` for any field that should fall back to its env var (see `fastloom.settings.utils.EnvBackend`).
 
 ## Typing discipline
 
