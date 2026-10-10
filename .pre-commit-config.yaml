@@ -18,7 +18,7 @@ repos:
             - "pydantic==2.12.5"
             - "returns"
             - "types-pyyaml"
-            - "libcst>=1.9.0,<2.0.0"
+            - "starlette>=0.40.0,<2.0.0"
     - repo: https://github.com/astral-sh/ruff-pre-commit
       rev: v0.15.7
       hooks:

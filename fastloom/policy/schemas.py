@@ -1,9 +1,12 @@
 from collections.abc import Iterable
-from typing import NamedTuple
+from http import HTTPMethod
+from typing import Literal
+
+from pydantic import BaseModel
 
 
-class Route(NamedTuple):
-    method: str
+class Route(BaseModel, frozen=True):
+    method: HTTPMethod | Literal["*"]
     path: str
 
 

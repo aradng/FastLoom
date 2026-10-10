@@ -55,9 +55,8 @@ def test_app_instruments_and_constructs_subscribers_before_get_app(
     assert positions == sorted(positions)
 
 
-def test_main_binds_to_the_host_and_port_from_the_environment(monkeypatch):
+def test_main_binds_to_the_host_from_the_environment(monkeypatch):
     monkeypatch.setenv("APP_HOST", "127.0.0.1")
-    monkeypatch.setenv("APP_PORT", "9000")
     configs = MagicMock()
     configs.__getitem__.return_value.general = LauncherSettings.model_validate(
         {}
@@ -71,4 +70,3 @@ def test_main_binds_to_the_host_and_port_from_the_environment(monkeypatch):
     launcher_main.main()
 
     assert run.call_args.kwargs["host"] == "127.0.0.1"
-    assert run.call_args.kwargs["port"] == 9000

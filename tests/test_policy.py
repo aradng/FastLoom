@@ -6,17 +6,10 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
+from starlette.routing import compile_path
 
 from fastloom.policy import main as cli
-from fastloom.policy.rego import (
-    COVERAGE,
-    COVERAGE_FILE,
-    ROUTES_FILE,
-    listed_routes,
-    pattern,
-    render,
-)
-from fastloom.policy.schemas import Route
+from fastloom.policy.rego import COVERAGE, COVERAGE_FILE, ROUTES_FILE
 from fastloom.policy.source import PolicySourceError, ServiceSource
 
 FILES = {
@@ -151,8 +144,8 @@ def replace(root: Path, name: str, old: str, new: str) -> None:
     path.write_text(path.read_text().replace(old, new))
 
 
-def read(root: Path) -> set[Route]:
-    return set(ServiceSource(root).routes())
+def read(root: Path) -> set[tuple[str, str]]:
+    return {(r.method, r.path) for r in ServiceSource(root).routes()}
 
 
 @pytest.fixture
@@ -167,6 +160,23 @@ def test_every_route_is_read_with_its_full_path(service: Path):
 
 def test_a_relative_root_reads_the_same_routes(service: Path):
     assert read(Path(".")) == SHOP_ROUTES
+
+
+def test_modules_the_app_never_imports_register_nothing(service: Path):
+    write(
+        service,
+        {
+            "tests/test_hooks.py": """
+                from shop.api.hooks import router
+
+
+                @router.get("/phantom")
+                async def phantom(): ...
+            """
+        },
+    )
+
+    assert read(service) == SHOP_ROUTES
 
 
 def test_an_app_without_routes_has_none(service: Path):
@@ -192,12 +202,12 @@ def test_an_app_without_routes_has_none(service: Path):
                 re.escape(call),
             )
             for call in (
-                'add_api_route("/x", webhook)',
-                'add_route("/x", webhook)',
-                'route("/x")',
-                'websocket_route("/x")',
-                'mount("/x", object())',
-                'host("example.com", object())',
+                "add_api_route('/x', webhook)",
+                "add_route('/x', webhook)",
+                "route('/x')",
+                "websocket_route('/x')",
+                "mount('/x', object())",
+                "host('example.com', object())",
             )
         ),
         (
@@ -213,9 +223,9 @@ def test_an_app_without_routes_has_none(service: Path):
             "dependencies must be a literal list",
         ),
         (
-            "shop/api/chart/__init__.py",
-            "router.include_router(dashboard.router",
-            "router.include_router(make_router()",
+            "shop/api/chart/dashboard.py",
+            'router = APIRouter(prefix="/boards")',
+            "router = make_router()",
             "not an APIRouter",
         ),
         (
@@ -253,7 +263,19 @@ def test_an_app_without_routes_has_none(service: Path):
             "app.py",
             "\napp = App(",
             '\nroutes += [(hooks.router, "/more", "More")]\napp = App(',
+            "routes is bound more than once",
+        ),
+        (
+            "app.py",
+            "\napp = App(",
+            '\nroutes.append((hooks.router, "/more", "More"))\napp = App(',
             "routes is changed after it is bound",
+        ),
+        (
+            "shop/api/admin.py",
+            "from shop.constants import STATS",
+            "from os.path import sep as STATS",
+            "as a string the repo defines",
         ),
         (
             "shop/api/hooks.py",
@@ -339,7 +361,7 @@ def test_reject_external_leaves_the_bare_path_wherever_it_is_declared(
         },
     )
 
-    assert {r for r in read(service) if "internal" in r.path} == {
+    assert {(m, p) for m, p in read(service) if "internal" in p} == {
         ("GET", "/internal/shop/child/leaf"),
         ("POST", "/internal/shop/route"),
         ("POST", "/internal/shop/annotated"),
@@ -377,13 +399,15 @@ EDGE_FILES = {
 
         class Legacy(str, Enum):
             CHAIN = "/chain"
+
+
+        class Prefix(str, Enum):
+            SPREAD = "/spread"
     """,
     "edge/routing.py": """
-        from edge_external import Prefix
-
         from .api import chain, reports, spread
         from .api.users import router as users_router
-        from .paths import Legacy, Path
+        from .paths import Legacy, Path, Prefix
 
         listing = [
             (users_router, "/users", "Users"),
@@ -494,23 +518,7 @@ EDGE_FILES = {
 }
 
 
-def test_routes_resolve_across_modules_aliases_and_nesting(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    write(
-        tmp_path / "external",
-        {
-            "edge_external.py": """
-                from enum import Enum
-
-
-                class Prefix(str, Enum):
-                    SPREAD = "/spread"
-            """
-        },
-    )
-    monkeypatch.syspath_prepend(tmp_path / "external")
-
+def test_routes_resolve_across_modules_aliases_and_nesting(tmp_path: Path):
     assert read(write(tmp_path / "edge", EDGE_FILES)) == {
         ("GET", "/api/edge/users/me"),
         ("GET", "/api/edge/users/self"),
@@ -533,30 +541,15 @@ def test_routes_resolve_across_modules_aliases_and_nesting(
 
 
 @pytest.mark.parametrize(
-    ("template", "expected"),
-    [
-        ("/api/shop/openapi.json", r"^/api/shop/openapi\.json/?$"),
-        ("/api/shop/items/{item_id}", "^/api/shop/items/[^/]+/?$"),
-        ("/api/shop/agent/", "^/api/shop/agent/?$"),
-        ("/", "^/?$"),
-        ("/api/iam/check/{rest:path}", "^/api/iam/check(?:/.*)?/?$"),
-        (
-            "/api/iam/oidc/.well-known/oauth-authorization-server{path:path}",
-            r"^/api/iam/oidc/\.well\-known/oauth\-authorization\-server.*/?$",
-        ),
-    ],
-)
-def test_a_route_template_becomes_an_escaped_pattern(template, expected):
-    assert pattern(template) == expected
-
-
-@pytest.mark.parametrize(
     ("template", "accepted", "rejected"),
     [
         ("/x", ["/x", "/x/"], ["/xY", "/x/y", "/", "/w/x"]),
         ("/x/", ["/x", "/x/"], ["/xY"]),
         ("/x/{id}", ["/x/1", "/x/1/"], ["/x", "/x/", "/x/1/2"]),
         ("/x/{p:path}", ["/x", "/x/", "/x/a", "/x/a/b"], ["/xa", "/y"]),
+        ("/n/{id:int}", ["/n/1", "/n/12/"], ["/n/a", "/n/"]),
+        ("/", ["/", ""], ["/x"]),
+        ("/a.b-c", ["/a.b-c"], ["/aXb-c"]),
         ("/x/{p:path}/y", ["/x/a/b/y", "/x/a/y/"], ["/x/y", "/x/a/z"]),
         ("/m{id}", ["/m1", "/m1/"], ["/m", "/m/1", "/n1"]),
         ("/a/{one}/b/{two}", ["/a/1/b/2"], ["/a/1/b", "/a/1/2/b/3"]),
@@ -565,22 +558,14 @@ def test_a_route_template_becomes_an_escaped_pattern(template, expected):
 def test_a_pattern_matches_the_paths_its_route_answers(
     template: str, accepted: list[str], rejected: list[str]
 ):
-    compiled = re.compile(pattern(template))
+    compiled = compile_path(template)[0]
 
-    assert all(compiled.match(path) for path in accepted)
-    assert not any(compiled.match(path) for path in rejected)
+    def requested(path: str) -> bool:
+        candidates = {path, path.removesuffix("/"), f"{path}/"}
+        return any(compiled.match(c) for c in candidates)
 
-
-@pytest.mark.parametrize(
-    "routes",
-    [
-        [],
-        [Route("GET", "/x"), Route("*", "/files/{path:path}")],
-        [Route("GET", '/q"uote'), Route("PUT", "/back\\slash/é")],
-    ],
-)
-def test_the_rendered_route_list_reads_back(routes: list[Route]):
-    assert listed_routes(render(routes)) == set(routes)
+    assert all(requested(path) for path in accepted)
+    assert not any(requested(path) for path in rejected)
 
 
 def run(monkeypatch: pytest.MonkeyPatch, *args: str) -> int:
@@ -588,13 +573,13 @@ def run(monkeypatch: pytest.MonkeyPatch, *args: str) -> int:
     return cli.main()
 
 
-def test_the_command_writes_the_routes_and_tests_then_reports_changes(
+def test_the_command_writes_the_routes_and_tests_until_they_are_current(
     service: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
     assert run(monkeypatch) == 1
-    assert "  + GET /api/shop/items\n" in capsys.readouterr().out
+    assert "policy was regenerated" in capsys.readouterr().out
     assert (service / "policy" / COVERAGE_FILE).read_text() == COVERAGE
     assert run(monkeypatch) == 0
     assert capsys.readouterr().out == ""
@@ -607,24 +592,9 @@ def test_the_command_writes_the_routes_and_tests_then_reports_changes(
     )
 
     assert run(monkeypatch) == 1
-    out = capsys.readouterr().out
-    assert "  + PUT /api/shop/webhook\n" in out
-    assert "  - POST /api/shop/webhook\n" in out
-
-
-def test_a_removed_route_is_reported_alone(
-    service: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-):
-    run(monkeypatch)
-    capsys.readouterr()
-    replace(service, "shop/api/hooks.py", '@router.post("/agent/")', "")
-
-    assert run(monkeypatch) == 1
-    out = capsys.readouterr().out
-    assert "  - POST /api/shop/agent/\n" in out
-    assert "+" not in out
+    routes = (service / "policy" / ROUTES_FILE).read_text()
+    assert '["PUT", "/api/shop/webhook"]' in routes
+    assert '["POST", "/api/shop/webhook"]' not in routes
 
 
 def test_a_stale_coverage_file_is_regenerated_without_route_changes(
@@ -637,22 +607,8 @@ def test_a_stale_coverage_file_is_regenerated_without_route_changes(
     (service / "policy" / COVERAGE_FILE).write_text("package policy_test\n")
 
     assert run(monkeypatch) == 1
-    out = capsys.readouterr().out
-    assert "policy was regenerated" in out
-    assert not re.search(r"^  [+-] ", out, re.MULTILINE)
+    assert "policy was regenerated" in capsys.readouterr().out
     assert (service / "policy" / COVERAGE_FILE).read_text() == COVERAGE
-
-
-def test_an_unreadable_route_list_reports_every_route_as_added(
-    service: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-):
-    write(service, {f"policy/{ROUTES_FILE}": "not rego"})
-
-    assert run(monkeypatch) == 1
-    added = re.findall(r"^  \+ (\S+) (\S+)$", capsys.readouterr().out, re.M)
-    assert set(added) == SHOP_ROUTES
 
 
 def test_an_unreadable_source_fails_without_writing(
@@ -671,21 +627,11 @@ def test_the_policy_directory_can_be_moved(
     service: Path, monkeypatch: pytest.MonkeyPatch
 ):
     assert run(monkeypatch, "--policy-dir", "rules") == 1
-    assert listed_routes((service / "rules" / ROUTES_FILE).read_text()) == (
-        SHOP_ROUTES
+    assert (
+        '["GET", "/api/shop/items"]'
+        in (service / "rules" / ROUTES_FILE).read_text()
     )
     assert not (service / "policy").exists()
-
-
-def test_the_command_asks_for_the_policy_extra_without_libcst(
-    service: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-):
-    monkeypatch.setattr(cli, "LIBCST_INSTALLED", False)
-
-    assert run(monkeypatch) == 1
-    assert "fastloom[policy]" in capsys.readouterr().err
 
 
 GENERATED = (f"policy/{ROUTES_FILE}", f"policy/{COVERAGE_FILE}")

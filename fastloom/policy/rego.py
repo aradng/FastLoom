@@ -1,13 +1,11 @@
 import json
-import re
+
+from starlette.routing import compile_path
 
 from fastloom.policy.schemas import Route
 
 ROUTES_FILE = "routes.rego"
 COVERAGE_FILE = "routes_test.rego"
-
-PATH_PARAMETER = re.compile(r"\{[^/}]+\}")
-LISTED_ROUTE = re.compile(r'^\t(\["[A-Z*]+", ".*"\]): `', re.MULTILINE)
 
 PREAMBLE = """package policy
 
@@ -28,7 +26,8 @@ routes := {route | some route, _ in route_patterns}
 
 requested(route) if {
 \troute[0] in {http.method, "*"}
-\tregex.match(route_patterns[route], path)
+\tsome candidate in {path, trim_suffix(path, "/"), concat("", [path, "/"])}
+\tregex.match(route_patterns[route], candidate)
 }
 
 requested_group(group) if {
@@ -59,34 +58,11 @@ test_every_ruled_route_still_exists if {
 """
 
 
-def pattern(template: str) -> str:
-    trimmed = template.rstrip("/")
-    pieces: list[str] = []
-    position = 0
-    for parameter in PATH_PARAMETER.finditer(trimmed):
-        literal = trimmed[position : parameter.start()]
-        catch_all = parameter.group().endswith(":path}")
-        if (
-            catch_all
-            and parameter.end() == len(trimmed)
-            and literal.endswith("/")
-        ):
-            pieces += [re.escape(literal[:-1]), "(?:/.*)?"]
-        else:
-            pieces += [re.escape(literal), ".*" if catch_all else "[^/]+"]
-        position = parameter.end()
-    pieces.append(re.escape(trimmed[position:]))
-    return f"^{''.join(pieces)}/?$"
-
-
 def render(routes: list[Route]) -> str:
     patterns = "".join(
-        f"\t{json.dumps(r, ensure_ascii=False)}: `{pattern(r.path)}`,\n"
+        f"\t{json.dumps([r.method, r.path], ensure_ascii=False)}: "
+        f"`{compile_path(r.path)[0].pattern}`,\n"
         for r in routes
     )
     listing = f"{{\n{patterns}}}" if routes else "{}"
     return f"{PREAMBLE}\n\nroute_patterns := {listing}\n"
-
-
-def listed_routes(rego: str) -> set[Route]:
-    return {Route(*json.loads(r)) for r in LISTED_ROUTE.findall(rego)}

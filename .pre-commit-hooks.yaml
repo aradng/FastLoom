@@ -3,6 +3,7 @@
   description: Generate policy/routes.rego and the tests that make the policy rule every route.
   entry: fastloom-policy
   language: python
+  language_version: "3.13"
   files: \.py$|^pyproject\.toml$|routes(_test)?\.rego$
-  additional_dependencies: ["libcst>=1.9.0,<2.0.0"]
+  additional_dependencies: ["starlette>=0.40.0,<2.0.0"]
   pass_filenames: false
