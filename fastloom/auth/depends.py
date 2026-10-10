@@ -4,6 +4,7 @@ from typing import Annotated, Any
 import httpx
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2, OpenIdConnect
+from fastapi.security.utils import get_authorization_scheme_param
 from jose.jwt import get_unverified_claims
 
 from fastloom.auth import Claims
@@ -44,10 +45,10 @@ class OptionalJWTAuth:
         if not data.active:
             raise HTTPException(status_code=403, detail="Inactive token")
 
-    def _transform_bearer(self, token: str) -> str:
-        if token.startswith("Bearer "):
-            return token.removeprefix("Bearer ").strip()
-        return token
+    @staticmethod
+    def _transform_bearer(token: str) -> str:
+        scheme, credentials = get_authorization_scheme_param(token)
+        return credentials if scheme.lower() == "bearer" else token
 
     async def _acl(
         self,
