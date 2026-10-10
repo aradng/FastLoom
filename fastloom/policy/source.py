@@ -31,6 +31,34 @@ ROUTER_METHODS = {
     "include_router",
 }
 APP_MODULE = "app"
+SETTINGS_MODULE = "settings"
+FRAMEWORK_ROUTES = (
+    ("GET", "/healthcheck"),
+    ("GET", "/tenant_schema"),
+    ("GET", "/tenant_settings"),
+    ("POST", "/tenant_settings"),
+    ("GET", "/reload"),
+    ("GET", "/docs"),
+    ("GET", "/docs/oauth2-redirect"),
+    ("GET", "/redoc"),
+    ("GET", "/openapi.json"),
+)
+
+
+def broker_docs(url: str) -> tuple[tuple[str, str], ...]:
+    return (
+        ("GET", url),
+        ("GET", f"{url}.json"),
+        ("GET", f"{url}.yaml"),
+        ("POST", f"{url}/try"),
+    )
+
+
+CAPABILITY_ROUTES = {
+    "MCPSettings": (("*", "/mcp"),),
+    "RabbitmqSettings": broker_docs("/rabbitapi"),
+    "KafkaSettings": broker_docs("/kafkaapi"),
+}
 
 
 class PolicySourceError(Exception): ...
@@ -392,6 +420,32 @@ class ServiceSource:
             path = self.api_prefix + path
         return f"{path}/{{path:path}}"
 
+    def capabilities(self) -> set[str]:
+        if self.file(SETTINGS_MODULE) is None:
+            return set()
+        return {
+            base.id if isinstance(base, ast.Name) else base.attr
+            for node in self.tree(SETTINGS_MODULE).body
+            if isinstance(node, ast.ClassDef) and node.name == "Settings"
+            for base in node.bases
+            if isinstance(base, ast.Name | ast.Attribute)
+        }
+
+    def framework_routes(self) -> set[Route]:
+        capable = self.capabilities()
+        return {
+            Route(method=method, path=self.api_prefix + path)
+            for method, path in (
+                *FRAMEWORK_ROUTES,
+                *(
+                    route
+                    for name, routes in CAPABILITY_ROUTES.items()
+                    if name in capable
+                    for route in routes
+                ),
+            )
+        }
+
     def routes(self) -> list[Route]:
         app = next(
             (
@@ -407,7 +461,7 @@ class ServiceSource:
         self.registered.clear()
         for module in self.reachable(APP_MODULE, set()):
             self.register(module)
-        found: set[Route] = set()
+        found = self.framework_routes()
         owner, entries = self.listing(app, "routes")
         for entry in entries:
             match entry:

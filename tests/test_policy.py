@@ -12,7 +12,12 @@ import pytest
 from fastloom.policy import main as cli
 from fastloom.policy.rego import ROUTES_FILE, render
 from fastloom.policy.schemas import Route
-from fastloom.policy.source import PolicySourceError, ServiceSource
+from fastloom.policy.source import (
+    CAPABILITY_ROUTES,
+    FRAMEWORK_ROUTES,
+    PolicySourceError,
+    ServiceSource,
+)
 
 FILES = {
     "pyproject.toml": """
@@ -114,7 +119,19 @@ FILES = {
         async def agent(): ...
     """,
 }
-SHOP_ROUTES = {
+
+
+def framework(prefix: str, *capabilities: str) -> set[tuple[str, str]]:
+    return {
+        (method, prefix + path)
+        for method, path in (
+            *FRAMEWORK_ROUTES,
+            *(r for name in capabilities for r in CAPABILITY_ROUTES[name]),
+        )
+    }
+
+
+SHOP_ROUTES = framework("/api/shop") | {
     ("GET", "/api/shop/items"),
     ("GET", "/api/shop/items/special"),
     ("GET", "/api/shop/items/{item_id}"),
@@ -177,10 +194,10 @@ def test_every_route_is_read_with_its_full_path(
     assert read(Path(".") if relative else service) == SHOP_ROUTES
 
 
-def test_an_app_without_routes_has_none(service: Path):
+def test_an_app_without_routes_has_only_fastloom_routes(service: Path):
     write(service, {"app.py": "from x import App\n\napp = App()\n"})
 
-    assert ServiceSource(service).routes() == []
+    assert read(service) == framework("/api/shop")
 
 
 UNREADABLE_CALLS = (
@@ -521,7 +538,29 @@ def test_routes_resolve_across_modules_aliases_and_nesting(tmp_path: Path):
         ("*", "/api/edge/static/{path:path}"),
         ("*", "/api/edge/api/edge-extra/{path:path}"),
         ("*", "/api/edge/{path:path}"),
-    }
+    } | framework("/api/edge")
+
+
+@pytest.mark.parametrize(
+    "bases",
+    [
+        ("BaseGeneralSettings",),
+        ("BaseGeneralSettings", "MCPSettings"),
+        ("BaseGeneralSettings", "KafkaSettings", "RabbitmqSettings"),
+    ],
+    ids=["plain", "mcp", "brokers"],
+)
+def test_fastloom_routes_follow_the_settings_capabilities(
+    service: Path, bases: tuple[str, ...]
+):
+    write(
+        service,
+        {"settings.py": f"class Settings({', '.join(bases)}): ...\n"},
+    )
+
+    assert read(service) == SHOP_ROUTES | framework(
+        "/api/shop", *(b for b in bases if b in CAPABILITY_ROUTES)
+    )
 
 
 def run(*args: str) -> int:

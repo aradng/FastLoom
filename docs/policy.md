@@ -51,6 +51,8 @@ Starting from `app.py`'s `App(routes=[(router, prefix, ...), ...], mounts=[(path
 - the route decorators `get`, `put`, `post`, `delete`, `patch`, `head`, `options`, `trace`, `websocket` (as `GET`) and `api_route(path, methods=[...])` — on a function inside an `if`, a `try` or a class body (not one nested in another function) or called as `router.get("/x")(endpoint)`, under an `as` alias or a plain `name = router` included;
 - `include_router(child, prefix=...)`, `child` positional or `router=`, followed into the child router.
 
+fastloom's own routes are generated too. The launcher's routes get blocks like any other: `GET /healthcheck`, the system endpoints `/tenant_schema`, `/tenant_settings` (`GET`, `POST`) and `/reload`, and the docs (`/docs`, `/docs/oauth2-redirect`, `/redoc`, `/openapi.json`), all under `API_PREFIX`. When the service's `Settings` in `settings.py` inherits `MCPSettings`, the MCP endpoint is `["*", "<API_PREFIX>/mcp"]`; `KafkaSettings` or `RabbitmqSettings` add the broker's AsyncAPI page (`/kafkaapi` or `/rabbitapi`, its `.json` and `.yaml` and `POST .../try`). A capability switched off at runtime (`DOCS_ENABLED`, `MCP_ENABLED`) still gets its block; its rule then never matters.
+
 Prefixes add up the way FastAPI adds them: the `App` entry, each `include_router`, then each `APIRouter(prefix=...)`. Every path starts with the service's `API_PREFIX` — `/api/<project name>`, the name read from `pyproject.toml` the way `PROJECT_NAME` defaults to it. [`reject_external`](launcher.md#reject_external) isn't read: a route behind it is still generated under `API_PREFIX`, where `reject_external` answers 404, and its bare path, which never passes the proxy, isn't listed.
 
 Prefixes, paths and methods may be literals, module constants or enum members (`StrEnum` or `(str, Enum)`, `.value` included) the repo defines. A mount path already under `API_PREFIX` is kept as it is.
@@ -68,7 +70,6 @@ What it can't read without running the code fails the hook, naming what it could
 ## What it doesn't generate
 
 - **Routes registered inside a function body.** A decorator on a function nested in another function, or a router call inside one, isn't read: the route is missing from `routes.rego`, so `allow` denies it.
-- **Fastloom's own routes.** The launcher adds `/healthcheck`, the docs (`/docs`, `/redoc`, `/openapi.json`, unless `DOCS_ENABLED` is off), the system endpoints `/tenant_schema`, `/tenant_settings` and `/reload` (reachable only on the bare path, through `reject_external`, unless `SETTINGS_PUBLIC`), the MCP mount when `MCP_ENABLED`, and the broker routers. None of them are in `routes`: the proxy has to route them around the policy, or the service rules them by hand.
 - **CORS preflight.** An `OPTIONS` preflight is answered by the edge's CORS filter before `ext_authz` runs, so it never reaches the policy.
 
 ## What it assumes
