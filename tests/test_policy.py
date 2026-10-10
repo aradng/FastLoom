@@ -3,7 +3,6 @@ import json
 import re
 import shutil
 import subprocess
-import sys
 import time
 from pathlib import Path
 from textwrap import dedent
@@ -492,9 +491,9 @@ def test_a_pattern_matches_the_paths_its_route_answers(
     assert not any(requested(path) for path in rejected)
 
 
-def run(monkeypatch: pytest.MonkeyPatch, *args: str) -> int:
-    monkeypatch.setattr(sys, "argv", ["fastloom-policy", *args])
-    return cli.main()
+def run(*args: str) -> int:
+    code = cli.main.main(list(args), standalone_mode=False)
+    return 0 if code is None else code
 
 
 def rule(method: str, path: str, value: str) -> str:
@@ -519,23 +518,22 @@ def rule_all(service: Path, **values: str) -> None:
 )
 def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     service: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     args: list[str],
 ):
     directory = service / (args[-1] if args else "policy")
 
-    assert run(monkeypatch, *args) == 1
+    assert run(*args) == 1
     assert capsys.readouterr().out.count("added as todo") == len(SHOP_ROUTES)
     assert (directory / ROUTES_FILE).read_text() == render(
         ServiceSource(service).routes()
     )
-    assert run(monkeypatch, *args) == 1
+    assert run(*args) == 1
     assert capsys.readouterr().out.count('not "public"') == len(SHOP_ROUTES)
 
     replace(service, str(directory / RULES_FILE), '"todo"', '"public"')
 
-    assert run(monkeypatch, *args) == 0
+    assert run(*args) == 0
     assert capsys.readouterr().out == ""
     assert not (service / ("policy" if args else "rules")).exists()
 
@@ -550,13 +548,11 @@ def test_every_route_gets_a_todo_rule_until_the_service_fills_it(
     ],
     ids=["authenticated", "roles", "roles across lines", "roles as sets"],
 )
-def test_a_well_formed_rule_passes(
-    service: Path, monkeypatch: pytest.MonkeyPatch, value: str
-):
-    run(monkeypatch)
+def test_a_well_formed_rule_passes(service: Path, value: str):
+    run()
     rule_all(service, stats=value)
 
-    assert run(monkeypatch) == 0
+    assert run() == 0
 
 
 PROBLEMS = {
@@ -571,16 +567,15 @@ PROBLEMS = {
 @pytest.mark.parametrize(("value", "message"), PROBLEMS.values(), ids=PROBLEMS)
 def test_a_malformed_rule_is_reported(
     service: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     value: str,
     message: str,
 ):
-    run(monkeypatch)
+    run()
     rule_all(service, stats=value)
     capsys.readouterr()
 
-    assert run(monkeypatch) == 1
+    assert run() == 1
     assert (
         f"GET /api/shop/admin/v1/stats: {message}" in capsys.readouterr().out
     )
@@ -596,26 +591,25 @@ def test_a_malformed_rule_is_reported(
 )
 def test_a_rule_that_matches_no_single_route_is_reported(
     service: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     extra: str,
     message: str,
 ):
-    run(monkeypatch)
+    run()
     rule_all(service)
     (service / "policy" / RULES_FILE).write_text(
         (service / "policy" / RULES_FILE).read_text() + extra
     )
     capsys.readouterr()
 
-    assert run(monkeypatch) == 1
+    assert run() == 1
     assert message in capsys.readouterr().out
 
 
 def test_a_new_route_is_appended_without_touching_existing_rules(
-    service: Path, monkeypatch: pytest.MonkeyPatch
+    service: Path,
 ):
-    run(monkeypatch)
+    run()
     rule_all(service, stats='[["admin"]]')
     before = (service / "policy" / RULES_FILE).read_text()
     replace(
@@ -625,19 +619,18 @@ def test_a_new_route_is_appended_without_touching_existing_rules(
         '@router.put("/agent/")',
     )
 
-    assert run(monkeypatch) == 1
+    assert run() == 1
     after = (service / "policy" / RULES_FILE).read_text()
     assert after == before + rule("PUT", "/api/shop/agent/", '"todo"')
 
 
 def test_an_unreadable_source_fails_without_writing(
     service: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
     replace(service, "shop/api/admin.py", "STATS)", 'f"/{STATS}")')
 
-    assert run(monkeypatch) == 1
+    assert run() == 1
     assert capsys.readouterr().err.startswith("fastloom-policy: ")
     assert not (service / "policy").exists()
 
@@ -685,13 +678,12 @@ DECISIONS = {
 )
 def test_the_generated_policy_decides_in_opa(
     service: Path,
-    monkeypatch: pytest.MonkeyPatch,
     method: str,
     path: str,
     bearer: str | None,
     allowed: bool,
 ):
-    run(monkeypatch)
+    run()
     rule_all(
         service,
         **{

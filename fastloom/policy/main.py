@@ -1,8 +1,8 @@
-import argparse
 import ast
-import sys
 from collections import Counter
 from pathlib import Path
+
+import click
 
 from fastloom.policy.rego import (
     ROUTES_FILE,
@@ -32,24 +32,27 @@ def invalid(value: str) -> bool:
     return False
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        prog="fastloom-policy",
-        description=(
-            "Generate the OPA route list for a service and keep its "
-            "per-route rules complete, without importing the service."
-        ),
+@click.command(
+    help=(
+        "Generate the OPA route list for a service and keep its per-route "
+        "rules complete, without importing the service."
     )
-    parser.add_argument("--policy-dir", type=Path, default=Path("policy"))
-    policy_dir = parser.parse_args().policy_dir
+)
+@click.option(
+    "--policy-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("policy"),
+    show_default=True,
+)
+def main(policy_dir: Path) -> None:
     rules_path = policy_dir / RULES_FILE
     text = rules_path.read_text() if rules_path.exists() else RULES_HEADER
     try:
         routes = ServiceSource(Path.cwd()).routes()
         rules = read_rules(text)
     except (PolicySourceError, ValueError) as e:
-        print(f"fastloom-policy: {e}", file=sys.stderr)
-        return 1
+        click.echo(f"fastloom-policy: {e}", err=True)
+        raise click.exceptions.Exit(1) from e
     listed = Counter(route for route, _ in rules)
     added = ordered(set(routes) - set(listed))
     report = {
@@ -68,10 +71,9 @@ def main() -> int:
     )
     for problem, found in report.items():
         for route in found:
-            print(f"  {route.method} {route.path}: {problem}")
+            click.echo(f"  {route.method} {route.path}: {problem}")
     if changed or any(report.values()):
-        print(
+        click.echo(
             f"{policy_dir} needs attention: fix {rules_path}, then stage it."
         )
-        return 1
-    return 0
+        raise click.exceptions.Exit(1)
