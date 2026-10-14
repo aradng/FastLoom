@@ -2,7 +2,7 @@ import gettext
 from collections.abc import Callable
 from pathlib import Path
 
-from babel import Locale
+from babel import Locale, UnknownLocaleError
 from babel.support import Translations
 from fastapi.responses import JSONResponse
 from jinja2 import Environment, FileSystemLoader
@@ -13,9 +13,13 @@ from fastloom.i18n.types import Languages
 
 
 def parse_locale(locale: str | None) -> str:
+    if locale is None:
+        return "en"
     try:
-        return Locale.parse(locale).language
-    except (ValueError, TypeError):
+        return Locale.parse(
+            locale.split(",")[0].split(";")[0].strip().replace("-", "_")
+        ).language
+    except (ValueError, UnknownLocaleError):
         return "en"
 
 
