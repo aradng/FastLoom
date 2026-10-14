@@ -1,4 +1,5 @@
 import gettext
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -16,10 +17,10 @@ from fastloom.i18n.types import Languages
 def parse_locale(locale: str | None) -> str:
     if locale is None:
         return DEFAULT_LANGUAGE
-    first, _, _ = locale.partition(",")
-    tag, _, _ = first.partition(";")
     try:
-        return Locale.parse(tag.strip().replace("-", "_")).language
+        return Locale.parse(
+            re.split(r"[,;]", locale, maxsplit=1)[0].strip().replace("-", "_")
+        ).language
     except (ValueError, UnknownLocaleError):
         return DEFAULT_LANGUAGE
 
