@@ -5,11 +5,12 @@ from functools import lru_cache
 from logging import Logger
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from fastloom.cache.http import setup_http_cache
 from fastloom.cache.settings import RedisSettings
+from fastloom.i18n.depends import get_language
 from fastloom.launcher.settings import LauncherSettings
 from fastloom.launcher.utils import (
     combine_lifespans,
@@ -74,6 +75,7 @@ def app():
                 *(lifespans + [service_app.lifespan_fn])
             ),
             title=fastapi_settings.PROJECT_NAME,
+            dependencies=[Depends(get_language)],
             root_path=fastapi_settings.API_PREFIX,
             swagger_ui_init_oauth={
                 "additionalQueryStringParams": {"browser": "false"},

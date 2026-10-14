@@ -1,22 +1,28 @@
 import gettext
+import re
 from collections.abc import Callable
 from pathlib import Path
 
-from babel import Locale
+from babel import Locale, UnknownLocaleError
 from babel.support import Translations
 from fastapi.responses import JSONResponse
 from jinja2 import Environment, FileSystemLoader
 from starlette.requests import Request
 
+from fastloom.i18n import DEFAULT_LANGUAGE
 from fastloom.i18n.base import CustomI18NException
 from fastloom.i18n.types import Languages
 
 
 def parse_locale(locale: str | None) -> str:
+    if locale is None:
+        return DEFAULT_LANGUAGE
     try:
-        return Locale.parse(locale).language
-    except (ValueError, TypeError):
-        return "en"
+        return Locale.parse(
+            re.split(r"[,;]", locale, maxsplit=1)[0].strip().replace("-", "_")
+        ).language
+    except (ValueError, UnknownLocaleError):
+        return DEFAULT_LANGUAGE
 
 
 def set_locale(locale: str | None) -> Callable[[str], str]:
