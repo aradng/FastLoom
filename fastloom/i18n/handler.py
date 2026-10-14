@@ -8,19 +8,20 @@ from fastapi.responses import JSONResponse
 from jinja2 import Environment, FileSystemLoader
 from starlette.requests import Request
 
+from fastloom.i18n import DEFAULT_LANGUAGE
 from fastloom.i18n.base import CustomI18NException
 from fastloom.i18n.types import Languages
 
 
 def parse_locale(locale: str | None) -> str:
     if locale is None:
-        return "en"
+        return DEFAULT_LANGUAGE
+    first, _, _ = locale.partition(",")
+    tag, _, _ = first.partition(";")
     try:
-        return Locale.parse(
-            locale.split(",")[0].split(";")[0].strip().replace("-", "_")
-        ).language
+        return Locale.parse(tag.strip().replace("-", "_")).language
     except (ValueError, UnknownLocaleError):
-        return "en"
+        return DEFAULT_LANGUAGE
 
 
 def set_locale(locale: str | None) -> Callable[[str], str]:

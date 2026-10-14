@@ -1,3 +1,5 @@
 from contextvars import ContextVar
 
-Language: ContextVar[str] = ContextVar("language", default="en")
+DEFAULT_LANGUAGE = "en"
+
+Language: ContextVar[str] = ContextVar("language", default=DEFAULT_LANGUAGE)
