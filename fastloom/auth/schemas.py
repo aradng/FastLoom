@@ -29,7 +29,7 @@ class Organization(OrganizationAttributes):
 class UserClaims(BaseModel):
     iss: HttpUrl
     id: UUID = Field(alias="sub")
-    sid: str = Field(alias="sid")
+    sid: str | None = None
     username: str = Field(alias="preferred_username")
     name: str
     given_name: str
