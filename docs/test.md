@@ -11,6 +11,7 @@ Fastloom ships with a batteries-included test helper package: pytest fixtures th
 - `fastloom.test.fixtures.docker.kafka_container` — session-scoped Kafka (KRaft mode, no Zookeeper) via testcontainers.
 - `fastloom.test.fixtures.docker.redis_container` — session-scoped Redis via testcontainers (`redis-stack-server` image, so RediSearch is available for `redis-om` indexes).
 - `fastloom.test.fixtures.docker.postgres_container` — session-scoped Postgres via testcontainers (not used by fastloom itself — for services that bring their own Postgres/SQLAlchemy layer).
+- `fastloom.test.fixtures.shared` — opt-in pytest plugin: one Postgres and/or Mongo for the whole run, shared by every xdist worker, with a database per worker (`shared_postgres`, `shared_mongo`, `worker_database`).
 - `fastloom.test.container.create_container`, `PrivateRegistryDocker` — testcontainers helper with private-registry auth.
 - `fastloom.test.utils.assert_deep_diff`, `status_check`, `assert_success`, `expect_calling`, `to_dict`, `generate_token`, `token_to_header`, `ignore_keys` — assertion + setup helpers.
 - `fastloom.test.constants` — `SECRET_KEY`, image names, port constants.
@@ -185,8 +186,8 @@ def mongo_container() -> ContainerDataFixture:
 
 `create_container` is a thin context manager over `testcontainers.core.container.DockerContainer` with three extras:
 
-1. Pulls from a **private registry** when `REGISTRY_ADDRESS`, `REGISTRY_USERNAME`, `REGISTRY_PASSWORD` env vars are set. (CI sets these; local dev usually doesn't need to.)
-2. Accepts `env_vars`, `volumes`, `commands`, `wait_strategy` as plain kwargs.
+1. Logs in to a **private registry** only when `REGISTRY_ADDRESS` is set (with `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`). Without it there's no login round trip, which used to cost ~1.7s per container.
+2. Accepts `env_vars`, `volumes`, `commands`, `tmpfs`, `wait_strategy` as plain kwargs.
 3. Yields `(container, host, exposed_port_string)`.
 
 `redis_container` and `postgres_container` are already provided the same way — import them instead of rolling your own:
@@ -205,6 +206,8 @@ def service_settings(redis_container) -> Settings:
         # ... other capability fields
     )
 ```
+
+`postgres_container` is tuned for tests: data on tmpfs, `trust` auth (asyncpg's SCRAM handshake is pure Python, ~8ms CPU per connect), `fsync`/`synchronous_commit`/`full_page_writes` off, `max_connections=500`, and readiness probed over TCP every 100ms (the image's init-time server listens on the unix socket only, so a socket probe can pass too early).
 
 `redis_container` uses the `redis-stack-server` image, not plain `redis` — `redis-om`'s indexed `JsonModel` queries need the RediSearch module, which the stock image doesn't ship. `postgres_container` isn't consumed by anything in fastloom itself (fastloom has no Postgres capability); it's there for services that bring their own Postgres/SQLAlchemy layer, matching the same `(container, host, port)` shape as every other fixture here.
 
@@ -225,6 +228,38 @@ def service_settings(kafka_container) -> Settings:
         # ... other capability fields
     )
 ```
+
+## One shared container for the whole run
+
+Each xdist worker is its own process, so a session-scoped `postgres_container` starts one Postgres **per worker**: `-n 8` means 8 boots, 8 sets of migrations, 8 data directories competing for disk. Load the `fastloom.test.fixtures.shared` plugin instead and the controller starts one container before the workers spawn, hands its address to each worker through xdist's `workerinput`, and stops it at the end. Each worker gets its own database, so tests stay isolated.
+
+```toml
+# pyproject.toml
+[tool.pytest.ini_options]
+addopts = "-n 8 -p fastloom.test.fixtures.shared"
+fastloom_shared_containers = ["postgres"]   # and/or "mongo"
+fastloom_postgres_image = "postgres:18"     # default: fastloom.test.constants.POSTGRES_IMAGE
+```
+
+```python
+# tests/conftest.py
+@pytest.fixture(scope="session")
+def service_settings(shared_postgres, worker_database) -> Settings:
+    return Settings(
+        POSTGRES_DSN=(
+            f"postgresql+asyncpg://postgres@{shared_postgres.host}:"
+            f"{shared_postgres.port}/{worker_database}"
+        ),
+        # ...
+    )
+```
+
+- `shared_postgres` creates `worker_database` (`test_gw0`, `test_gw1`, …; `test_master` at `-n 0`) with `createdb` inside the container, so the service needs no Postgres driver of its own to set it up. Run your migrations against it in a session fixture.
+- `shared_mongo` needs no setup: use `worker_database` as the Mongo database name. It's a standalone `mongod`, so code that needs a replica set (transactions, change streams) still needs its own container.
+- Works at `-n 0` too (the single process owns the container). Requires xdist's `worker_id` fixture, which the `test` extra installs.
+- `--collect-only` and `--fixtures` don't start anything.
+- Use a database, not a schema, per worker: anything set with `ALTER DATABASE … SET` stays private to its worker.
+- Redis isn't in the list: RediSearch refuses `FT.CREATE` on any db but 0, so redis-om indexes can't share one server. Keep `redis_container` per worker.
 
 ## Running
 
