@@ -1,6 +1,6 @@
 [project]
 name = "fastloom"
-version = "0.5.9"
+version = "0.5.10"
 description = "Core package"
 authors = []
 readme = "README.md"
@@ -9,7 +9,7 @@ urls = { "Repository" = "https://github.com/aradng/FastLoom" }
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "jdatetime>=4.1.1,<6.0.0",
-    "python-jose>=3.5.0,<4.0.0",
+    "pyjwt>=2.15.1,<3.0.0",
     "pydantic[email]>=2.12,<3.0.0",
     "uvicorn>=0.35.0,<0.52.0",
     "orjson>=3.10.14,<4.0.0",
@@ -94,7 +94,6 @@ dev = [
     "types-pyyaml",
     "types-requests",
     "types-redis",
-    "types-python-jose",
 ]
 
 [project.scripts]

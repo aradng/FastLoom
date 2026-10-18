@@ -127,7 +127,7 @@ def test_ping(init_app, admin_token_headers):
 
 ## Auth: mocked sidecar, real JWT
 
-The `mock_authz` fixture is `autouse` — it patches `OptionalJWTAuth._acl` and `OptionalJWTAuth._introspect` to return `None`, so every test runs in `INTROSPECT=False` / `ACL=False` mode regardless of `Settings` config. The JWT signature is still validated locally via `jose` against `SECRET_KEY = "test_secret"`.
+The `mock_authz` fixture is `autouse` — it patches `OptionalJWTAuth._acl` and `OptionalJWTAuth._introspect` to return `None`, so every test runs in `INTROSPECT=False` / `ACL=False` mode regardless of `Settings` config. Test tokens are real JWTs, signed with PyJWT (HS256) using `fastloom.test.constants.SECRET_KEY`; like production, fastloom reads their claims without verifying the signature.
 
 Token fixtures:
 

@@ -8,9 +8,8 @@ from enum import Enum, member
 from os import getenv
 from typing import TYPE_CHECKING, Any
 
+import jwt
 import logfire
-from jose.exceptions import JWTError
-from jose.jwt import get_unverified_claims
 from opentelemetry import metrics, trace
 from opentelemetry.context import attach, detach, set_value
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
@@ -114,11 +113,13 @@ def _get_authorization_header(scopes: dict[str, Any]) -> str | None:
 
 def _set_user_attributes_to_span(span: Span, token: str):
     try:
-        payload: dict[str, Any] = get_unverified_claims(token)
+        payload: dict[str, Any] = jwt.decode(
+            token, options={"verify_signature": False}
+        )
         span.set_attribute("username", payload["name"])
         span.set_attribute("user_id", payload["sub"])
         span.set_attribute("tenant", payload["owner"])
-    except (JWTError, KeyError):
+    except (jwt.PyJWTError, KeyError):
         return
 
 

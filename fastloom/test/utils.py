@@ -5,10 +5,10 @@ from itertools import zip_longest
 from operator import itemgetter
 from unittest.mock import AsyncMock
 
+import jwt
 from deepdiff import DeepDiff
 from deepdiff.helper import CannotCompare
 from httpx import Response
-from jose import jwt
 from pydantic import AliasPath, BaseModel
 
 from fastloom.test.constants import SECRET_KEY

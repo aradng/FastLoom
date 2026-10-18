@@ -2,10 +2,10 @@ from collections.abc import Callable, Coroutine
 from typing import Annotated, Any
 
 import httpx
+import jwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2, OpenIdConnect
 from fastapi.security.utils import get_authorization_scheme_param
-from jose.jwt import get_unverified_claims
 
 from fastloom.auth import Claims
 from fastloom.auth.schemas import UserClaims
@@ -72,7 +72,9 @@ class OptionalJWTAuth:
 
     @classmethod
     def _parse_token(cls, token: str) -> UserClaims:
-        return UserClaims.model_validate(get_unverified_claims(token))
+        return UserClaims.model_validate(
+            jwt.decode(token, options={"verify_signature": False})
+        )
 
     async def _validate_token(
         self, token: str, request: Request
