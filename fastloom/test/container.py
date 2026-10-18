@@ -9,9 +9,11 @@ from testcontainers.core.waiting_utils import WaitStrategy
 
 class PrivateRegistryDocker(DockerContainer):
     def _configure(self) -> None:
+        if (registry := os.getenv("REGISTRY_ADDRESS", "")) == "":
+            return
         self._docker.login(
             auth_config=DockerAuthInfo(
-                os.getenv("REGISTRY_ADDRESS"),
+                registry,
                 os.getenv("REGISTRY_USERNAME"),
                 os.getenv("REGISTRY_PASSWORD"),
             )
@@ -26,6 +28,7 @@ def create_container(
     commands: str | None = None,
     volumes: dict[str, str] | None = None,
     wait_strategy: WaitStrategy | None = None,
+    tmpfs: dict[str, str] | None = None,
 ) -> Generator[tuple[PrivateRegistryDocker, str]]:
     """
     Example:
@@ -48,6 +51,8 @@ def create_container(
         container.with_exposed_ports(port)
     if commands:
         container.with_command(commands)
+    if tmpfs is not None:
+        container.with_kwargs(tmpfs=tmpfs)
     container.start()
     try:
         port_str = str(container.get_exposed_port(port))

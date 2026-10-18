@@ -1,6 +1,7 @@
 import copy
 from collections.abc import Generator, MutableMapping
 from contextlib import contextmanager
+from functools import cache
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
@@ -20,14 +21,18 @@ def patched_settings[V: BaseModel, T: BaseModel](
 ) -> Generator[None]:
     from fastloom.tenant.utils import dump_settings, load_settings
 
-    yaml_text = dump_settings(
-        service_settings=service_settings,
-        tenant_settings=tenant_settings if tenant_settings is not None else {},
-        yaml_mode=True,
-    )
+    @cache
+    def yaml_text() -> str:
+        return dump_settings(
+            service_settings=service_settings,
+            tenant_settings=(
+                tenant_settings if tenant_settings is not None else {}
+            ),
+            yaml_mode=True,
+        )
 
     def _load_settings(*args, **kwargs):
-        kwargs["config_stream"] = yaml_text
+        kwargs["config_stream"] = yaml_text()
         return load_settings(*args, **kwargs)
 
     patcher = patch(

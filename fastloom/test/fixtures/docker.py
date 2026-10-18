@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import AbstractContextManager
 
 import pytest
 from testcontainers.core.wait_strategies import ExecWaitStrategy
@@ -9,6 +10,7 @@ from fastloom.test.constants import (
     LOCALHOST_BASE_URL,
     MONGO_IMAGE,
     MONGO_PORT,
+    POLL_INTERVAL,
     POSTGRES_DB,
     POSTGRES_IMAGE,
     POSTGRES_PASSWORD,
@@ -16,16 +18,36 @@ from fastloom.test.constants import (
     REDIS_IMAGE,
     REDIS_PORT,
 )
-from fastloom.test.container import create_container
+from fastloom.test.container import PrivateRegistryDocker, create_container
 from fastloom.test.types import ContainerDataFixture
+
+
+def postgres() -> AbstractContextManager[tuple[PrivateRegistryDocker, str]]:
+    return create_container(
+        POSTGRES_IMAGE,
+        port=POSTGRES_PORT,
+        env_vars={
+            "POSTGRES_PASSWORD": POSTGRES_PASSWORD,
+            "POSTGRES_DB": POSTGRES_DB,
+        },
+        commands=(
+            "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
+            " -c max_connections=500"
+        ),
+        tmpfs={"/var/lib/postgresql": "rw"},
+        wait_strategy=ExecWaitStrategy(
+            ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
+        ).with_poll_interval(POLL_INTERVAL),
+    )
+
+
+def mongo() -> AbstractContextManager[tuple[PrivateRegistryDocker, str]]:
+    return create_container(MONGO_IMAGE, port=MONGO_PORT)
 
 
 @pytest.fixture(scope="session")
 def mongo_container() -> ContainerDataFixture:
-    with create_container(MONGO_IMAGE, port=MONGO_PORT) as (
-        container,
-        port_str,
-    ):
+    with mongo() as (container, port_str):
         yield container, LOCALHOST_BASE_URL, port_str
 
 
@@ -44,20 +66,14 @@ def redis_container() -> ContainerDataFixture:
     with create_container(
         REDIS_IMAGE,
         port=REDIS_PORT,
-        wait_strategy=ExecWaitStrategy(["redis-cli", "ping"]),
+        wait_strategy=ExecWaitStrategy(
+            ["redis-cli", "ping"]
+        ).with_poll_interval(POLL_INTERVAL),
     ) as (container, port_str):
         yield container, LOCALHOST_BASE_URL, port_str
 
 
 @pytest.fixture(scope="session")
 def postgres_container() -> ContainerDataFixture:
-    with create_container(
-        POSTGRES_IMAGE,
-        port=POSTGRES_PORT,
-        env_vars={
-            "POSTGRES_PASSWORD": POSTGRES_PASSWORD,
-            "POSTGRES_DB": POSTGRES_DB,
-        },
-        wait_strategy=ExecWaitStrategy(["pg_isready", "-U", "postgres"]),
-    ) as (container, port_str):
+    with postgres() as (container, port_str):
         yield container, LOCALHOST_BASE_URL, port_str
