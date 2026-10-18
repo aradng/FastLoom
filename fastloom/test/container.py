@@ -9,7 +9,7 @@ from testcontainers.core.waiting_utils import WaitStrategy
 
 class PrivateRegistryDocker(DockerContainer):
     def _configure(self) -> None:
-        if (registry := os.getenv("REGISTRY_ADDRESS")) is None:
+        if (registry := os.getenv("REGISTRY_ADDRESS", "")) == "":
             return
         self._docker.login(
             auth_config=DockerAuthInfo(

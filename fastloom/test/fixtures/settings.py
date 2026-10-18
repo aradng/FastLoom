@@ -22,7 +22,7 @@ def patched_settings[V: BaseModel, T: BaseModel](
     from fastloom.tenant.utils import dump_settings, load_settings
 
     @cache
-    def yaml_text():
+    def yaml_text() -> str:
         return dump_settings(
             service_settings=service_settings,
             tenant_settings=(

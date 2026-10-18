@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
+    Literal,
     Protocol,
     overload,
     runtime_checkable,
@@ -140,7 +141,7 @@ def load_settings[T: BaseModel](
 def dump_settings[V: BaseModel, T: BaseModel](
     service_settings: V,
     tenant_settings: MutableMapping[str, T] | None = None,
-    yaml_mode: bool = False,
+    yaml_mode: Literal[False] = False,
 ) -> dict[str, Any]: ...
 
 
@@ -148,7 +149,8 @@ def dump_settings[V: BaseModel, T: BaseModel](
 def dump_settings[V: BaseModel, T: BaseModel](
     service_settings: V,
     tenant_settings: MutableMapping[str, T] | None = None,
-    yaml_mode: bool = True,
+    *,
+    yaml_mode: Literal[True],
 ) -> str: ...
 
 

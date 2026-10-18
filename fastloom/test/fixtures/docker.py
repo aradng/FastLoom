@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager
 
 import pytest
 from testcontainers.core.wait_strategies import ExecWaitStrategy
@@ -22,17 +22,13 @@ from fastloom.test.container import PrivateRegistryDocker, create_container
 from fastloom.test.types import ContainerDataFixture
 
 
-@contextmanager
-def postgres(
-    image: str = POSTGRES_IMAGE,
-) -> Generator[tuple[PrivateRegistryDocker, str]]:
-    with create_container(
-        image,
+def postgres() -> AbstractContextManager[tuple[PrivateRegistryDocker, str]]:
+    return create_container(
+        POSTGRES_IMAGE,
         port=POSTGRES_PORT,
         env_vars={
             "POSTGRES_PASSWORD": POSTGRES_PASSWORD,
             "POSTGRES_DB": POSTGRES_DB,
-            "POSTGRES_HOST_AUTH_METHOD": "trust",
         },
         commands=(
             "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
@@ -42,16 +38,11 @@ def postgres(
         wait_strategy=ExecWaitStrategy(
             ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
         ).with_poll_interval(POLL_INTERVAL),
-    ) as started:
-        yield started
+    )
 
 
-@contextmanager
-def mongo(
-    image: str = MONGO_IMAGE,
-) -> Generator[tuple[PrivateRegistryDocker, str]]:
-    with create_container(image, port=MONGO_PORT) as started:
-        yield started
+def mongo() -> AbstractContextManager[tuple[PrivateRegistryDocker, str]]:
+    return create_container(MONGO_IMAGE, port=MONGO_PORT)
 
 
 @pytest.fixture(scope="session")
