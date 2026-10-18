@@ -207,7 +207,7 @@ def service_settings(redis_container) -> Settings:
     )
 ```
 
-`postgres_container` is tuned for tests: data on tmpfs, `fsync`/`synchronous_commit`/`full_page_writes` off, `max_connections=500`, and readiness probed over TCP every 100ms (the image's init-time server listens on the unix socket only, so a socket probe can pass too early).
+`postgres_container` is tuned for tests: `trust` auth with the port published on 127.0.0.1 only (asyncpg's SCRAM handshake is pure Python, ~8ms CPU per connection, and nothing off the machine can reach the server), data on tmpfs, `fsync`/`synchronous_commit`/`full_page_writes` off, `max_connections=500`, and readiness probed over TCP every 100ms (the image's init-time server listens on the unix socket only, so a socket probe can pass too early).
 
 `redis_container` uses the `redis-stack-server` image, not plain `redis` — `redis-om`'s indexed `JsonModel` queries need the RediSearch module, which the stock image doesn't ship. `postgres_container` isn't consumed by anything in fastloom itself (fastloom has no Postgres capability); it's there for services that bring their own Postgres/SQLAlchemy layer, matching the same `(container, host, port)` shape as every other fixture here.
 

@@ -10,6 +10,7 @@ from testcontainers.core.docker_client import DockerClient
 
 from fastloom.test.container import PrivateRegistryDocker
 from fastloom.test.fixtures import shared
+from fastloom.test.fixtures.docker import postgres
 from fastloom.test.fixtures.settings import patched_settings
 
 pytest_plugins = ["pytester"]
@@ -76,6 +77,15 @@ def test_workers_get_the_controllers_containers():
 
     worker = SimpleNamespace(workerinput=node.workerinput)
     assert shared._shared(worker, "postgres") == container
+
+
+def test_postgres_is_published_on_loopback_only():
+    with postgres() as (container, _):
+        wrapped = container.get_wrapped_container()
+        wrapped.reload()
+        bindings = wrapped.attrs["NetworkSettings"]["Ports"]["5432/tcp"]
+
+    assert {binding["HostIp"] for binding in bindings} == {"127.0.0.1"}
 
 
 _INI = "[pytest]\nfastloom_shared_containers =\n    postgres\n    mongo\n"

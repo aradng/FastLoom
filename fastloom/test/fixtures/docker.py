@@ -29,12 +29,14 @@ def postgres() -> AbstractContextManager[tuple[PrivateRegistryDocker, str]]:
         env_vars={
             "POSTGRES_PASSWORD": POSTGRES_PASSWORD,
             "POSTGRES_DB": POSTGRES_DB,
+            "POSTGRES_HOST_AUTH_METHOD": "trust",
         },
         commands=(
             "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
             " -c max_connections=500"
         ),
         tmpfs={"/var/lib/postgresql": "rw"},
+        host_ip="127.0.0.1",
         wait_strategy=ExecWaitStrategy(
             ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]
         ).with_poll_interval(POLL_INTERVAL),
