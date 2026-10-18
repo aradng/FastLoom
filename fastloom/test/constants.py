@@ -16,4 +16,4 @@ TIMEOUT = 10
 DOCKER_GATEWAY_BASE_URL = "http://172.17.0.1"
 LOCALHOST_BASE_URL = "localhost"
 
-SECRET_KEY = "test_secret"
+SECRET_KEY = "fastloom-test-secret-hmac-sha256-key"

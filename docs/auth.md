@@ -33,7 +33,7 @@ flowchart LR
   - `POST /introspect` — forwards the token to the IAM for JWT inspection (validity, revocation, claims). Called when `INTROSPECT=True`.
   - `POST /acl` — performs the policy check (may this token call this path with this method?). Called when `ACL=True`.
 - Fastloom services hit the sidecar via `IAM_SIDECAR_URL`. No direct calls from services to Casdoor / Keycloak — the sidecar is the only boundary, so policy and IAM-backend changes don't need fan-out across every service.
-- Signing keys are **not** shared with services. Fastloom uses `jose.jwt.get_unverified_claims` to parse the token; trust comes from the introspection round-trip, not from a local signature check. Don't enable `INTROSPECT=False` in production unless the network path between client and service is already trusted (e.g. internal mesh with mTLS).
+- Signing keys are **not** shared with services. Fastloom decodes the token with PyJWT's `jwt.decode(token, options={"verify_signature": False})`; trust comes from the introspection round-trip, not from a local signature check. Don't enable `INTROSPECT=False` in production unless the network path between client and service is already trusted (e.g. internal mesh with mTLS).
 
 ## `IAMSettings`
 
