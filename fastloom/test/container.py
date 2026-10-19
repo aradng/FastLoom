@@ -29,6 +29,7 @@ def create_container(
     volumes: dict[str, str] | None = None,
     wait_strategy: WaitStrategy | None = None,
     tmpfs: dict[str, str] | None = None,
+    host_ip: str | None = None,
 ) -> Generator[tuple[PrivateRegistryDocker, str]]:
     """
     Example:
@@ -47,7 +48,11 @@ def create_container(
         container.with_env(key, value)
     for host_path, container_path in volumes.items():
         container.with_volume_mapping(host_path, container_path)
-    if port:
+    if port and host_ip is not None:
+        # NOTE: docker-py binds one interface only through a (host_ip,)
+        # tuple, which testcontainers' str | int annotation leaves out.
+        container.with_bind_ports(port, (host_ip,))  # type: ignore[arg-type]
+    elif port:
         container.with_exposed_ports(port)
     if commands:
         container.with_command(commands)
