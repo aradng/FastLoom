@@ -113,7 +113,7 @@ Routes that don't depend on `get_claims` are unauthenticated by default — `TC.
 class UserClaims(BaseModel):
     iss: HttpUrl
     id: UUID = Field(alias="sub")
-    sid: str
+    sid: str | None = None     # None on sessionless tokens
     username: str = Field(alias="preferred_username")
     name: str
     given_name: str
@@ -133,6 +133,7 @@ class UserClaims(BaseModel):
 
 - `tenant` is derived from the JWT issuer (`iss.path` final segment) — make sure the IAM realm path matches your tenant name.
 - `organization` is the first entry of `organizations` (or `None`).
+- `sid` is `None` on tokens with no user session, such as Keycloak's JWT Authorization Grant (API keys, Telegram), and serializes as `"sid": null`.
 - `is_admin` matches `ADMIN` (constant `fastloom.auth.schemas.ADMIN_ROLE`).
 - JSON serialization uses claim aliases (`sub`, `preferred_username`) and re-joins `scope` into a space-delimited string.
 
