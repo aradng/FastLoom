@@ -959,6 +959,28 @@ def test_prefix_rules_are_kept_sorted_after_the_preamble(service: Path):
 
 
 @pytest.mark.parametrize(
+    ("path", "prefix", "served"),
+    [
+        ("/api/x/{id}", "/api/x/42", True),
+        ("/api/x/{id}/sub", "/api/x/42", True),
+        ("/api/x/{id}/sub", "/api/x/42/sub", True),
+        ("/api/x/{id:int}/sub", "/api/x/42", True),
+        ("/api/x/{id:int}/sub", "/api/x/abc", False),
+        ("/api/x/{rest:path}", "/api/x/a/b", True),
+        ("/api/x/{id}", "/api/y/42", False),
+        ("/api/x/{id}", "/api/x/42/sub", False),
+    ],
+)
+def test_a_prefix_is_served_by_a_route_whose_pattern_reaches_it(
+    path: str, prefix: str, served: bool
+):
+    from fastloom.policy.main import serves
+    from fastloom.policy.schemas import Route
+
+    assert serves(Route(method="GET", path=path), prefix) is served
+
+
+@pytest.mark.parametrize(
     "prefix",
     ["/api/shop/items/42", "/api/shop/files/reports"],
     ids=["a path parameter's value", "under a path converter"],

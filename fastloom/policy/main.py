@@ -32,8 +32,9 @@ def describe(route: Route) -> str:
 
 
 def serves(route: Route, prefix: str) -> bool:
+    head = "/".join(route.path.split("/")[: prefix.count("/") + 1])
     return f"{route.path}/".startswith(f"{prefix}/") or bool(
-        re.match(pattern(route), prefix)
+        re.fullmatch(pattern(route.model_copy(update={"path": head})), prefix)
     )
 
 
