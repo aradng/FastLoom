@@ -31,15 +31,15 @@ def describe(route: Route) -> str:
     return f"{route.method} {route.path}"
 
 
-def serves(route: Route, prefix: str) -> bool:
+def describe_prefix(prefix: str) -> str:
+    return f"prefix {prefix}"
+
+
+def covers(prefix: str, route: Route) -> bool:
     head = "/".join(route.path.split("/")[: prefix.count("/") + 1])
     return f"{route.path}/".startswith(f"{prefix}/") or bool(
         re.fullmatch(pattern(route.model_copy(update={"path": head})), prefix)
     )
-
-
-def describe_prefix(prefix: str) -> str:
-    return f"prefix {prefix}"
 
 
 def once[K](keys: list[K], name: Callable[[K], str]) -> None:
@@ -64,7 +64,7 @@ def report(
         Problem.UNUSED: [
             describe_prefix(s.prefix)
             for s in scopes
-            if not any(serves(r, s.prefix) for r in routes)
+            if not any(covers(s.prefix, r) for r in routes)
         ],
     }
 

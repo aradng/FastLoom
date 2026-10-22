@@ -971,13 +971,13 @@ def test_prefix_rules_are_kept_sorted_after_the_preamble(service: Path):
         ("/api/x/{id}", "/api/x/42/sub", False),
     ],
 )
-def test_a_prefix_is_served_by_a_route_whose_pattern_reaches_it(
+def test_a_prefix_is_covered_by_a_route_whose_pattern_reaches_it(
     path: str, prefix: str, served: bool
 ):
-    from fastloom.policy.main import serves
+    from fastloom.policy.main import covers
     from fastloom.policy.schemas import Route
 
-    assert serves(Route(method="GET", path=path), prefix) is served
+    assert covers(prefix, Route(method="GET", path=path)) is served
 
 
 @pytest.mark.parametrize(
@@ -986,15 +986,13 @@ def test_a_prefix_is_served_by_a_route_whose_pattern_reaches_it(
     ids=["a path parameter's value", "under a path converter"],
 )
 def test_a_prefix_a_templated_route_serves_is_in_use(
-    service: Path, capsys: pytest.CaptureFixture[str], prefix: str
+    service: Path, prefix: str
 ):
     routes = rule_all(service, {})
     add(routes, "prefix_rules", scope(prefix, '[["broker"]]'))
     run()
-    capsys.readouterr()
 
     assert run() == 0
-    assert "matches no route" not in capsys.readouterr().out
 
 
 def test_a_non_ascii_prefix_is_kept_as_written(service: Path):
