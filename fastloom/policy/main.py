@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from collections.abc import Callable
 from enum import StrEnum
@@ -5,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from fastloom.policy.rego import ROUTES_FILE, read, render
+from fastloom.policy.rego import ROUTES_FILE, pattern, read, render
 from fastloom.policy.schemas import (
     PolicySourceError,
     Route,
@@ -28,6 +29,12 @@ FAILURES = (Problem.INVALID, Problem.UNUSED)
 
 def describe(route: Route) -> str:
     return f"{route.method} {route.path}"
+
+
+def serves(route: Route, prefix: str) -> bool:
+    return f"{route.path}/".startswith(f"{prefix}/") or bool(
+        re.match(pattern(route), prefix)
+    )
 
 
 def describe_prefix(prefix: str) -> str:
@@ -56,7 +63,7 @@ def report(
         Problem.UNUSED: [
             describe_prefix(s.prefix)
             for s in scopes
-            if not any(f"{r.path}/".startswith(f"{s.prefix}/") for r in routes)
+            if not any(serves(r, s.prefix) for r in routes)
         ],
     }
 

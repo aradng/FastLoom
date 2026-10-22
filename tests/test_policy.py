@@ -958,6 +958,23 @@ def test_prefix_rules_are_kept_sorted_after_the_preamble(service: Path):
     assert run() == 0
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    ["/api/shop/items/42", "/api/shop/files/reports"],
+    ids=["a path parameter's value", "under a path converter"],
+)
+def test_a_prefix_a_templated_route_serves_is_in_use(
+    service: Path, capsys: pytest.CaptureFixture[str], prefix: str
+):
+    routes = rule_all(service, {})
+    add(routes, "prefix_rules", scope(prefix, '[["broker"]]'))
+    run()
+    capsys.readouterr()
+
+    assert run() == 0
+    assert "matches no route" not in capsys.readouterr().out
+
+
 def test_a_non_ascii_prefix_is_kept_as_written(service: Path):
     routes = rule_all(service, {})
     add(routes, "prefix_rules", scope("/api/shop/سلام", '"authenticated"'))
