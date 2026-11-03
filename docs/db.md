@@ -6,7 +6,7 @@ Fastloom uses Beanie as the MongoDB ODM. The launcher auto-discovers `Document` 
 
 - `fastloom.db.lifehooks.init_db`, `get_models`, `get_mongo_client`, `destroy_db`.
 - `fastloom.db.schemas.CreatedAtSchema`, `CreatedUpdatedAtSchema` — timestamp mixins.
-- `fastloom.db.schemas.BasePaginationQuery`, `PaginatedResponse[T]` — pagination contracts.
+- `fastloom.db.schemas.BasePaginationQuery`, `PaginatedResponse[T]`, `PageLimit`, `PageOffset` — pagination contracts.
 - `fastloom.db.schemas.BaseTenantSettingsDocument` — backing collection for per-tenant settings (Settings collection name: `settings`).
 - `fastloom.db.signals.BaseDocumentSignal`, `SignalsInsert`, `SignalsUpdate`, `SignalsDelete`, `SignalsAll`, `SignalMessage`, `Operations` — auto-publish CRUD events.
 - `fastloom.db.settings.MongoSettings` — `MONGO_URI`, `MONGO_DATABASE`.
@@ -66,16 +66,14 @@ class CreatedUpdatedAtSchema(CreatedAtSchema):
 ## Pagination
 
 ```python
-class BasePaginationQuery(BaseModel):
-    offset: int | None = Field(None, ge=0)
-    limit: int | None = Field(None, ge=0)
+class BasePaginationQuery(BaseModel, Generic[MaxLimit, DefaultLimit]):
+    offset: PageOffset = 0
+    limit: PageLimit = 10
 
     @computed_field
     @property
-    def skip(self) -> int | None:
-        if self.limit and self.offset is not None:
-            return self.limit * self.offset
-        return None
+    def skip(self) -> int:
+        return self.limit * self.offset
 
 
 class PaginatedResponse[T](BaseModel):
@@ -83,7 +81,18 @@ class PaginatedResponse[T](BaseModel):
     count: int = 0
 ```
 
-`offset` is a **page number**, not a document count. `skip` (computed) gives you the document count to feed into Mongo. A `limit=0` is normalized to `None` so callers can disable pagination explicitly.
+`offset` is a **page number**, not a document count. `skip` (computed) gives you the document count to feed into Mongo or `OFFSET`. `limit` defaults to 10 and is capped at 100. Change both for one endpoint by subscripting the base with `[max, default]` as `Literal`s, or cap a single field:
+
+```python
+class AuditSearchIn(BasePaginationQuery[Literal[500], Literal[100]]):
+    actor: str | None = None
+
+
+class ExportSearchIn(BasePaginationQuery):
+    limit: PageLimit[Literal[200]] = 50
+```
+
+The numbers are `Literal`s so mypy reads them as types; no plugin needed. A default outside `1..max` raises when the class is defined.
 
 ```python
 from typing import Annotated
