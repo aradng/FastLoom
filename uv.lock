@@ -851,7 +851,7 @@ wheels = [
 
 [[package]]
 name = "fastloom"
-version = "0.5.12"
+version = "0.5.13"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
@@ -865,6 +865,7 @@ dependencies = [
     { name = "python-jose" },
     { name = "pyyaml" },
     { name = "sentry-sdk", extra = ["fastapi"] },
+    { name = "typing-extensions" },
     { name = "uvicorn" },
 ]
 
@@ -996,6 +997,7 @@ requires-dist = [
     { name = "sentry-sdk", extras = ["fastapi"], specifier = ">=2.0.0,<3.0.0" },
     { name = "starlette", marker = "extra == 'policy'", specifier = ">=0.40.0,<2.0.0" },
     { name = "testcontainers", marker = "extra == 'test'", specifier = ">=4.14.2,<5.0.0" },
+    { name = "typing-extensions", specifier = ">=4.14.1,<5.0.0" },
     { name = "uvicorn", specifier = ">=0.35.0,<0.52.0" },
     { name = "uvicorn", marker = "extra == 'fastapi'" },
     { name = "uvicorn", marker = "extra == 'kafka'" },

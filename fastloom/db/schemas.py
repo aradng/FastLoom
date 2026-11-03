@@ -1,5 +1,13 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Annotated
+from functools import cache
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Generic,
+    Literal,
+    TypeAliasType,
+    get_args,
+)
 
 if TYPE_CHECKING:
     from beanie import (
@@ -39,7 +47,15 @@ else:
             return decorator
 
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    GetCoreSchemaHandler,
+    computed_field,
+    create_model,
+)
+from pydantic_core import CoreSchema
+from typing_extensions import TypeVar
 
 from fastloom.date import utcnow
 
@@ -65,21 +81,51 @@ class CreatedUpdatedAtSchema(CreatedAtSchema):
         self.updated_at = utcnow()
 
 
-class BasePaginationQuery(BaseModel):
-    offset: int | None = Field(None, ge=0)
-    limit: int | None = Field(None, ge=0)
+MaxLimit = TypeVar("MaxLimit", bound=int, default=Literal[100])
+DefaultLimit = TypeVar("DefaultLimit", bound=int, default=Literal[10])
 
-    @field_validator("limit", mode="after")
-    @classmethod
-    def convert_zero_limit(cls, v: int | None) -> int | None:
-        return v or None
+if TYPE_CHECKING:
+    PageLimit = TypeAliasType(  # noqa: UP040
+        "PageLimit", int, type_params=(MaxLimit,)
+    )
+else:
+
+    class PageLimit:
+        def __class_getitem__(cls, max_size):
+            return Annotated[int, Field(ge=1, le=get_args(max_size)[0])]
+
+        @classmethod
+        def __get_pydantic_core_schema__(
+            cls, source: type, handler: GetCoreSchemaHandler
+        ) -> CoreSchema:
+            return handler.generate_schema(cls[Literal[100]])
+
+
+PageOffset = Annotated[int, Field(ge=0)]
+
+
+class BasePaginationQuery(BaseModel, Generic[MaxLimit, DefaultLimit]):
+    offset: PageOffset = 0
+    limit: PageLimit = 10
+
+    if not TYPE_CHECKING:
+
+        @classmethod
+        @cache
+        def __class_getitem__(cls, limits):
+            max_size, default = (get_args(lit)[0] for lit in limits)
+            if not 1 <= default <= max_size:
+                raise ValueError(f"default {default} outside 1..{max_size}")
+            return create_model(
+                f"{cls.__name__}[{max_size}, {default}]",
+                __base__=cls,
+                limit=(PageLimit[Literal[max_size]], default),
+            )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def skip(self) -> int | None:
-        if self.limit and self.offset is not None:
-            return self.limit * self.offset
-        return None
+    def skip(self) -> int:
+        return self.limit * self.offset
 
 
 class PaginatedResponse[T](BaseModel):
